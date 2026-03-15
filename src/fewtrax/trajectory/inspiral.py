@@ -30,6 +30,23 @@ To vmap over a batch of initial conditions::
     from jax import vmap
     batch_traj = vmap(traj)(p0_arr, e0_arr)
 
+Backward integration
+--------------------
+Setting ``backward=True`` integrates the time-reversed ODE, starting at the
+separatrix and moving outward.  This anchors the track to the plunge rather
+than to uncertain initial conditions, and is more stable near merger because
+the ODE moves *away* from the separatrix.
+
+The backward ODE is simply the negation of the forward ODE:
+
+.. math::
+
+    \\frac{d y}{d\\tau} = -\\frac{d y}{dt}
+
+where :math:`\\tau = T_{\\rm plunge} - t` is time before plunge.  Initial
+conditions are set to :math:`(p_{\\rm sep}(e_f, a) + \\epsilon, e_f, 0, 0, 0)`
+and the integration runs for duration :math:`T` years.
+
 """
 
 from __future__ import annotations
@@ -225,6 +242,44 @@ class EMRIInspiral(eqx.Module):
             args=mu_over_M,
         )
 
+    @eqx.filter_jit
+    def _solve_backward(
+        self,
+        y0: jnp.ndarray,
+        t_save: jnp.ndarray,
+        T_geo: jnp.ndarray,
+        mu_over_M: jnp.ndarray,
+        atol: float,
+        rtol: float,
+        max_steps: int,
+    ):
+        r"""JIT-compiled backward diffrax solve.
+
+        Integrates the time-reversed ODE
+
+        .. math::
+
+            \frac{dy}{d\tau} = -\frac{dy}{dt}
+
+        where :math:`\tau = T_{\rm plunge} - t` is time before plunge.
+        There is no separatrix event condition: the integration moves
+        *away* from the separatrix, so no termination is needed.
+
+        Parameters are identical to :meth:`_solve`.
+        """
+        return diffrax.diffeqsolve(
+            diffrax.ODETerm(lambda t, y, args: -self._ode_rhs(t, y, args)),
+            diffrax.Tsit5(),
+            t0=jnp.zeros((), dtype=jnp.float64),
+            t1=T_geo,
+            dt0=None,
+            y0=y0,
+            saveat=diffrax.SaveAt(ts=t_save),
+            stepsize_controller=diffrax.PIDController(rtol=rtol, atol=atol),
+            max_steps=max_steps,
+            args=mu_over_M,
+        )
+
     # ------------------------------------------------------------------
     # Public interface
     # ------------------------------------------------------------------
@@ -244,13 +299,16 @@ class EMRIInspiral(eqx.Module):
         rtol: float = 1e-9,
         max_steps: int = 4096,
         dense_steps: int = 100,
+        backward: bool = False,
+        e_f: Optional[float] = None,
     ) -> tuple[jnp.ndarray, ...]:
         r"""Integrate the EMRI inspiral trajectory.
 
         Parameters
         ----------
         p0, e0 : float
-            Initial orbital parameters.
+            Initial orbital parameters (forward mode).  Ignored in backward
+            mode; the starting point is determined from ``e_f`` instead.
         T : float
             Observation time [years].
         dt : float
@@ -258,7 +316,9 @@ class EMRIInspiral(eqx.Module):
         M, mu : float
             Primary and secondary masses [:math:`M_\odot`].
         Phi_phi0, Phi_theta0, Phi_r0 : float
-            Initial orbital phases [rad].
+            Initial orbital phases [rad].  In backward mode these are the
+            phases at plunge (:math:`\tau = 0`); they are often left at zero
+            since only the instantaneous frequency matters for track generation.
         atol, rtol : float
             Adaptive solver tolerances.
         max_steps : int
@@ -269,21 +329,51 @@ class EMRIInspiral(eqx.Module):
             step count, not max_steps).
         dense_steps : int
             Number of output trajectory points.
+        backward : bool
+            If ``True``, integrate the time-reversed ODE starting from the
+            separatrix.  The output time axis represents
+            :math:`\tau = T_{\rm plunge} - t` (time before plunge), so
+            ``t[0] = 0`` is at plunge and ``t[-1]`` is ``T`` years earlier.
+            In backward mode ``p`` and ``e`` *increase* along the output
+            arrays (moving away from the separatrix), and the phases
+            *decrease* (since :math:`d\Phi/d\tau < 0`).
+        e_f : float, optional
+            Eccentricity at plunge, required when ``backward=True``.
+            The corresponding semi-latus rectum is set to
+            :math:`p_{\rm sep}(e_f, a) + \\epsilon` automatically.
+            To obtain a consistent value, run a forward integration first
+            and read off ``e`` at the last valid (non-NaN) trajectory point.
 
         Returns
         -------
         t, p, e, Phi_phi, Phi_theta, Phi_r : jnp.ndarray, shape (dense_steps,)
-            Trajectory arrays.  Time is in seconds; phases in radians.
+            Trajectory arrays.  ``t`` is in seconds; phases in radians.
+            In backward mode ``t`` is time before plunge (:math:`\tau`).
         """
         M_s = M * MTSUN_SI                        # primary mass in seconds
         T_s = T * YEAR_SI                         # observation time in seconds
         T_geo = jnp.asarray(T_s / M_s)           # geometric time  (units of M)
         mu_over_M = jnp.asarray(mu / M)
 
-        y0 = jnp.array([p0, e0, Phi_phi0, Phi_theta0, Phi_r0], dtype=jnp.float64)
         t_save = jnp.linspace(jnp.zeros((), jnp.float64), T_geo, dense_steps)
 
-        sol = self._solve(y0, t_save, T_geo, mu_over_M, atol, rtol, max_steps)
+        if backward:
+            if e_f is None:
+                raise ValueError(
+                    "e_f must be provided when backward=True.  "
+                    "Run a forward integration first and read off e at the "
+                    "last valid trajectory point."
+                )
+            e_f_ = jnp.asarray(float(e_f), dtype=jnp.float64)
+            p_sep = get_separatrix(jnp.abs(float(self.a)), e_f_, self._x_sign())
+            p_start = p_sep + SEPARATRIX_BUFFER
+            y0 = jnp.array(
+                [p_start, e_f_, Phi_phi0, Phi_theta0, Phi_r0], dtype=jnp.float64
+            )
+            sol = self._solve_backward(y0, t_save, T_geo, mu_over_M, atol, rtol, max_steps)
+        else:
+            y0 = jnp.array([p0, e0, Phi_phi0, Phi_theta0, Phi_r0], dtype=jnp.float64)
+            sol = self._solve(y0, t_save, T_geo, mu_over_M, atol, rtol, max_steps)
 
         ys = sol.ys          # (dense_steps, 5)
         t_arr = sol.ts       # (dense_steps,)
@@ -307,6 +397,8 @@ class EMRIInspiral(eqx.Module):
         mu: float,
         l: int, m: int, k: int, n: int,
         dense_steps: int = 100,
+        backward: bool = False,
+        e_f: Optional[float] = None,
         **kwargs,
     ) -> tuple[jnp.ndarray, jnp.ndarray]:
         r"""Compute the instantaneous frequency track of harmonic :math:`(l,m,k,n)`.
@@ -315,30 +407,39 @@ class EMRIInspiral(eqx.Module):
 
         .. math::
 
-            f_{mkn}(t) = \frac{m\,\Omega_\phi + k\,\Omega_\theta + n\,\Omega_r}{2\pi}
+            f_{mkn}(t) = \frac{|m\,\Omega_\phi + k\,\Omega_\theta + n\,\Omega_r|}{2\pi}
 
         evaluated along the inspiral trajectory.
 
         Parameters
         ----------
         p0, e0 : float
-            Initial orbital parameters.
+            Initial orbital parameters (forward mode; ignored when
+            ``backward=True``).
         T, M, mu : float
             Observation time [years], primary and secondary masses.
         l, m, k, n : int
             Harmonic mode indices.
         dense_steps : int
             Number of trajectory output points.
+        backward : bool
+            If ``True``, integrate backward from the separatrix.  The
+            returned time axis is time before plunge (:math:`\tau`), so
+            ``t[0] = 0`` is at plunge.  Frequency decreases as ``t``
+            increases (moving earlier in the inspiral).
+        e_f : float, optional
+            Eccentricity at plunge, required when ``backward=True``.
 
         Returns
         -------
         t : jnp.ndarray, shape (dense_steps,)
-            Time [s].
+            Time [s] (forward: from start; backward: time before plunge).
         f : jnp.ndarray, shape (dense_steps,)
-            Instantaneous frequency [Hz].
+            Instantaneous frequency [Hz], always non-negative.
         """
         t_s, p_arr, e_arr, *_ = self(
-            p0=p0, e0=e0, T=T, M=M, mu=mu, dense_steps=dense_steps, **kwargs
+            p0=p0, e0=e0, T=T, M=M, mu=mu, dense_steps=dense_steps,
+            backward=backward, e_f=e_f, **kwargs
         )
         a_abs = jnp.abs(float(self.a))
         x_in = float(self._x_sign())
@@ -346,7 +447,7 @@ class EMRIInspiral(eqx.Module):
         def _freq_at_point(pe):
             p_, e_ = pe
             Om_phi, Om_theta, Om_r = get_fundamental_frequencies(a_abs, p_, e_, x_in)
-            return (m * Om_phi + k * Om_theta + n * Om_r) / (2.0 * jnp.pi)
+            return jnp.abs(m * Om_phi + k * Om_theta + n * Om_r) / (2.0 * jnp.pi)
 
         # Physical frequency: convert Mino-time Ω (rad/M) to Hz
         # Ω [rad/M] × (M_s)^{-1} [1/s] / (2π) [already included above]
@@ -369,6 +470,8 @@ def run_inspiral(
     Phi_theta0: float = 0.0,
     Phi_r0: float = 0.0,
     dense_steps: int = 100,
+    backward: bool = False,
+    e_f: Optional[float] = None,
     **kwargs,
 ) -> tuple[jnp.ndarray, ...]:
     r"""Convenience wrapper: integrate an EMRI inspiral trajectory.
@@ -378,7 +481,8 @@ def run_inspiral(
     a : float
         BH spin parameter.
     p0, e0 : float
-        Initial orbital parameters.
+        Initial orbital parameters (forward mode; ignored when
+        ``backward=True``).
     T : float
         Observation time [years].
     flux_data : FluxData
@@ -391,15 +495,19 @@ def run_inspiral(
         Inclination cosine.
     dense_steps : int
         Number of output trajectory points.
+    backward : bool
+        If ``True``, integrate the time-reversed ODE from the separatrix.
+    e_f : float, optional
+        Eccentricity at plunge, required when ``backward=True``.
 
     Returns
     -------
     t, p, e, Phi_phi, Phi_theta, Phi_r : jnp.ndarray
-        Trajectory arrays.
+        Trajectory arrays.  In backward mode ``t`` is time before plunge.
     """
     traj = EMRIInspiral(flux_data, a=a, x0=x0)
     return traj(
         p0=p0, e0=e0, T=T, dt=dt, M=M, mu=mu,
         Phi_phi0=Phi_phi0, Phi_theta0=Phi_theta0, Phi_r0=Phi_r0,
-        dense_steps=dense_steps, **kwargs,
+        dense_steps=dense_steps, backward=backward, e_f=e_f, **kwargs,
     )

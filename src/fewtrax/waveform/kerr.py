@@ -357,6 +357,8 @@ class KerrEccentricEquatorialWaveform:
         e0: float,
         T: float,
         x0: float = 1.0,
+        backward: bool = False,
+        e_f: Optional[float] = None,
     ) -> tuple[jnp.ndarray, jnp.ndarray]:
         r"""Compute the instantaneous frequency track of a single harmonic mode.
 
@@ -378,35 +380,28 @@ class KerrEccentricEquatorialWaveform:
         l, m, k, n : int
             Mode indices.
         M, mu, a, p0, e0, T, x0 : as for :meth:`__call__`.
+        backward : bool
+            If ``True``, integrate backward from the separatrix.  The
+            returned time axis ``t`` is time before plunge
+            (:math:`\\tau = T_{\\rm plunge} - t`), so ``t[0] = 0`` is at
+            plunge and ``t[-1]`` is ``T`` years earlier.  Frequency
+            decreases as ``t`` increases.
+        e_f : float, optional
+            Eccentricity at plunge, required when ``backward=True``.
+            Obtain this from a forward run:
+            ``e_f = float(e_arr[jnp.isfinite(e_arr)][-1])``.
 
         Returns
         -------
         t : jnp.ndarray
-            Time stamps [s].
+            Time stamps [s] (forward: from start; backward: time before plunge).
         f : jnp.ndarray
-            Instantaneous frequency [Hz].
+            Instantaneous frequency [Hz], always non-negative.
         """
-        from fewtrax.utils.geodesic import get_fundamental_frequencies
-
         traj = EMRIInspiral(self._flux_data, a=a, x0=x0)
-        t, p_arr, e_arr, _, _, _ = traj(
+        return traj.get_frequency_track(
             p0=p0, e0=e0, T=T, M=M, mu=mu,
+            l=l, m=m, k=k, n=n,
             dense_steps=self.dense_steps,
+            backward=backward, e_f=e_f,
         )
-
-        M_s = M * MTSUN_SI
-
-        # Compute frequencies at each trajectory point
-        a_abs = abs(a)
-        x_in = 1.0 if a * x0 > 0 else -1.0
-
-        freqs = jnp.array([
-            float(
-                m * get_fundamental_frequencies(a_abs, float(p_arr[i]), float(e_arr[i]), x_in)[0]
-                + k * get_fundamental_frequencies(a_abs, float(p_arr[i]), float(e_arr[i]), x_in)[1]
-                + n * get_fundamental_frequencies(a_abs, float(p_arr[i]), float(e_arr[i]), x_in)[2]
-            ) / (2.0 * np.pi * M_s)
-            for i in range(len(p_arr))
-        ])
-
-        return t, jnp.abs(freqs)
