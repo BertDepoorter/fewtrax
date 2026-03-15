@@ -1,0 +1,1150 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>API Reference &mdash; fewtrax 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="_static/jquery.js?v=5d32c60e"></script>
+      <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="_static/documentation_options.js?v=01f34227"></script>
+      <script src="_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+      <script defer="defer" src="https://cdn.jsdelivr.net/npm/mathjax@4/tex-mml-chtml.js"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="prev" title="fewtrax" href="index.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="index.html" class="icon icon-home">
+            fewtrax
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul class="current">
+<li class="toctree-l1 current"><a class="current reference internal" href="#">API Reference</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#pipeline">Pipeline</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#frame-transformations">Frame transformations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#jax-compatibility">JAX compatibility</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#fewtrax.waveform.kerr.KerrEccentricEquatorialWaveform"><code class="docutils literal notranslate"><span class="pre">KerrEccentricEquatorialWaveform</span></code></a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#fewtrax.waveform.kerr.KerrEccentricEquatorialWaveform.generate_sparse"><code class="docutils literal notranslate"><span class="pre">KerrEccentricEquatorialWaveform.generate_sparse()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#fewtrax.waveform.kerr.KerrEccentricEquatorialWaveform.get_harmonic_track"><code class="docutils literal notranslate"><span class="pre">KerrEccentricEquatorialWaveform.get_harmonic_track()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#backward-integration">Backward integration</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#fewtrax.trajectory.inspiral.EMRIInspiral"><code class="docutils literal notranslate"><span class="pre">EMRIInspiral</span></code></a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#fewtrax.trajectory.inspiral.EMRIInspiral.get_frequency_track"><code class="docutils literal notranslate"><span class="pre">EMRIInspiral.get_frequency_track()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#fewtrax.trajectory.inspiral.run_inspiral"><code class="docutils literal notranslate"><span class="pre">run_inspiral()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#design-notes">Design notes</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#fewtrax.amplitude.interp.AmplitudeInterpolator"><code class="docutils literal notranslate"><span class="pre">AmplitudeInterpolator</span></code></a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#fewtrax.amplitude.interp.AmplitudeInterpolator.evaluate"><code class="docutils literal notranslate"><span class="pre">AmplitudeInterpolator.evaluate()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#fewtrax.amplitude.interp.AmplitudeInterpolator.get_mode_power"><code class="docutils literal notranslate"><span class="pre">AmplitudeInterpolator.get_mode_power()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#fewtrax.amplitude.interp.AmplitudeInterpolator.select_modes"><code class="docutils literal notranslate"><span class="pre">AmplitudeInterpolator.select_modes()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#utilities">Utilities</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#fewtrax.summation.modes.direct_mode_sum"><code class="docutils literal notranslate"><span class="pre">direct_mode_sum()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#fewtrax.summation.modes.interpolated_mode_sum"><code class="docutils literal notranslate"><span class="pre">interpolated_mode_sum()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#fewtrax.summation.modes.to_frequency_domain"><code class="docutils literal notranslate"><span class="pre">to_frequency_domain()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#fewtrax.summation.modes.ModeSum"><code class="docutils literal notranslate"><span class="pre">ModeSum</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#fewtrax.data.loader.FluxData"><code class="docutils literal notranslate"><span class="pre">FluxData</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#fewtrax.data.loader.AmplitudeData"><code class="docutils literal notranslate"><span class="pre">AmplitudeData</span></code></a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#fewtrax.data.loader.AmplitudeData.coeffs_A"><code class="docutils literal notranslate"><span class="pre">AmplitudeData.coeffs_A</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#fewtrax.data.loader.AmplitudeData.coeffs_B"><code class="docutils literal notranslate"><span class="pre">AmplitudeData.coeffs_B</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#fewtrax.data.loader.find_few_data_dir"><code class="docutils literal notranslate"><span class="pre">find_few_data_dir()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#fewtrax.data.loader.load_flux_data"><code class="docutils literal notranslate"><span class="pre">load_flux_data()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#fewtrax.data.loader.load_amplitude_data"><code class="docutils literal notranslate"><span class="pre">load_amplitude_data()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#mathematical-background">Mathematical background</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#fewtrax.utils.geodesic.ellipk"><code class="docutils literal notranslate"><span class="pre">ellipk()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#fewtrax.utils.geodesic.ellipe"><code class="docutils literal notranslate"><span class="pre">ellipe()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#fewtrax.utils.geodesic.ellip_pi"><code class="docutils literal notranslate"><span class="pre">ellip_pi()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#fewtrax.utils.geodesic.kerr_geo_energy_equatorial"><code class="docutils literal notranslate"><span class="pre">kerr_geo_energy_equatorial()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#fewtrax.utils.geodesic.kerr_geo_angular_momentum_equatorial"><code class="docutils literal notranslate"><span class="pre">kerr_geo_angular_momentum_equatorial()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#fewtrax.utils.geodesic.get_separatrix"><code class="docutils literal notranslate"><span class="pre">get_separatrix()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#fewtrax.utils.geodesic.get_fundamental_frequencies"><code class="docutils literal notranslate"><span class="pre">get_fundamental_frequencies()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#fewtrax.utils.harmonics.spin_weighted_spherical_harmonic"><code class="docutils literal notranslate"><span class="pre">spin_weighted_spherical_harmonic()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#fewtrax.utils.harmonics.get_ylms_for_modes"><code class="docutils literal notranslate"><span class="pre">get_ylms_for_modes()</span></code></a></li>
+</ul>
+</li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">fewtrax</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">API Reference</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/api.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="module-fewtrax.waveform.kerr">
+<span id="api-reference"></span><h1>API Reference<a class="headerlink" href="#module-fewtrax.waveform.kerr" title="Link to this heading"></a></h1>
+<p>High-level KerrEccentricEquatorial waveform generator.</p>
+<p><a class="reference internal" href="#fewtrax.waveform.kerr.KerrEccentricEquatorialWaveform" title="fewtrax.waveform.kerr.KerrEccentricEquatorialWaveform"><code class="xref py py-class docutils literal notranslate"><span class="pre">KerrEccentricEquatorialWaveform</span></code></a> is the main entry point for
+generating EMRI gravitational waveforms in fewtrax.  It mirrors the
+API of <code class="docutils literal notranslate"><span class="pre">few.waveform.FastKerrEccentricEquatorialFlux</span></code> while using
+JAX-accelerated trajectory integration and mode summation.</p>
+<section id="pipeline">
+<h2>Pipeline<a class="headerlink" href="#pipeline" title="Link to this heading"></a></h2>
+<ol class="arabic simple">
+<li><p><strong>Data loading</strong>: on construction, the FEW HDF5 data files are read
+once and JAX-compatible interpolators are built.</p></li>
+<li><p><strong>Trajectory</strong>: <code class="xref py py-class docutils literal notranslate"><span class="pre">EMRIInspiral</span></code> integrates
+the adiabatic ODE for <span class="math notranslate nohighlight">\((p, e, \Phi_\phi, \Phi_\theta, \Phi_r)\)</span>.</p></li>
+<li><p><strong>Mode selection</strong>: modes are filtered by their relative power
+contribution (threshold configurable).</p></li>
+<li><p><strong>Amplitude evaluation</strong>: <code class="xref py py-class docutils literal notranslate"><span class="pre">AmplitudeInterpolator</span></code>
+evaluates <span class="math notranslate nohighlight">\(A_{\ell m k n}\)</span> at each trajectory point.</p></li>
+<li><p><strong>Harmonics</strong>: <a class="reference internal" href="#fewtrax.utils.harmonics.get_ylms_for_modes" title="fewtrax.utils.harmonics.get_ylms_for_modes"><code class="xref py py-func docutils literal notranslate"><span class="pre">get_ylms_for_modes()</span></code></a>
+computes <span class="math notranslate nohighlight">\({}_{-2}Y_{\ell m}(\theta, \phi)\)</span>.</p></li>
+<li><p><strong>Summation</strong>: <code class="xref py py-class docutils literal notranslate"><span class="pre">ModeSum</span></code> upsamples the sparse
+trajectory to the requested <code class="docutils literal notranslate"><span class="pre">dt</span></code> and sums the modes.</p></li>
+</ol>
+</section>
+<section id="frame-transformations">
+<h2>Frame transformations<a class="headerlink" href="#frame-transformations" title="Link to this heading"></a></h2>
+<p>The waveform is produced in the <em>source frame</em> (sky direction
+<span class="math notranslate nohighlight">\((\theta_S, \phi_S)\)</span>, spin direction <span class="math notranslate nohighlight">\((\theta_K, \phi_K)\)</span>).
+The <code class="xref py py-meth docutils literal notranslate"><span class="pre">__call__()</span></code> signature matches the FEW convention, including
+the sky-location and spin-orientation angles.</p>
+</section>
+<section id="jax-compatibility">
+<h2>JAX compatibility<a class="headerlink" href="#jax-compatibility" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p><code class="xref py py-meth docutils literal notranslate"><span class="pre">__call__()</span></code> is <strong>not</strong> JIT-compiled as a whole (it mixes numpy
+amplitude evaluation with JAX trajectory/summation).  Use
+<code class="xref py py-meth docutils literal notranslate"><span class="pre">generate_sparse()</span></code> to obtain the sparse trajectory and
+amplitudes, then call <code class="xref py py-func docutils literal notranslate"><span class="pre">direct_mode_sum()</span></code>
+directly inside <code class="docutils literal notranslate"><span class="pre">jax.jit</span></code>.</p></li>
+<li><p>The trajectory is fully differentiable with respect to
+<span class="math notranslate nohighlight">\((p_0, e_0, \Phi_{\phi 0}, \Phi_{\theta 0}, \Phi_{r 0})\)</span>.</p></li>
+</ul>
+<p class="rubric">Examples</p>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span><span class="w"> </span><span class="nn">fewtrax</span><span class="w"> </span><span class="kn">import</span> <span class="n">KerrEccentricEquatorialWaveform</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">wf</span> <span class="o">=</span> <span class="n">KerrEccentricEquatorialWaveform</span><span class="p">(</span><span class="n">data_dir</span><span class="o">=</span><span class="s2">&quot;/path/to/few/data&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">hp</span><span class="p">,</span> <span class="n">hx</span> <span class="o">=</span> <span class="n">wf</span><span class="p">(</span>
+<span class="gp">... </span>    <span class="n">M</span><span class="o">=</span><span class="mf">1e6</span><span class="p">,</span> <span class="n">mu</span><span class="o">=</span><span class="mf">10.0</span><span class="p">,</span> <span class="n">a</span><span class="o">=</span><span class="mf">0.3</span><span class="p">,</span>
+<span class="gp">... </span>    <span class="n">p0</span><span class="o">=</span><span class="mf">10.0</span><span class="p">,</span> <span class="n">e0</span><span class="o">=</span><span class="mf">0.4</span><span class="p">,</span> <span class="n">x0</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span>
+<span class="gp">... </span>    <span class="n">dist</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span>
+<span class="gp">... </span>    <span class="n">qS</span><span class="o">=</span><span class="mf">0.2</span><span class="p">,</span> <span class="n">phiS</span><span class="o">=</span><span class="mf">0.2</span><span class="p">,</span> <span class="n">qK</span><span class="o">=</span><span class="mf">0.8</span><span class="p">,</span> <span class="n">phiK</span><span class="o">=</span><span class="mf">0.8</span><span class="p">,</span>
+<span class="gp">... </span>    <span class="n">Phi_phi0</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span> <span class="n">Phi_theta0</span><span class="o">=</span><span class="mf">2.0</span><span class="p">,</span> <span class="n">Phi_r0</span><span class="o">=</span><span class="mf">3.0</span><span class="p">,</span>
+<span class="gp">... </span>    <span class="n">T</span><span class="o">=</span><span class="mf">0.1</span><span class="p">,</span> <span class="n">dt</span><span class="o">=</span><span class="mf">10.0</span><span class="p">,</span>
+<span class="gp">... </span><span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<dl class="py class">
+<dt class="sig sig-object py" id="fewtrax.waveform.kerr.KerrEccentricEquatorialWaveform">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">fewtrax.waveform.kerr.</span></span><span class="sig-name descname"><span class="pre">KerrEccentricEquatorialWaveform</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data_dir</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">amp_filename</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'ZNAmps_l10_m10_n55_DS2Outer.h5'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mode_selection_threshold</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1e-05</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dense_steps</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">100</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">preload_amplitude</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/fewtrax/waveform/kerr.html#KerrEccentricEquatorialWaveform"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#fewtrax.waveform.kerr.KerrEccentricEquatorialWaveform" title="Link to this definition"></a></dt>
+<dd><p>EMRI waveform generator for the KerrEccentricEquatorial model.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>data_dir</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-data docutils literal notranslate"><span class="pre">Optional</span></code>[<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>]</span>) – Directory containing the FEW HDF5 data files.</p></li>
+<li><p><strong>amp_filename</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code></span>) – Amplitude data file name.</p></li>
+<li><p><strong>mode_selection_threshold</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Relative power threshold for mode selection.  Modes whose
+time-averaged power is below this fraction of the dominant mode
+power are discarded.</p></li>
+<li><p><strong>dense_steps</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code></span>) – Number of sparse trajectory points used in the ODE integration.</p></li>
+<li><p><strong>preload_amplitude</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code></span>) – If True, load the amplitude data file at construction time.
+Set to False to defer loading (useful if amplitude data is
+large and the user only wants to compare trajectory outputs).</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py method">
+<dt class="sig sig-object py" id="fewtrax.waveform.kerr.KerrEccentricEquatorialWaveform.generate_sparse">
+<span class="sig-name descname"><span class="pre">generate_sparse</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">M</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mu</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">a</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">p0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">e0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x0</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">T</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dt</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">10.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">Phi_phi0</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">Phi_theta0</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">Phi_r0</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.0</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">traj_kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/fewtrax/waveform/kerr.html#KerrEccentricEquatorialWaveform.generate_sparse"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#fewtrax.waveform.kerr.KerrEccentricEquatorialWaveform.generate_sparse" title="Link to this definition"></a></dt>
+<dd><p>Compute the sparse trajectory and mode amplitudes.</p>
+<p>Returns a dictionary with the sparse trajectory outputs and
+amplitude arrays.  This is the differentiable “inner loop”;
+the trajectory components are JAX arrays.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>M</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Primary BH mass [<span class="math notranslate nohighlight">\(M_\\odot\)</span>].</p></li>
+<li><p><strong>mu</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Secondary mass [<span class="math notranslate nohighlight">\(M_\\odot\)</span>].</p></li>
+<li><p><strong>a</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Dimensionless spin parameter.</p></li>
+<li><p><strong>p0</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Initial semi-latus rectum [<span class="math notranslate nohighlight">\(M\)</span>].</p></li>
+<li><p><strong>e0</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Initial eccentricity.</p></li>
+<li><p><strong>x0</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Cosine of inclination (<span class="math notranslate nohighlight">\(\pm 1\)</span>).</p></li>
+<li><p><strong>T</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Observation time [years].</p></li>
+<li><p><strong>dt</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Waveform sampling interval [s] (used for output).</p></li>
+<li><p><strong>Phi_phi0</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Initial orbital phases [rad].</p></li>
+<li><p><strong>Phi_theta0</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Initial orbital phases [rad].</p></li>
+<li><p><strong>Phi_r0</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Initial orbital phases [rad].</p></li>
+<li><p><strong>**traj_kwargs</strong> – Extra keyword arguments forwarded to <code class="xref py py-class docutils literal notranslate"><span class="pre">EMRIInspiral</span></code>.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><dl class="simple">
+<dt><code class="docutils literal notranslate"><span class="pre">t</span></code>, <code class="docutils literal notranslate"><span class="pre">p</span></code>, <code class="docutils literal notranslate"><span class="pre">e</span></code>, <code class="docutils literal notranslate"><span class="pre">Phi_phi</span></code>, <code class="docutils literal notranslate"><span class="pre">Phi_theta</span></code>, <code class="docutils literal notranslate"><span class="pre">Phi_r</span></code> :</dt><dd><p>Sparse trajectory arrays.</p>
+</dd>
+<dt><code class="docutils literal notranslate"><span class="pre">teuk_modes</span></code><span class="classifier">np.ndarray, shape (N_traj, N_modes), complex</span></dt><dd><p>Mode amplitudes at trajectory points.</p>
+</dd>
+<dt><code class="docutils literal notranslate"><span class="pre">l_arr</span></code>, <code class="docutils literal notranslate"><span class="pre">m_arr</span></code>, <code class="docutils literal notranslate"><span class="pre">k_arr</span></code>, <code class="docutils literal notranslate"><span class="pre">n_arr</span></code> :</dt><dd><p>Mode index arrays.</p>
+</dd>
+<dt><code class="docutils literal notranslate"><span class="pre">mode_inds</span></code><span class="classifier">np.ndarray of int</span></dt><dd><p>Selected mode indices.</p>
+</dd>
+</dl>
+</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">dict</span></code></span></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="fewtrax.waveform.kerr.KerrEccentricEquatorialWaveform.get_harmonic_track">
+<span class="sig-name descname"><span class="pre">get_harmonic_track</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">l</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">m</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">k</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">M</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mu</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">a</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">p0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">e0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">T</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x0</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">backward</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">e_f</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/fewtrax/waveform/kerr.html#KerrEccentricEquatorialWaveform.get_harmonic_track"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#fewtrax.waveform.kerr.KerrEccentricEquatorialWaveform.get_harmonic_track" title="Link to this definition"></a></dt>
+<dd><p>Compute the instantaneous frequency track of a single harmonic mode.</p>
+<p>The instantaneous GW frequency of mode <span class="math notranslate nohighlight">\((\\ell, m, k, n)\)</span> is:</p>
+<div class="math notranslate nohighlight">
+\[\begin{split}f_{\\ell m k n}(t) =
+    \\frac{1}{2\\pi}
+    \\left|
+        m \\Omega_\\phi(t) + k \\Omega_\\theta(t) + n \\Omega_r(t)
+    \\right|\end{split}\]</div>
+<p>where <span class="math notranslate nohighlight">\(\\Omega_i\)</span> are the fundamental frequencies in
+Boyer-Lindquist coordinate time evaluated along the trajectory.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>l</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code></span>) – Mode indices.</p></li>
+<li><p><strong>m</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code></span>) – Mode indices.</p></li>
+<li><p><strong>k</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code></span>) – Mode indices.</p></li>
+<li><p><strong>n</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code></span>) – Mode indices.</p></li>
+<li><p><strong>M</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>)</p></li>
+<li><p><strong>mu</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>)</p></li>
+<li><p><strong>a</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>)</p></li>
+<li><p><strong>p0</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>)</p></li>
+<li><p><strong>e0</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>)</p></li>
+<li><p><strong>T</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>)</p></li>
+<li><p><strong>x0</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>)</p></li>
+<li><p><strong>backward</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code></span>) – If <code class="docutils literal notranslate"><span class="pre">True</span></code>, integrate backward from the separatrix.  The
+returned time axis <code class="docutils literal notranslate"><span class="pre">t</span></code> is time before plunge
+(<span class="math notranslate nohighlight">\(\\tau = T_{\\rm plunge} - t\)</span>), so <code class="docutils literal notranslate"><span class="pre">t[0]</span> <span class="pre">=</span> <span class="pre">0</span></code> is at
+plunge and <code class="docutils literal notranslate"><span class="pre">t[-1]</span></code> is <code class="docutils literal notranslate"><span class="pre">T</span></code> years earlier.  Frequency
+decreases as <code class="docutils literal notranslate"><span class="pre">t</span></code> increases.</p></li>
+<li><p><strong>e_f</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-data docutils literal notranslate"><span class="pre">Optional</span></code>[<code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code>]</span>) – Eccentricity at plunge, required when <code class="docutils literal notranslate"><span class="pre">backward=True</span></code>.
+Obtain this from a forward run:
+<code class="docutils literal notranslate"><span class="pre">e_f</span> <span class="pre">=</span> <span class="pre">float(e_arr[jnp.isfinite(e_arr)][-1])</span></code>.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">tuple</span></code>[<code class="xref py py-class docutils literal notranslate"><span class="pre">Array</span></code>, <code class="xref py py-class docutils literal notranslate"><span class="pre">Array</span></code>]</span></p>
+</dd>
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p><ul class="simple">
+<li><p><strong>t</strong> (<em>jnp.ndarray</em>) – Time stamps [s] (forward: from start; backward: time before plunge).</p></li>
+<li><p><strong>f</strong> (<em>jnp.ndarray</em>) – Instantaneous frequency [Hz], always non-negative.</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<p id="module-fewtrax.trajectory.inspiral">EMRI orbital trajectory integration via diffrax.</p>
+<p>The trajectory ODE integrates</p>
+<div class="math notranslate nohighlight">
+\[\begin{split}\frac{dp}{dt} &amp;= \left(\frac{\partial E}{\partial p}\right)^{-1}_{\rm eff}\,\dot{E}_{\rm GR} + \cdots \\
+\frac{de}{dt} &amp;= \cdots \\
+\frac{d\Phi_\phi}{dt} &amp;= \Omega_\phi(a, p, e) \\
+\frac{d\Phi_\theta}{dt} &amp;= \Omega_\theta(a, p, e) \\
+\frac{d\Phi_r}{dt} &amp;= \Omega_r(a, p, e)\end{split}\]</div>
+<p>where time is in units of <span class="math notranslate nohighlight">\(M\)</span>.</p>
+<p>The radiation-reaction terms are obtained by interpolating the PN-normalised
+<span class="math notranslate nohighlight">\(\dot{E}\)</span> and <span class="math notranslate nohighlight">\(\dot{L}\)</span> grids from <a class="reference internal" href="#module-fewtrax.data.loader" title="fewtrax.data.loader"><code class="xref py py-mod docutils literal notranslate"><span class="pre">fewtrax.data.loader</span></code></a>
+and converting them to <span class="math notranslate nohighlight">\(\dot{p}\)</span>, <span class="math notranslate nohighlight">\(\dot{e}\)</span> via the
+Jacobian <span class="math notranslate nohighlight">\(\partial(E,L)/\partial(p,e)\)</span> computed analytically with
+<code class="xref py py-func docutils literal notranslate"><span class="pre">jax.jacfwd()</span></code>.</p>
+<p>Solver: <code class="xref py py-class docutils literal notranslate"><span class="pre">diffrax.Tsit5</span></code> (4th/5th order Runge-Kutta, efficient for
+smooth problems) with <code class="xref py py-class docutils literal notranslate"><span class="pre">diffrax.PIDController</span></code> adaptive step-size
+control.  The system is stopped when the orbit approaches the separatrix.</p>
+<p>The ODE is fully JIT-compilable and differentiable with respect to the
+initial conditions <span class="math notranslate nohighlight">\((p_0, e_0)\)</span>.</p>
+<p>To vmap over a batch of initial conditions:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">jax</span><span class="w"> </span><span class="kn">import</span> <span class="n">vmap</span>
+<span class="n">batch_traj</span> <span class="o">=</span> <span class="n">vmap</span><span class="p">(</span><span class="n">traj</span><span class="p">)(</span><span class="n">p0_arr</span><span class="p">,</span> <span class="n">e0_arr</span><span class="p">)</span>
+</pre></div>
+</div>
+<section id="backward-integration">
+<h2>Backward integration<a class="headerlink" href="#backward-integration" title="Link to this heading"></a></h2>
+<p>Setting <code class="docutils literal notranslate"><span class="pre">backward=True</span></code> integrates the time-reversed ODE, starting at the
+separatrix and moving outward.  This anchors the track to the plunge rather
+than to uncertain initial conditions, and is more stable near merger because
+the ODE moves <em>away</em> from the separatrix.</p>
+<p>The backward ODE is simply the negation of the forward ODE:</p>
+<div class="math notranslate nohighlight">
+\[\frac{d y}{d\tau} = -\frac{d y}{dt}\]</div>
+<p>where <span class="math notranslate nohighlight">\(\tau = T_{\rm plunge} - t\)</span> is time before plunge.  Initial
+conditions are set to <span class="math notranslate nohighlight">\((p_{\rm sep}(e_f, a) + \epsilon, e_f, 0, 0, 0)\)</span>
+and the integration runs for duration <span class="math notranslate nohighlight">\(T\)</span> years.</p>
+</section>
+<dl class="py class">
+<dt class="sig sig-object py" id="fewtrax.trajectory.inspiral.EMRIInspiral">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">fewtrax.trajectory.inspiral.</span></span><span class="sig-name descname"><span class="pre">EMRIInspiral</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">flux_data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">a</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x0</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/fewtrax/trajectory/inspiral.html#EMRIInspiral"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#fewtrax.trajectory.inspiral.EMRIInspiral" title="Link to this definition"></a></dt>
+<dd><p>Adiabatic EMRI trajectory integrator (JIT/vmap-compatible).</p>
+<p>Integrates the adiabatic inspiral ODE using <code class="xref py py-class docutils literal notranslate"><span class="pre">diffrax.Tsit5</span></code>
+with adaptive step-size control.  The radiation-reaction force
+(<span class="math notranslate nohighlight">\(\dot{p}\)</span>, <span class="math notranslate nohighlight">\(\dot{e}\)</span>) is computed from the FEW flux
+tables by:</p>
+<ol class="arabic simple">
+<li><p>Interpolating the PN-normalised flux ratios
+<span class="math notranslate nohighlight">\(r_E = \dot{E}_{\rm GR}/\dot{E}_{\rm PN}\)</span> and
+<span class="math notranslate nohighlight">\(r_L = \dot{L}_{\rm GR}/\dot{L}_{\rm PN}\)</span>.</p></li>
+<li><p>Multiplying by the Peters (1964) PN functions.</p></li>
+<li><p>Applying the Jacobian <span class="math notranslate nohighlight">\(\partial(E,L)/\partial(p,e)\)</span> via
+<code class="xref py py-func docutils literal notranslate"><span class="pre">jax.jacfwd()</span></code> to obtain <span class="math notranslate nohighlight">\((\dot{p}, \dot{e})\)</span>.</p></li>
+</ol>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>flux_data</strong> (<span class="sphinx_autodoc_typehints-type"><a class="reference internal" href="#fewtrax.data.loader.FluxData" title="fewtrax.data.loader.FluxData"><code class="xref py py-class docutils literal notranslate"><span class="pre">FluxData</span></code></a></span>) – Pre-loaded flux interpolators.</p></li>
+<li><p><strong>a</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Dimensionless BH spin.</p></li>
+<li><p><strong>x0</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Inclination cosine (+1 prograde, -1 retrograde).</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py method">
+<dt class="sig sig-object py" id="fewtrax.trajectory.inspiral.EMRIInspiral.get_frequency_track">
+<span class="sig-name descname"><span class="pre">get_frequency_track</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">p0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">e0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">T</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">M</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mu</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">l</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">m</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">k</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dense_steps</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">100</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">backward</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">e_f</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/fewtrax/trajectory/inspiral.html#EMRIInspiral.get_frequency_track"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#fewtrax.trajectory.inspiral.EMRIInspiral.get_frequency_track" title="Link to this definition"></a></dt>
+<dd><p>Compute the instantaneous frequency track of harmonic <span class="math notranslate nohighlight">\((l,m,k,n)\)</span>.</p>
+<p>The harmonic frequency is</p>
+<div class="math notranslate nohighlight">
+\[f_{mkn}(t) = \frac{|m\,\Omega_\phi + k\,\Omega_\theta + n\,\Omega_r|}{2\pi}\]</div>
+<p>evaluated along the inspiral trajectory.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>p0</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Initial orbital parameters (forward mode; ignored when
+<code class="docutils literal notranslate"><span class="pre">backward=True</span></code>).</p></li>
+<li><p><strong>e0</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Initial orbital parameters (forward mode; ignored when
+<code class="docutils literal notranslate"><span class="pre">backward=True</span></code>).</p></li>
+<li><p><strong>T</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Observation time [years], primary and secondary masses.</p></li>
+<li><p><strong>M</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Observation time [years], primary and secondary masses.</p></li>
+<li><p><strong>mu</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Observation time [years], primary and secondary masses.</p></li>
+<li><p><strong>l</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code></span>) – Harmonic mode indices.</p></li>
+<li><p><strong>m</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code></span>) – Harmonic mode indices.</p></li>
+<li><p><strong>k</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code></span>) – Harmonic mode indices.</p></li>
+<li><p><strong>n</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code></span>) – Harmonic mode indices.</p></li>
+<li><p><strong>dense_steps</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code></span>) – Number of trajectory output points.</p></li>
+<li><p><strong>backward</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code></span>) – If <code class="docutils literal notranslate"><span class="pre">True</span></code>, integrate backward from the separatrix.  The
+returned time axis is time before plunge (<span class="math notranslate nohighlight">\(\tau\)</span>), so
+<code class="docutils literal notranslate"><span class="pre">t[0]</span> <span class="pre">=</span> <span class="pre">0</span></code> is at plunge.  Frequency decreases as <code class="docutils literal notranslate"><span class="pre">t</span></code>
+increases (moving earlier in the inspiral).</p></li>
+<li><p><strong>e_f</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-data docutils literal notranslate"><span class="pre">Optional</span></code>[<code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code>]</span>) – Eccentricity at plunge, required when <code class="docutils literal notranslate"><span class="pre">backward=True</span></code>.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">tuple</span></code>[<code class="xref py py-class docutils literal notranslate"><span class="pre">Array</span></code>, <code class="xref py py-class docutils literal notranslate"><span class="pre">Array</span></code>]</span></p>
+</dd>
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p><ul class="simple">
+<li><p><strong>t</strong> (<em>jnp.ndarray, shape (dense_steps,)</em>) – Time [s] (forward: from start; backward: time before plunge).</p></li>
+<li><p><strong>f</strong> (<em>jnp.ndarray, shape (dense_steps,)</em>) – Instantaneous frequency [Hz], always non-negative.</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="fewtrax.trajectory.inspiral.run_inspiral">
+<span class="sig-prename descclassname"><span class="pre">fewtrax.trajectory.inspiral.</span></span><span class="sig-name descname"><span class="pre">run_inspiral</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">a</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">p0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">e0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">T</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">flux_data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">M</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1000000.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mu</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">10.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dt</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">10.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x0</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">Phi_phi0</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">Phi_theta0</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">Phi_r0</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dense_steps</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">100</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">backward</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">e_f</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/fewtrax/trajectory/inspiral.html#run_inspiral"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#fewtrax.trajectory.inspiral.run_inspiral" title="Link to this definition"></a></dt>
+<dd><p>Convenience wrapper: integrate an EMRI inspiral trajectory.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>a</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – BH spin parameter.</p></li>
+<li><p><strong>p0</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Initial orbital parameters (forward mode; ignored when
+<code class="docutils literal notranslate"><span class="pre">backward=True</span></code>).</p></li>
+<li><p><strong>e0</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Initial orbital parameters (forward mode; ignored when
+<code class="docutils literal notranslate"><span class="pre">backward=True</span></code>).</p></li>
+<li><p><strong>T</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Observation time [years].</p></li>
+<li><p><strong>flux_data</strong> (<span class="sphinx_autodoc_typehints-type"><a class="reference internal" href="#fewtrax.data.loader.FluxData" title="fewtrax.data.loader.FluxData"><code class="xref py py-class docutils literal notranslate"><span class="pre">FluxData</span></code></a></span>) – Pre-loaded flux data.</p></li>
+<li><p><strong>M</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Primary and secondary masses [<span class="math notranslate nohighlight">\(M_\odot\)</span>].</p></li>
+<li><p><strong>mu</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Primary and secondary masses [<span class="math notranslate nohighlight">\(M_\odot\)</span>].</p></li>
+<li><p><strong>dt</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Waveform sampling interval [s] (not ODE step size).</p></li>
+<li><p><strong>x0</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Inclination cosine.</p></li>
+<li><p><strong>dense_steps</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code></span>) – Number of output trajectory points.</p></li>
+<li><p><strong>backward</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code></span>) – If <code class="docutils literal notranslate"><span class="pre">True</span></code>, integrate the time-reversed ODE from the separatrix.</p></li>
+<li><p><strong>e_f</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-data docutils literal notranslate"><span class="pre">Optional</span></code>[<code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code>]</span>) – Eccentricity at plunge, required when <code class="docutils literal notranslate"><span class="pre">backward=True</span></code>.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><strong>t, p, e, Phi_phi, Phi_theta, Phi_r</strong> – Trajectory arrays.  In backward mode <code class="docutils literal notranslate"><span class="pre">t</span></code> is time before plunge.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">tuple</span></code>[<code class="xref py py-class docutils literal notranslate"><span class="pre">Array</span></code>, <code class="xref py py-data docutils literal notranslate"><span class="pre">...</span></code>]</span></p>
+</dd>
+</dl>
+</dd></dl>
+
+<p id="module-fewtrax.amplitude.interp">Teukolsky mode amplitude interpolation from FEW precomputed grids.</p>
+<p>The amplitude HDF5 file stores bicubic B-spline coefficients
+in <code class="docutils literal notranslate"><span class="pre">scipy.interpolate.bisplev</span></code> format (one set per z-slice per mode).
+This module evaluates those coefficients at query trajectory points using
+<code class="docutils literal notranslate"><span class="pre">scipy.interpolate.bisplev</span></code> and linear interpolation in the spin
+coordinate z, returning complex mode amplitudes as a numpy array.</p>
+<p>The result is then passed to the JAX summation module.</p>
+<section id="design-notes">
+<h2>Design notes<a class="headerlink" href="#design-notes" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p>The amplitude evaluation is intentionally <strong>numpy-based</strong> rather than
+JAX-based.  The spline coefficient arrays are large (several GB for all
+6993 modes), and precomputing them as JAX arrays on the GPU would exceed
+typical GPU memory budgets.  Instead, the scipy B-spline evaluation runs
+on the CPU and only the resulting (N_traj, N_modes) amplitude array is
+transferred to the GPU for the mode summation.</p></li>
+<li><p>Mode selection (thresholding by relative power) is done here to
+reduce the number of modes passed to the summation step.</p></li>
+</ul>
+</section>
+<dl class="py class">
+<dt class="sig sig-object py" id="fewtrax.amplitude.interp.AmplitudeInterpolator">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">fewtrax.amplitude.interp.</span></span><span class="sig-name descname"><span class="pre">AmplitudeInterpolator</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">amp_data</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/fewtrax/amplitude/interp.html#AmplitudeInterpolator"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#fewtrax.amplitude.interp.AmplitudeInterpolator" title="Link to this definition"></a></dt>
+<dd><p>Evaluate Teukolsky mode amplitudes <span class="math notranslate nohighlight">\(A_{\ell mkn}(a, p, e)\)</span>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>amp_data</strong> (<span class="sphinx_autodoc_typehints-type"><a class="reference internal" href="#fewtrax.data.loader.AmplitudeData" title="fewtrax.data.loader.AmplitudeData"><code class="xref py py-class docutils literal notranslate"><span class="pre">AmplitudeData</span></code></a></span>) – Pre-loaded amplitude data (B-spline coefficients + mode arrays).</p>
+</dd>
+</dl>
+<dl class="py method">
+<dt class="sig sig-object py" id="fewtrax.amplitude.interp.AmplitudeInterpolator.evaluate">
+<span class="sig-name descname"><span class="pre">evaluate</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">a</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">p</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">e</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">specific_modes</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/fewtrax/amplitude/interp.html#AmplitudeInterpolator.evaluate"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#fewtrax.amplitude.interp.AmplitudeInterpolator.evaluate" title="Link to this definition"></a></dt>
+<dd><p>Evaluate Teukolsky mode amplitudes along a trajectory.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>a</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Dimensionless BH spin.</p></li>
+<li><p><strong>p</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">ndarray</span></code></span>) – Semi-latus rectum and eccentricity.</p></li>
+<li><p><strong>e</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">ndarray</span></code></span>) – Semi-latus rectum and eccentricity.</p></li>
+<li><p><strong>x</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Inclination cosine (±1).</p></li>
+<li><p><strong>specific_modes</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-data docutils literal notranslate"><span class="pre">Optional</span></code>[<code class="xref py py-class docutils literal notranslate"><span class="pre">Sequence</span></code>[<code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code>]]</span>) – Mode indices to evaluate.  Default: all modes.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><strong>amps</strong></p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">ndarray</span></code></span></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="fewtrax.amplitude.interp.AmplitudeInterpolator.get_mode_power">
+<span class="sig-name descname"><span class="pre">get_mode_power</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">a</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">p</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">e</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/fewtrax/amplitude/interp.html#AmplitudeInterpolator.get_mode_power"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#fewtrax.amplitude.interp.AmplitudeInterpolator.get_mode_power" title="Link to this definition"></a></dt>
+<dd><p>Return mean <a href="#id1"><span class="problematic" id="id2">|</span></a>A|² per mode, shape (n_modes,).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">ndarray</span></code></span></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="fewtrax.amplitude.interp.AmplitudeInterpolator.select_modes">
+<span class="sig-name descname"><span class="pre">select_modes</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">a</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">p</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">e</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">threshold</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1e-05</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/fewtrax/amplitude/interp.html#AmplitudeInterpolator.select_modes"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#fewtrax.amplitude.interp.AmplitudeInterpolator.select_modes" title="Link to this definition"></a></dt>
+<dd><p>Return indices of modes with relative power ≥ <code class="docutils literal notranslate"><span class="pre">threshold</span> <span class="pre">×</span> <span class="pre">max</span></code>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>indices</strong></p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">ndarray</span></code></span></p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<p id="module-fewtrax.summation.modes">Harmonic mode summation for EMRI waveforms.</p>
+<p>This module implements the coherent summation of Teukolsky harmonic modes
+to produce the gravitational-wave strain:</p>
+<div class="math notranslate nohighlight">
+\[h_+ - i h_{\times} =
+    \frac{\mu}{d_L}
+    \sum_{\ell, m, k, n}
+    A_{\ell m k n}(t) \;
+    {}_{-2}Y_{\ell m}(\theta, \phi) \;
+    e^{-i \Phi_{\ell m k n}(t)}
+    + \text{c.c.}\]</div>
+<p>where the phase is</p>
+<div class="math notranslate nohighlight">
+\[\Phi_{\ell m k n}(t) = m \Phi_\phi(t) + k \Phi_\theta(t) + n \Phi_r(t)\]</div>
+<p>and the complex conjugate (c.c.) term accounts for <span class="math notranslate nohighlight">\(m &lt; 0\)</span> modes.</p>
+<p>The summation is performed by <a class="reference internal" href="#fewtrax.summation.modes.direct_mode_sum" title="fewtrax.summation.modes.direct_mode_sum"><code class="xref py py-func docutils literal notranslate"><span class="pre">direct_mode_sum()</span></code></a>, which is a
+pure JAX function that can be JIT-compiled and differentiated:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">jax</span>
+<span class="n">jit_sum</span> <span class="o">=</span> <span class="n">jax</span><span class="o">.</span><span class="n">jit</span><span class="p">(</span><span class="n">direct_mode_sum</span><span class="p">)</span>
+<span class="n">h</span> <span class="o">=</span> <span class="n">jit_sum</span><span class="p">(</span><span class="n">teuk_modes</span><span class="p">,</span> <span class="n">ylms_pos</span><span class="p">,</span> <span class="n">ylms_neg</span><span class="p">,</span> <span class="n">Phi_phi</span><span class="p">,</span> <span class="n">Phi_theta</span><span class="p">,</span> <span class="n">Phi_r</span><span class="p">,</span>
+            <span class="n">l_arr</span><span class="p">,</span> <span class="n">m_arr</span><span class="p">,</span> <span class="n">k_arr</span><span class="p">,</span> <span class="n">n_arr</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>For parameter estimation, the derivative of the strain with respect
+to waveform parameters is obtained simply by:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">dh_dp0</span> <span class="o">=</span> <span class="n">jax</span><span class="o">.</span><span class="n">grad</span><span class="p">(</span><span class="k">lambda</span> <span class="n">p0</span><span class="p">:</span> <span class="n">jnp</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">jnp</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span>
+    <span class="n">jit_sum</span><span class="p">(</span><span class="o">...</span><span class="p">,</span> <span class="n">Phi_phi</span><span class="p">(</span><span class="n">p0</span><span class="p">),</span> <span class="o">...</span><span class="p">))</span><span class="o">**</span><span class="mi">2</span><span class="p">))(</span><span class="n">p0</span><span class="p">)</span>
+</pre></div>
+</div>
+<section id="utilities">
+<h2>Utilities<a class="headerlink" href="#utilities" title="Link to this heading"></a></h2>
+<dl class="simple">
+<dt><a class="reference internal" href="#fewtrax.summation.modes.interpolated_mode_sum" title="fewtrax.summation.modes.interpolated_mode_sum"><code class="xref py py-func docutils literal notranslate"><span class="pre">interpolated_mode_sum()</span></code></a></dt><dd><p>Upsamples the sparse trajectory to a dense time grid before
+summation using cubic spline interpolation of the phases.</p>
+</dd>
+<dt><a class="reference internal" href="#fewtrax.summation.modes.ModeSum" title="fewtrax.summation.modes.ModeSum"><code class="xref py py-class docutils literal notranslate"><span class="pre">ModeSum</span></code></a></dt><dd><p>Stateful wrapper that caches the trajectory phases and amplitudes.</p>
+</dd>
+</dl>
+</section>
+<dl class="py function">
+<dt class="sig sig-object py" id="fewtrax.summation.modes.direct_mode_sum">
+<span class="sig-prename descclassname"><span class="pre">fewtrax.summation.modes.</span></span><span class="sig-name descname"><span class="pre">direct_mode_sum</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">teuk_modes</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ylms_pos</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ylms_neg</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">Phi_phi</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">Phi_theta</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">Phi_r</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">l_arr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">m_arr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">k_arr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_arr</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/fewtrax/summation/modes.html#direct_mode_sum"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#fewtrax.summation.modes.direct_mode_sum" title="Link to this definition"></a></dt>
+<dd><p>Coherently sum Teukolsky modes to produce the GW strain.</p>
+<p>Computes</p>
+<div class="math notranslate nohighlight">
+\[h(t) =
+    \sum_{(\ell,m,k,n),\; m \ge 0}
+    Y_{+}(\ell,m) \; A_{\ell m k n}(t) \;
+    e^{-i(m \Phi_\phi + k \Phi_\theta + n \Phi_r)}
+    +
+    \sum_{(\ell,m,k,n),\; m &gt; 0}
+    (-1)^\ell \; Y_{-}(\ell,m) \;
+    \bar{A}_{\ell m k n}(t) \;
+    e^{+i(m \Phi_\phi + k \Phi_\theta + n \Phi_r)}\]</div>
+<p>where <span class="math notranslate nohighlight">\(Y_{+}\)</span> and <span class="math notranslate nohighlight">\(Y_{-}\)</span> are the spin-weighted spherical
+harmonics for <span class="math notranslate nohighlight">\(+m\)</span> and <span class="math notranslate nohighlight">\(-m\)</span>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>teuk_modes</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">Array</span></code></span>) – Teukolsky mode amplitudes at each time step.  Assumed to be for
+<span class="math notranslate nohighlight">\(m \ge 0\)</span> modes only (the negative-m term uses conjugation).</p></li>
+<li><p><strong>ylms_pos</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">Array</span></code></span>) – <span class="math notranslate nohighlight">\({}_{-2}Y_{\ell m}(\theta, \phi)\)</span> for each mode.</p></li>
+<li><p><strong>ylms_neg</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">Array</span></code></span>) – <span class="math notranslate nohighlight">\({}_{-2}Y_{\ell, -m}(\theta, \phi)\)</span> for each mode.</p></li>
+<li><p><strong>Phi_phi</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">Array</span></code></span>) – Orbital phases.</p></li>
+<li><p><strong>Phi_theta</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">Array</span></code></span>) – Orbital phases.</p></li>
+<li><p><strong>Phi_r</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">Array</span></code></span>) – Orbital phases.</p></li>
+<li><p><strong>l_arr</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">Array</span></code></span>) – Mode index arrays.</p></li>
+<li><p><strong>m_arr</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">Array</span></code></span>) – Mode index arrays.</p></li>
+<li><p><strong>k_arr</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">Array</span></code></span>) – Mode index arrays.</p></li>
+<li><p><strong>n_arr</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">Array</span></code></span>) – Mode index arrays.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Complex strain <span class="math notranslate nohighlight">\(h_+ - i h_{\\times}\)</span> at each time step.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">Array</span></code></span></p>
+</dd>
+</dl>
+<p class="rubric">Notes</p>
+<p>The amplitude arrays <code class="docutils literal notranslate"><span class="pre">teuk_modes</span></code> are passed as regular (non-JAX
+static) arrays and can originate from numpy.  They will be converted
+to JAX arrays on first call.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="fewtrax.summation.modes.interpolated_mode_sum">
+<span class="sig-prename descclassname"><span class="pre">fewtrax.summation.modes.</span></span><span class="sig-name descname"><span class="pre">interpolated_mode_sum</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">t_traj</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">teuk_modes</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ylms_pos</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ylms_neg</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">Phi_phi</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">Phi_theta</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">Phi_r</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">l_arr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">m_arr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">k_arr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_arr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dt</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">10.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">M</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">T</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/fewtrax/summation/modes.html#interpolated_mode_sum"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#fewtrax.summation.modes.interpolated_mode_sum" title="Link to this definition"></a></dt>
+<dd><p>Produce a densely sampled waveform by interpolating the phases.</p>
+<p>The trajectory is computed on a sparse grid; this function upsamples
+the phases to a uniformly spaced time grid with step <code class="docutils literal notranslate"><span class="pre">dt</span></code> using
+cubic spline interpolation, then calls <a class="reference internal" href="#fewtrax.summation.modes.direct_mode_sum" title="fewtrax.summation.modes.direct_mode_sum"><code class="xref py py-func docutils literal notranslate"><span class="pre">direct_mode_sum()</span></code></a>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>t_traj</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">Array</span></code></span>) – Sparse trajectory time stamps [s].</p></li>
+<li><p><strong>teuk_modes</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">ndarray</span></code></span>) – Mode amplitudes at each trajectory point.</p></li>
+<li><p><strong>ylms_pos</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">Array</span></code></span>) – Spherical harmonics.</p></li>
+<li><p><strong>ylms_neg</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">Array</span></code></span>) – Spherical harmonics.</p></li>
+<li><p><strong>Phi_phi</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">Array</span></code></span>) – Orbital phases at trajectory points.</p></li>
+<li><p><strong>Phi_theta</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">Array</span></code></span>) – Orbital phases at trajectory points.</p></li>
+<li><p><strong>Phi_r</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">Array</span></code></span>) – Orbital phases at trajectory points.</p></li>
+<li><p><strong>l_arr</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">ndarray</span></code></span>) – Mode index arrays.</p></li>
+<li><p><strong>m_arr</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">ndarray</span></code></span>) – Mode index arrays.</p></li>
+<li><p><strong>k_arr</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">ndarray</span></code></span>) – Mode index arrays.</p></li>
+<li><p><strong>n_arr</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">ndarray</span></code></span>) – Mode index arrays.</p></li>
+<li><p><strong>dt</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Output sampling interval [s].</p></li>
+<li><p><strong>M</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Primary mass <span class="math notranslate nohighlight">\([M_\\odot]\)</span>.</p></li>
+<li><p><strong>T</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Total duration [years].  If not provided, uses <code class="docutils literal notranslate"><span class="pre">t_traj[-1]</span></code>.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">tuple</span></code>[<code class="xref py py-class docutils literal notranslate"><span class="pre">Array</span></code>, <code class="xref py py-class docutils literal notranslate"><span class="pre">Array</span></code>]</span></p>
+</dd>
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p><ul class="simple">
+<li><p><strong>t_dense</strong> (<em>jnp.ndarray, shape (N_dense,)</em>) – Dense time stamps [s].</p></li>
+<li><p><strong>h</strong> (<em>jnp.ndarray, shape (N_dense,), complex128</em>) – Waveform strain.</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="fewtrax.summation.modes.to_frequency_domain">
+<span class="sig-prename descclassname"><span class="pre">fewtrax.summation.modes.</span></span><span class="sig-name descname"><span class="pre">to_frequency_domain</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">h</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dt</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/fewtrax/summation/modes.html#to_frequency_domain"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#fewtrax.summation.modes.to_frequency_domain" title="Link to this definition"></a></dt>
+<dd><p>Transform the time-domain waveform to the frequency domain.</p>
+<p>Computes <span class="math notranslate nohighlight">\(\tilde{h}(f) = \int h(t) e^{2\pi i f t} dt\)</span> via the
+FFT, normalised to physical units (strain/Hz).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>h</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">Array</span></code></span>) – Complex or real time-domain strain.</p></li>
+<li><p><strong>dt</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Sampling interval [s].</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">tuple</span></code>[<code class="xref py py-class docutils literal notranslate"><span class="pre">Array</span></code>, <code class="xref py py-class docutils literal notranslate"><span class="pre">Array</span></code>]</span></p>
+</dd>
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p><ul class="simple">
+<li><p><strong>freqs</strong> (<em>jnp.ndarray, shape (N//2 + 1,)</em>) – Positive frequencies [Hz].</p></li>
+<li><p><strong>h_tilde</strong> (<em>jnp.ndarray, shape (N//2 + 1,), complex</em>) – One-sided frequency-domain strain.</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="fewtrax.summation.modes.ModeSum">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">fewtrax.summation.modes.</span></span><span class="sig-name descname"><span class="pre">ModeSum</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">l_arr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">m_arr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">k_arr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_arr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ylms_pos</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ylms_neg</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dist</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">M</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mu</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/fewtrax/summation/modes.html#ModeSum"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#fewtrax.summation.modes.ModeSum" title="Link to this definition"></a></dt>
+<dd><p>Stateful wrapper that caches trajectory data and evaluates the sum.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>l_arr</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">ndarray</span></code></span>) – Mode index arrays.</p></li>
+<li><p><strong>m_arr</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">ndarray</span></code></span>) – Mode index arrays.</p></li>
+<li><p><strong>k_arr</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">ndarray</span></code></span>) – Mode index arrays.</p></li>
+<li><p><strong>n_arr</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">ndarray</span></code></span>) – Mode index arrays.</p></li>
+<li><p><strong>ylms_pos</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">Array</span></code></span>) – Spherical harmonics for each mode.</p></li>
+<li><p><strong>ylms_neg</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">Array</span></code></span>) – Spherical harmonics for each mode.</p></li>
+<li><p><strong>dist</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Luminosity distance [Gpc].</p></li>
+<li><p><strong>M</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Primary mass [<span class="math notranslate nohighlight">\(M_\\odot\)</span>].</p></li>
+<li><p><strong>mu</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Secondary mass [<span class="math notranslate nohighlight">\(M_\\odot\)</span>].</p></li>
+</ul>
+</dd>
+</dl>
+<p class="rubric">Examples</p>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">summer</span> <span class="o">=</span> <span class="n">ModeSum</span><span class="p">(</span><span class="n">l_arr</span><span class="p">,</span> <span class="n">m_arr</span><span class="p">,</span> <span class="n">k_arr</span><span class="p">,</span> <span class="n">n_arr</span><span class="p">,</span> <span class="n">ylms_pos</span><span class="p">,</span> <span class="n">ylms_neg</span><span class="p">,</span>
+<span class="gp">... </span>                 <span class="n">dist</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span> <span class="n">M</span><span class="o">=</span><span class="mf">1e6</span><span class="p">,</span> <span class="n">mu</span><span class="o">=</span><span class="mf">10.0</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">h</span> <span class="o">=</span> <span class="n">summer</span><span class="p">(</span><span class="n">t_traj</span><span class="p">,</span> <span class="n">teuk_modes</span><span class="p">,</span> <span class="n">Phi_phi</span><span class="p">,</span> <span class="n">Phi_theta</span><span class="p">,</span> <span class="n">Phi_r</span><span class="p">,</span> <span class="n">dt</span><span class="o">=</span><span class="mf">10.0</span><span class="p">)</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<p id="module-fewtrax.data.loader">HDF5 data loading and JAX interpolator construction.</p>
+<p>Flux data (<code class="docutils literal notranslate"><span class="pre">KerrEccEqFluxData.h5</span></code>) is loaded using the <strong>ELQ convention</strong>:
+the stored <span class="math notranslate nohighlight">\(\dot{E}\)</span> and <span class="math notranslate nohighlight">\(\dot{L}\)</span> grids are normalised by the
+leading-order Peters (1964) PN expressions, which are smooth and free of
+separatrix singularities.  At ODE run-time the stored ratio is multiplied by
+the PN function to recover the physical flux, and then the (Ė, L̇) → (ṗ, ė)
+Jacobian is applied using JAX automatic differentiation.</p>
+<p>Amplitude data (<code class="docutils literal notranslate"><span class="pre">ZNAmps_l10_m10_n55_DS2Outer.h5</span></code>) stores bicubic B-spline
+coefficients (<code class="docutils literal notranslate"><span class="pre">multispline</span></code> format).  These are evaluated at query points
+using <code class="docutils literal notranslate"><span class="pre">scipy.interpolate.bisplev</span></code>, which can be called from the amplitude
+interpolation module.  The coefficients themselves are stored in the
+<a class="reference internal" href="#fewtrax.data.loader.AmplitudeData" title="fewtrax.data.loader.AmplitudeData"><code class="xref py py-class docutils literal notranslate"><span class="pre">AmplitudeData</span></code></a> container as raw numpy arrays.</p>
+<p>Data directory discovery (in order):
+1. Explicit <code class="docutils literal notranslate"><span class="pre">data_dir</span></code> argument.
+2. <code class="docutils literal notranslate"><span class="pre">FEW_DATA_DIR</span></code> environment variable.
+3. FEW package file-manager cache.
+4. <code class="docutils literal notranslate"><span class="pre">~/.fewtrax/data/</span></code>.</p>
+<dl class="py class">
+<dt class="sig sig-object py" id="fewtrax.data.loader.FluxData">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">fewtrax.data.loader.</span></span><span class="sig-name descname"><span class="pre">FluxData</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">Edot_A</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">Ldot_A</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">Edot_B</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">Ldot_B</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/fewtrax/data/loader.html#FluxData"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#fewtrax.data.loader.FluxData" title="Link to this definition"></a></dt>
+<dd><p>Container for the Kerr eccentric equatorial flux interpolators.</p>
+<p>Stores the ratio <code class="docutils literal notranslate"><span class="pre">Edot_GR</span> <span class="pre">/</span> <span class="pre">Edot_PN</span></code> and <code class="docutils literal notranslate"><span class="pre">Ldot_GR</span> <span class="pre">/</span> <span class="pre">Ldot_PN</span></code>
+(ELQ convention), where the PN normalisation is the leading-order
+Peters (1964) expression.  At ODE run-time the ratio is multiplied by
+the PN function to recover the physical flux; the Jacobian
+(Ė, L̇) → (ṗ, ė) is then applied via JAX automatic differentiation.</p>
+<p>Inherits from <code class="xref py py-class docutils literal notranslate"><span class="pre">equinox.Module</span></code> so it is a valid JAX pytree and
+can be used inside JIT-compiled functions and vmapped code.</p>
+<dl class="py attribute">
+<dt class="sig sig-object py">
+<span class="sig-name descname"><span class="pre">Edot_A,</span> <span class="pre">Ldot_A</span></span></dt>
+<dd><p>Energy- and angular-momentum-flux ratio interpolators for Region A.
+Inputs are normalised coordinates (u, w, z) ∈ [0, 1]³.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>CubicSpline3D</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py">
+<span class="sig-name descname"><span class="pre">Edot_B,</span> <span class="pre">Ldot_B</span></span></dt>
+<dd><p>Same for Region B.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>CubicSpline3D</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="fewtrax.data.loader.AmplitudeData">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">fewtrax.data.loader.</span></span><span class="sig-name descname"><span class="pre">AmplitudeData</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">coeffs_A</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">coeffs_B</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">u_knots_A</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">w_knots_A</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">u_knots_B</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">w_knots_B</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">z_knots_A</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">z_knots_B</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">l_arr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">m_arr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">k_arr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_arr</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/fewtrax/data/loader.html#AmplitudeData"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#fewtrax.data.loader.AmplitudeData" title="Link to this definition"></a></dt>
+<dd><p>Container for Teukolsky mode amplitude data.</p>
+<p>The amplitude HDF5 file stores bicubic B-spline coefficients in the
+<code class="docutils literal notranslate"><span class="pre">multispline</span></code>/<code class="docutils literal notranslate"><span class="pre">scipy.bisplev</span></code> format.  They are kept as raw numpy
+arrays and evaluated at query points using <code class="docutils literal notranslate"><span class="pre">scipy.interpolate.bisplev</span></code>.</p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="fewtrax.data.loader.AmplitudeData.coeffs_A">
+<span class="sig-name descname"><span class="pre">coeffs_A</span></span><a class="headerlink" href="#fewtrax.data.loader.AmplitudeData.coeffs_A" title="Link to this definition"></a></dt>
+<dd><p>B-spline coefficients for Region A.  Axis 2 indexes [real, imag].</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>np.ndarray, shape (n_z, n_modes, 2, n_coeffs_A)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="fewtrax.data.loader.AmplitudeData.coeffs_B">
+<span class="sig-name descname"><span class="pre">coeffs_B</span></span><a class="headerlink" href="#fewtrax.data.loader.AmplitudeData.coeffs_B" title="Link to this definition"></a></dt>
+<dd><p>Same for Region B.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>np.ndarray or None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py">
+<span class="sig-name descname"><span class="pre">u_knots_A,</span> <span class="pre">w_knots_A</span></span></dt>
+<dd><p>B-spline knot sequences (including boundary repetitions) for Region A.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>np.ndarray</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py">
+<span class="sig-name descname"><span class="pre">u_knots_B,</span> <span class="pre">w_knots_B</span></span></dt>
+<dd><p>Same for Region B.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>np.ndarray or None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py">
+<span class="sig-name descname"><span class="pre">z_knots_A,</span> <span class="pre">z_knots_B</span></span></dt>
+<dd><p>Spin-grid values used for linear interpolation between z-slices.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>np.ndarray</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py">
+<span class="sig-name descname"><span class="pre">l_arr,</span> <span class="pre">m_arr,</span> <span class="pre">k_arr,</span> <span class="pre">n_arr</span></span></dt>
+<dd><p>Mode index arrays, shape (n_modes,).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>np.ndarray of int</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="fewtrax.data.loader.find_few_data_dir">
+<span class="sig-prename descclassname"><span class="pre">fewtrax.data.loader.</span></span><span class="sig-name descname"><span class="pre">find_few_data_dir</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data_dir</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/fewtrax/data/loader.html#find_few_data_dir"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#fewtrax.data.loader.find_few_data_dir" title="Link to this definition"></a></dt>
+<dd><p>Locate the FEW data directory.</p>
+<p>Searches (in order): explicit argument → <code class="docutils literal notranslate"><span class="pre">FEW_DATA_DIR</span></code> env var →
+FEW package file-manager cache → <code class="docutils literal notranslate"><span class="pre">~/.fewtrax/data/</span></code>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>data_dir</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-data docutils literal notranslate"><span class="pre">Union</span></code>[<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>, <code class="xref py py-class docutils literal notranslate"><span class="pre">Path</span></code>, <code class="xref py py-obj docutils literal notranslate"><span class="pre">None</span></code>]</span>) – Explicit data directory override.</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">Path</span></code></span></p>
+</dd>
+<dt class="field-odd">Raises<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>FileNotFoundError</strong> – </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="fewtrax.data.loader.load_flux_data">
+<span class="sig-prename descclassname"><span class="pre">fewtrax.data.loader.</span></span><span class="sig-name descname"><span class="pre">load_flux_data</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data_dir</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">downsample</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/fewtrax/data/loader.html#load_flux_data"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#fewtrax.data.loader.load_flux_data" title="Link to this definition"></a></dt>
+<dd><p>Load Kerr eccentric equatorial flux data (ELQ convention).</p>
+<p>Reads <code class="docutils literal notranslate"><span class="pre">KerrEccEqFluxData.h5</span></code> and builds JAX 3-D cubic-spline
+interpolators for the PN-normalised energy and angular-momentum flux
+ratios.  The normalisation uses the leading-order Peters (1964)
+expressions, which have no separatrix singularity.</p>
+<p>At ODE run-time, the physical fluxes are recovered by multiplying the
+stored ratio by the PN function.  The Jacobian
+(Ė, L̇) → (ṗ, ė) is then applied via JAX automatic differentiation
+inside <code class="xref py py-class docutils literal notranslate"><span class="pre">EMRIInspiral</span></code>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>data_dir</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-data docutils literal notranslate"><span class="pre">Union</span></code>[<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>, <code class="xref py py-class docutils literal notranslate"><span class="pre">Path</span></code>, <code class="xref py py-obj docutils literal notranslate"><span class="pre">None</span></code>]</span>) – Directory containing <code class="docutils literal notranslate"><span class="pre">KerrEccEqFluxData.h5</span></code>.</p></li>
+<li><p><strong>downsample</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-data docutils literal notranslate"><span class="pre">Optional</span></code>[<code class="xref py py-class docutils literal notranslate"><span class="pre">list</span></code>]</span>) – <code class="docutils literal notranslate"><span class="pre">[(dU_A,</span> <span class="pre">dW_A,</span> <span class="pre">dZ_A),</span> <span class="pre">(dU_B,</span> <span class="pre">dW_B,</span> <span class="pre">dZ_B)]</span></code> downsampling factors.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><span class="sphinx_autodoc_typehints-type"><a class="reference internal" href="#fewtrax.data.loader.FluxData" title="fewtrax.data.loader.FluxData"><code class="xref py py-class docutils literal notranslate"><span class="pre">FluxData</span></code></a></span></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="fewtrax.data.loader.load_amplitude_data">
+<span class="sig-prename descclassname"><span class="pre">fewtrax.data.loader.</span></span><span class="sig-name descname"><span class="pre">load_amplitude_data</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data_dir</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">filename</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'ZNAmps_l10_m10_n55_DS2Outer.h5'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/fewtrax/data/loader.html#load_amplitude_data"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#fewtrax.data.loader.load_amplitude_data" title="Link to this definition"></a></dt>
+<dd><p>Load Teukolsky mode amplitude data.</p>
+<p>Reads the amplitude HDF5 file and returns an <a class="reference internal" href="#fewtrax.data.loader.AmplitudeData" title="fewtrax.data.loader.AmplitudeData"><code class="xref py py-class docutils literal notranslate"><span class="pre">AmplitudeData</span></code></a>
+container holding the raw B-spline coefficients.  The coefficients are
+in <code class="docutils literal notranslate"><span class="pre">scipy.interpolate.bisplev</span></code> format and are evaluated at query
+points in <a class="reference internal" href="#fewtrax.amplitude.interp.AmplitudeInterpolator" title="fewtrax.amplitude.interp.AmplitudeInterpolator"><code class="xref py py-class docutils literal notranslate"><span class="pre">AmplitudeInterpolator</span></code></a>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>data_dir</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-data docutils literal notranslate"><span class="pre">Union</span></code>[<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>, <code class="xref py py-class docutils literal notranslate"><span class="pre">Path</span></code>, <code class="xref py py-obj docutils literal notranslate"><span class="pre">None</span></code>]</span>) – FEW data directory.</p></li>
+<li><p><strong>filename</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code></span>) – Amplitude HDF5 file.  Default: <code class="docutils literal notranslate"><span class="pre">ZNAmps_l10_m10_n55_DS2Outer.h5</span></code>.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><span class="sphinx_autodoc_typehints-type"><a class="reference internal" href="#fewtrax.data.loader.AmplitudeData" title="fewtrax.data.loader.AmplitudeData"><code class="xref py py-class docutils literal notranslate"><span class="pre">AmplitudeData</span></code></a></span></p>
+</dd>
+</dl>
+</dd></dl>
+
+<p id="module-fewtrax.utils.geodesic">Kerr geodesic utilities implemented in JAX.</p>
+<p>This module provides JAX-compatible functions for computing key quantities
+of Kerr geodesics required by the EMRI waveform model:</p>
+<ul class="simple">
+<li><p>Orbital energy <span class="math notranslate nohighlight">\(E\)</span> and angular momentum <span class="math notranslate nohighlight">\(L_z\)</span></p></li>
+<li><p>Separatrix <span class="math notranslate nohighlight">\(p_{\rm sep}(a, e, x_I)\)</span></p></li>
+<li><p>Boyer-Lindquist fundamental frequencies
+<span class="math notranslate nohighlight">\(\Omega_\phi, \Omega_\theta, \Omega_r\)</span></p></li>
+</ul>
+<p>All functions are JIT-compilable and differentiable via JAX’s automatic
+differentiation.  Elliptic integrals <span class="math notranslate nohighlight">\(K(k)\)</span> and <span class="math notranslate nohighlight">\(E(k)\)</span> are
+evaluated with <code class="docutils literal notranslate"><span class="pre">jax.scipy.special</span></code>; the complete elliptic integral of
+the third kind <span class="math notranslate nohighlight">\(\Pi(n, k)\)</span> is evaluated by 64-point Gauss-Legendre
+quadrature on the standard integral representation.</p>
+<section id="mathematical-background">
+<h2>Mathematical background<a class="headerlink" href="#mathematical-background" title="Link to this heading"></a></h2>
+<p>Orbital mechanics follows Schmidt (2002), gr-qc/0202090.
+Separatrix polynomials follow Glampedakis &amp; Kennefick (2002),
+gr-qc/0203086.</p>
+</section>
+<dl class="py function">
+<dt class="sig sig-object py" id="fewtrax.utils.geodesic.ellipk">
+<span class="sig-prename descclassname"><span class="pre">fewtrax.utils.geodesic.</span></span><span class="sig-name descname"><span class="pre">ellipk</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">m</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/fewtrax/utils/geodesic.html#ellipk"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#fewtrax.utils.geodesic.ellipk" title="Link to this definition"></a></dt>
+<dd><p>Complete elliptic integral of the first kind <span class="math notranslate nohighlight">\(K(m)\)</span>.</p>
+<div class="math notranslate nohighlight">
+\[K(m) = \int_0^{\pi/2} \frac{d\theta}{\sqrt{1 - m \sin^2\theta}}\]</div>
+<p>Uses 64-point Gauss-Legendre quadrature.  <code class="docutils literal notranslate"><span class="pre">m</span></code> is the <em>parameter</em>
+(square of the modulus), consistent with scipy’s convention.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="fewtrax.utils.geodesic.ellipe">
+<span class="sig-prename descclassname"><span class="pre">fewtrax.utils.geodesic.</span></span><span class="sig-name descname"><span class="pre">ellipe</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">m</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/fewtrax/utils/geodesic.html#ellipe"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#fewtrax.utils.geodesic.ellipe" title="Link to this definition"></a></dt>
+<dd><p>Complete elliptic integral of the second kind <span class="math notranslate nohighlight">\(E(m)\)</span>.</p>
+<div class="math notranslate nohighlight">
+\[E(m) = \int_0^{\pi/2} \sqrt{1 - m \sin^2\theta}\, d\theta\]</div>
+<p>Uses 64-point Gauss-Legendre quadrature.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="fewtrax.utils.geodesic.ellip_pi">
+<span class="sig-prename descclassname"><span class="pre">fewtrax.utils.geodesic.</span></span><span class="sig-name descname"><span class="pre">ellip_pi</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">n</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">k</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/fewtrax/utils/geodesic.html#ellip_pi"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#fewtrax.utils.geodesic.ellip_pi" title="Link to this definition"></a></dt>
+<dd><p>Complete elliptic integral of the third kind <span class="math notranslate nohighlight">\(\Pi(n, k)\)</span>.</p>
+<div class="math notranslate nohighlight">
+\[\Pi(n, k) = \int_0^{\pi/2}
+    \frac{d\theta}{(1 - n\sin^2\theta)\sqrt{1 - k^2\sin^2\theta}}\]</div>
+<p>Evaluated via 64-point Gauss-Legendre quadrature on <span class="math notranslate nohighlight">\([0, \pi/2]\)</span>.
+Accurate to approximately <span class="math notranslate nohighlight">\(10^{-12}\)</span> for the parameter ranges
+encountered in EMRI trajectories.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>n</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Characteristic parameter; must satisfy <span class="math notranslate nohighlight">\(n &lt; 1\)</span>.</p></li>
+<li><p><strong>k</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Modulus; must satisfy <span class="math notranslate nohighlight">\(0 \le k &lt; 1\)</span>.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><span class="math notranslate nohighlight">\(\Pi(n, k)\)</span>.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="fewtrax.utils.geodesic.kerr_geo_energy_equatorial">
+<span class="sig-prename descclassname"><span class="pre">fewtrax.utils.geodesic.</span></span><span class="sig-name descname"><span class="pre">kerr_geo_energy_equatorial</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">a</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">p</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">e</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/fewtrax/utils/geodesic.html#kerr_geo_energy_equatorial"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#fewtrax.utils.geodesic.kerr_geo_energy_equatorial" title="Link to this definition"></a></dt>
+<dd><p>Orbital energy <span class="math notranslate nohighlight">\(E\)</span> for an equatorial Kerr geodesic.</p>
+<p>Uses the closed-form expression derived from the roots of the radial
+potential (Schmidt 2002, Eqs. 28–32), specialized to the equatorial
+case <span class="math notranslate nohighlight">\(x_I = \pm 1\)</span>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>a</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Dimensionless spin parameter, <span class="math notranslate nohighlight">\(|a| \le 1\)</span>.</p></li>
+<li><p><strong>p</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Semi-latus rectum in units of <span class="math notranslate nohighlight">\(M\)</span>.</p></li>
+<li><p><strong>e</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Orbital eccentricity, <span class="math notranslate nohighlight">\(0 \le e &lt; 1\)</span>.</p></li>
+<li><p><strong>x</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Cosine of inclination; must be <span class="math notranslate nohighlight">\(\pm 1\)</span> for equatorial orbits.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Specific orbital energy <span class="math notranslate nohighlight">\(E\)</span>.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="fewtrax.utils.geodesic.kerr_geo_angular_momentum_equatorial">
+<span class="sig-prename descclassname"><span class="pre">fewtrax.utils.geodesic.</span></span><span class="sig-name descname"><span class="pre">kerr_geo_angular_momentum_equatorial</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">a</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">p</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">e</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">En</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/fewtrax/utils/geodesic.html#kerr_geo_angular_momentum_equatorial"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#fewtrax.utils.geodesic.kerr_geo_angular_momentum_equatorial" title="Link to this definition"></a></dt>
+<dd><p>Orbital angular momentum <span class="math notranslate nohighlight">\(L_z\)</span> for an equatorial Kerr geodesic.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>a</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Orbital parameters as for <a class="reference internal" href="#fewtrax.utils.geodesic.kerr_geo_energy_equatorial" title="fewtrax.utils.geodesic.kerr_geo_energy_equatorial"><code class="xref py py-func docutils literal notranslate"><span class="pre">kerr_geo_energy_equatorial()</span></code></a>.</p></li>
+<li><p><strong>p</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Orbital parameters as for <a class="reference internal" href="#fewtrax.utils.geodesic.kerr_geo_energy_equatorial" title="fewtrax.utils.geodesic.kerr_geo_energy_equatorial"><code class="xref py py-func docutils literal notranslate"><span class="pre">kerr_geo_energy_equatorial()</span></code></a>.</p></li>
+<li><p><strong>e</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Orbital parameters as for <a class="reference internal" href="#fewtrax.utils.geodesic.kerr_geo_energy_equatorial" title="fewtrax.utils.geodesic.kerr_geo_energy_equatorial"><code class="xref py py-func docutils literal notranslate"><span class="pre">kerr_geo_energy_equatorial()</span></code></a>.</p></li>
+<li><p><strong>x</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Orbital parameters as for <a class="reference internal" href="#fewtrax.utils.geodesic.kerr_geo_energy_equatorial" title="fewtrax.utils.geodesic.kerr_geo_energy_equatorial"><code class="xref py py-func docutils literal notranslate"><span class="pre">kerr_geo_energy_equatorial()</span></code></a>.</p></li>
+<li><p><strong>En</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Orbital energy (from <a class="reference internal" href="#fewtrax.utils.geodesic.kerr_geo_energy_equatorial" title="fewtrax.utils.geodesic.kerr_geo_energy_equatorial"><code class="xref py py-func docutils literal notranslate"><span class="pre">kerr_geo_energy_equatorial()</span></code></a>).</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Specific orbital angular momentum <span class="math notranslate nohighlight">\(L_z\)</span>.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="fewtrax.utils.geodesic.get_separatrix">
+<span class="sig-prename descclassname"><span class="pre">fewtrax.utils.geodesic.</span></span><span class="sig-name descname"><span class="pre">get_separatrix</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">a</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">e</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/fewtrax/utils/geodesic.html#get_separatrix"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#fewtrax.utils.geodesic.get_separatrix" title="Link to this definition"></a></dt>
+<dd><p>Compute the separatrix semi-latus rectum <span class="math notranslate nohighlight">\(p_{\\rm sep}(a, e, x_I)\)</span>.</p>
+<p>The separatrix is the boundary between stable and unstable bound orbits.
+For Schwarzschild it equals <span class="math notranslate nohighlight">\(6 + 2e\)</span>; for Kerr equatorial it is
+found as the root of a polynomial (Glampedakis &amp; Kennefick 2002).</p>
+<p>Only equatorial orbits (<span class="math notranslate nohighlight">\(x_I = \pm 1\)</span>) are currently supported.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>a</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Dimensionless BH spin, <span class="math notranslate nohighlight">\(-1 &lt; a &lt; 1\)</span>.</p></li>
+<li><p><strong>e</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Eccentricity.</p></li>
+<li><p><strong>x</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Cosine of inclination; must be <span class="math notranslate nohighlight">\(\pm 1\)</span>.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><span class="math notranslate nohighlight">\(p_{\\rm sep}\)</span>.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="fewtrax.utils.geodesic.get_fundamental_frequencies">
+<span class="sig-prename descclassname"><span class="pre">fewtrax.utils.geodesic.</span></span><span class="sig-name descname"><span class="pre">get_fundamental_frequencies</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">a</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">p</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">e</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/fewtrax/utils/geodesic.html#get_fundamental_frequencies"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#fewtrax.utils.geodesic.get_fundamental_frequencies" title="Link to this definition"></a></dt>
+<dd><p>Boyer-Lindquist fundamental frequencies for an equatorial Kerr geodesic.</p>
+<div class="math notranslate nohighlight">
+\[\Omega_\phi = \frac{\Upsilon_\phi}{\Gamma}, \quad
+\Omega_\theta = \frac{\Upsilon_\theta}{\Gamma}, \quad
+\Omega_r = \frac{\Upsilon_r}{\Gamma}\]</div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>a</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – BH spin parameter.</p></li>
+<li><p><strong>p</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Semi-latus rectum in units of <span class="math notranslate nohighlight">\(M\)</span>.</p></li>
+<li><p><strong>e</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Eccentricity.</p></li>
+<li><p><strong>x</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Cosine of inclination (<span class="math notranslate nohighlight">\(\pm 1\)</span> for equatorial).</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><span class="math notranslate nohighlight">\((\Omega_\phi, \Omega_\theta, \Omega_r)\)</span>.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">tuple</span></code>[<code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code>, <code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code>, <code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code>]</span></p>
+</dd>
+</dl>
+</dd></dl>
+
+<p id="module-fewtrax.utils.harmonics">Spin-weight −2 spherical harmonics <span class="math notranslate nohighlight">\({}_{-2}Y_{\ell m}(\theta, \phi)\)</span>.</p>
+<p>These are the spin-weighted spherical harmonics with spin weight <span class="math notranslate nohighlight">\(s = -2\)</span>
+that appear in the gravitational wave strain decomposition:</p>
+<div class="math notranslate nohighlight">
+\[h_+ - i h_{\times} = \sum_{\ell, m} {}_{-2}Y_{\ell m}(\theta, \phi) h_{\ell m}(t)\]</div>
+<p>Closed-form expressions are tabulated for <span class="math notranslate nohighlight">\(\ell = 2, \ldots, 10\)</span>.
+They are expressed in terms of
+<span class="math notranslate nohighlight">\(c = \cos(\theta/2)\)</span> and <span class="math notranslate nohighlight">\(s = \sin(\theta/2)\)</span>.</p>
+<p>All functions are JIT-compilable.  For use in vectorised pipelines,
+use <a class="reference internal" href="#fewtrax.utils.harmonics.get_ylms_for_modes" title="fewtrax.utils.harmonics.get_ylms_for_modes"><code class="xref py py-func docutils literal notranslate"><span class="pre">get_ylms_for_modes()</span></code></a> which returns a 1-D complex array of
+harmonics for a list of <span class="math notranslate nohighlight">\((\ell, m)\)</span> mode indices.</p>
+<p class="rubric">References</p>
+<p>Goldberg et al. (1967); Berti, Cardoso &amp; Will (2006) for conventions.</p>
+<dl class="py function">
+<dt class="sig sig-object py" id="fewtrax.utils.harmonics.spin_weighted_spherical_harmonic">
+<span class="sig-prename descclassname"><span class="pre">fewtrax.utils.harmonics.</span></span><span class="sig-name descname"><span class="pre">spin_weighted_spherical_harmonic</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">l</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">m</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">theta</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">phi</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/fewtrax/utils/harmonics.html#spin_weighted_spherical_harmonic"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#fewtrax.utils.harmonics.spin_weighted_spherical_harmonic" title="Link to this definition"></a></dt>
+<dd><p>Spin-weight −2 spherical harmonic <span class="math notranslate nohighlight">\({}_{-2}Y_{\ell m}(\theta, \phi)\)</span>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>l</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code></span>) – Degree <span class="math notranslate nohighlight">\(\ell \ge 2\)</span>.</p></li>
+<li><p><strong>m</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code></span>) – Order <span class="math notranslate nohighlight">\(-\ell \le m \le \ell\)</span>.</p></li>
+<li><p><strong>theta</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Polar angle [rad].</p></li>
+<li><p><strong>phi</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Azimuthal angle [rad].</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The harmonic value.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">complex</span></code></span></p>
+</dd>
+</dl>
+<p class="rubric">Notes</p>
+<p>Expressions are hardcoded for <span class="math notranslate nohighlight">\(\ell = 2 \ldots 10\)</span>.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="fewtrax.utils.harmonics.get_ylms_for_modes">
+<span class="sig-prename descclassname"><span class="pre">fewtrax.utils.harmonics.</span></span><span class="sig-name descname"><span class="pre">get_ylms_for_modes</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">l_arr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">m_arr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">theta</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">phi</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/fewtrax/utils/harmonics.html#get_ylms_for_modes"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#fewtrax.utils.harmonics.get_ylms_for_modes" title="Link to this definition"></a></dt>
+<dd><p>Compute <span class="math notranslate nohighlight">\({}_{-2}Y_{\ell m}(\theta, \phi)\)</span> for an array of modes.</p>
+<p>Returns a complex array of shape <code class="docutils literal notranslate"><span class="pre">(N_modes,)</span></code> as well as the
+corresponding negative-m harmonics <code class="docutils literal notranslate"><span class="pre">(N_modes,)</span></code> needed for the
+conjugate term in the summation.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>l_arr</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">ndarray</span></code></span>) – Arrays of <span class="math notranslate nohighlight">\(\ell\)</span> and <span class="math notranslate nohighlight">\(m\)</span> values (length N_modes).</p></li>
+<li><p><strong>m_arr</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">ndarray</span></code></span>) – Arrays of <span class="math notranslate nohighlight">\(\ell\)</span> and <span class="math notranslate nohighlight">\(m\)</span> values (length N_modes).</p></li>
+<li><p><strong>theta</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Observer angles [rad].</p></li>
+<li><p><strong>phi</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Observer angles [rad].</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">Array</span></code></span></p>
+</dd>
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p><ul class="simple">
+<li><p><strong>ylms_pos</strong> (<em>jnp.ndarray, shape (N_modes,), complex</em>) – Harmonics <span class="math notranslate nohighlight">\({}_{-2}Y_{\ell m}\)</span> (for m as given).</p></li>
+<li><p><strong>ylms_neg</strong> (<em>jnp.ndarray, shape (N_modes,), complex</em>) – Harmonics <span class="math notranslate nohighlight">\({}_{-2}Y_{\ell, -m}\)</span> (for the negative-m conjugate term).</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="index.html" class="btn btn-neutral float-left" title="fewtrax" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2026, Bert Depoorter.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>
