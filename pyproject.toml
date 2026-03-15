@@ -36,6 +36,8 @@ test = [
 ]
 compare = [
     "FastEMRIWaveforms",
+    "python-dotenv>=1.0.0",
+    "matplotlib>=3.8.0",
 ]
 wavelet = [
     "pywavelet>=0.1.0",
