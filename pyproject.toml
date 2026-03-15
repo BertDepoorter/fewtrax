@@ -1,0 +1,69 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "fewtrax"
+version = "0.1.0"
+description = "JAX implementation of EMRI waveforms (KerrEccentricEquatorial) with JIT, vmap, and autodiff support"
+license = "MIT"
+requires-python = ">=3.10"
+dependencies = [
+    "jax>=0.4.25",
+    "jaxlib>=0.4.25",
+    "diffrax>=0.5.1",
+    "interpax>=0.3.3",
+    "h5py>=3.9.0",
+    "numpy>=1.26.0",
+    "scipy>=1.12.0",
+    "equinox>=0.11.0",
+    "multispline>=0.8.5",
+    "pydantic>=2.12.5",
+    "rich>=14.3.3",
+    "numba>=0.64.0",
+    "lisaconstants>=2.0.1",
+    "tqdm>=4.67.3",
+]
+
+[project.optional-dependencies]
+gpu = [
+    "jax[cuda12]",
+]
+test = [
+    "pytest>=8.0.0",
+    "pytest-cov>=4.1.0",
+    "matplotlib>=3.8.0",
+]
+compare = [
+    "FastEMRIWaveforms",
+]
+wavelet = [
+    "pywavelet>=0.1.0",
+]
+dev = [
+    "fewtrax[test,compare,wavelet]",
+    "jupyter>=1.0.0",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/fewtrax"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+filterwarnings = ["ignore::DeprecationWarning"]
+addopts = "-v"
+
+[tool.coverage.run]
+source = ["fewtrax"]
+
+[tool.ruff]
+line-length = 100
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-cov>=4.1.0",
+    "matplotlib>=3.8.0",
+    "jupyter>=1.0.0",
+    "ipykernel>=6.0.0",
+]
