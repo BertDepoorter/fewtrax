@@ -365,7 +365,7 @@
 <a class="viewcode-back" href="../../../api.html#fewtrax.utils.geodesic.get_separatrix">[docs]</a>
 <span class="nd">@partial</span><span class="p">(</span><span class="n">jit</span><span class="p">,</span> <span class="n">static_argnames</span><span class="o">=</span><span class="p">())</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">get_separatrix</span><span class="p">(</span><span class="n">a</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">e</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">x</span><span class="p">:</span> <span class="nb">float</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
-<span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;Compute the separatrix semi-latus rectum :math:`p_{\\rm sep}(a, e, x_I)`.</span>
+<span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;Compute the separatrix semi-latus rectum :math:`p_{\rm sep}(a, e, x_I)`.</span>
 
 <span class="sd">    The separatrix is the boundary between stable and unstable bound orbits.</span>
 <span class="sd">    For Schwarzschild it equals :math:`6 + 2e`; for Kerr equatorial it is</span>
@@ -385,7 +385,7 @@
 <span class="sd">    Returns</span>
 <span class="sd">    -------</span>
 <span class="sd">    float</span>
-<span class="sd">        :math:`p_{\\rm sep}`.</span>
+<span class="sd">        :math:`p_{\rm sep}`.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="c1"># Schwarzschild case</span>
     <span class="n">schw_sep</span> <span class="o">=</span> <span class="mf">6.0</span> <span class="o">+</span> <span class="mf">2.0</span> <span class="o">*</span> <span class="n">e</span>

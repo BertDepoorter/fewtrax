@@ -235,9 +235,9 @@
 <span class="sd">        Parameters</span>
 <span class="sd">        ----------</span>
 <span class="sd">        M : float</span>
-<span class="sd">            Primary BH mass [:math:`M_\\odot`].</span>
+<span class="sd">            Primary BH mass [:math:`M_\odot`].</span>
 <span class="sd">        mu : float</span>
-<span class="sd">            Secondary mass [:math:`M_\\odot`].</span>
+<span class="sd">            Secondary mass [:math:`M_\odot`].</span>
 <span class="sd">        a : float</span>
 <span class="sd">            Dimensionless spin parameter.</span>
 <span class="sd">        p0 : float</span>
@@ -329,9 +329,9 @@
 <span class="sd">        Parameters</span>
 <span class="sd">        ----------</span>
 <span class="sd">        M : float</span>
-<span class="sd">            Primary BH mass [:math:`M_\\odot`].</span>
+<span class="sd">            Primary BH mass [:math:`M_\odot`].</span>
 <span class="sd">        mu : float</span>
-<span class="sd">            Secondary mass [:math:`M_\\odot`].</span>
+<span class="sd">            Secondary mass [:math:`M_\odot`].</span>
 <span class="sd">        a : float</span>
 <span class="sd">            Dimensionless spin parameter, :math:`|a| &lt; 1`.</span>
 <span class="sd">        p0 : float</span>
@@ -364,7 +364,7 @@
 <span class="sd">        hp : jnp.ndarray, shape (N,)</span>
 <span class="sd">            Plus-polarisation strain :math:`h_+` at the detector [dimensionless].</span>
 <span class="sd">        hx : jnp.ndarray, shape (N,)</span>
-<span class="sd">            Cross-polarisation strain :math:`h_{\\times}` [dimensionless].</span>
+<span class="sd">            Cross-polarisation strain :math:`h_{\times}` [dimensionless].</span>
 <span class="sd">        (optional) sparse_dict : dict</span>
 <span class="sd">            Returned if ``return_sparse=True``.</span>
 
@@ -372,8 +372,8 @@
 <span class="sd">        -----</span>
 <span class="sd">        The frame transformations from the source frame to the SSB (Solar</span>
 <span class="sd">        System Barycentre) frame follow the convention in FEW.  The</span>
-<span class="sd">        angles :math:`(\\theta_S, \\phi_S)` are the ecliptic co-latitude</span>
-<span class="sd">        and longitude of the source, and :math:`(\\theta_K, \\phi_K)` are</span>
+<span class="sd">        angles :math:`(\theta_S, \phi_S)` are the ecliptic co-latitude</span>
+<span class="sd">        and longitude of the source, and :math:`(\theta_K, \phi_K)` are</span>
 <span class="sd">        the polar and azimuthal angles of the BH spin in the SSB frame.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="k">if</span> <span class="n">mode_selection_threshold</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
@@ -453,17 +453,17 @@
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">jnp</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">jnp</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]:</span>
 <span class="w">        </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;Compute the instantaneous frequency track of a single harmonic mode.</span>
 
-<span class="sd">        The instantaneous GW frequency of mode :math:`(\\ell, m, k, n)` is:</span>
+<span class="sd">        The instantaneous GW frequency of mode :math:`(\ell, m, k, n)` is:</span>
 
 <span class="sd">        .. math::</span>
 
-<span class="sd">            f_{\\ell m k n}(t) =</span>
-<span class="sd">                \\frac{1}{2\\pi}</span>
-<span class="sd">                \\left|</span>
-<span class="sd">                    m \\Omega_\\phi(t) + k \\Omega_\\theta(t) + n \\Omega_r(t)</span>
-<span class="sd">                \\right|</span>
+<span class="sd">            f_{\ell m k n}(t) =</span>
+<span class="sd">                \frac{1}{2\pi}</span>
+<span class="sd">                \left|</span>
+<span class="sd">                    m \Omega_\phi(t) + k \Omega_\theta(t) + n \Omega_r(t)</span>
+<span class="sd">                \right|</span>
 
-<span class="sd">        where :math:`\\Omega_i` are the fundamental frequencies in</span>
+<span class="sd">        where :math:`\Omega_i` are the fundamental frequencies in</span>
 <span class="sd">        Boyer-Lindquist coordinate time evaluated along the trajectory.</span>
 
 <span class="sd">        Parameters</span>
@@ -474,7 +474,7 @@
 <span class="sd">        backward : bool</span>
 <span class="sd">            If ``True``, integrate backward from the separatrix.  The</span>
 <span class="sd">            returned time axis ``t`` is time before plunge</span>
-<span class="sd">            (:math:`\\tau = T_{\\rm plunge} - t`), so ``t[0] = 0`` is at</span>
+<span class="sd">            (:math:`\tau = T_{\rm plunge} - t`), so ``t[0] = 0`` is at</span>
 <span class="sd">            plunge and ``t[-1]`` is ``T`` years earlier.  Frequency</span>
 <span class="sd">            decreases as ``t`` increases.</span>
 <span class="sd">        e_f : float, optional</span>

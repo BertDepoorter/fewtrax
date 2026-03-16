@@ -232,8 +232,8 @@ the trajectory components are JAX arrays.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>M</strong> (<em>float</em>) – Primary BH mass [<span class="math notranslate nohighlight">\(M_\\odot\)</span>].</p></li>
-<li><p><strong>mu</strong> (<em>float</em>) – Secondary mass [<span class="math notranslate nohighlight">\(M_\\odot\)</span>].</p></li>
+<li><p><strong>M</strong> (<em>float</em>) – Primary BH mass [<span class="math notranslate nohighlight">\(M_\odot\)</span>].</p></li>
+<li><p><strong>mu</strong> (<em>float</em>) – Secondary mass [<span class="math notranslate nohighlight">\(M_\odot\)</span>].</p></li>
 <li><p><strong>a</strong> (<em>float</em>) – Dimensionless spin parameter.</p></li>
 <li><p><strong>p0</strong> (<em>float</em>) – Initial semi-latus rectum [<span class="math notranslate nohighlight">\(M\)</span>].</p></li>
 <li><p><strong>e0</strong> (<em>float</em>) – Initial eccentricity.</p></li>
@@ -269,14 +269,14 @@ the trajectory components are JAX arrays.</p>
 <dt class="sig sig-object py" id="fewtrax.KerrEccentricEquatorialWaveform.get_harmonic_track">
 <span class="sig-name descname"><span class="pre">get_harmonic_track</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">l</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">m</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">k</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">M</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mu</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">a</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">p0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">e0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">T</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x0</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">backward</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">e_f</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/fewtrax/waveform/kerr.html#KerrEccentricEquatorialWaveform.get_harmonic_track"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#fewtrax.KerrEccentricEquatorialWaveform.get_harmonic_track" title="Link to this definition"></a></dt>
 <dd><p>Compute the instantaneous frequency track of a single harmonic mode.</p>
-<p>The instantaneous GW frequency of mode <span class="math notranslate nohighlight">\((\\ell, m, k, n)\)</span> is:</p>
+<p>The instantaneous GW frequency of mode <span class="math notranslate nohighlight">\((\ell, m, k, n)\)</span> is:</p>
 <div class="math notranslate nohighlight">
-\[\begin{split}f_{\\ell m k n}(t) =
-    \\frac{1}{2\\pi}
-    \\left|
-        m \\Omega_\\phi(t) + k \\Omega_\\theta(t) + n \\Omega_r(t)
-    \\right|\end{split}\]</div>
-<p>where <span class="math notranslate nohighlight">\(\\Omega_i\)</span> are the fundamental frequencies in
+\[f_{\ell m k n}(t) =
+    \frac{1}{2\pi}
+    \left|
+        m \Omega_\phi(t) + k \Omega_\theta(t) + n \Omega_r(t)
+    \right|\]</div>
+<p>where <span class="math notranslate nohighlight">\(\Omega_i\)</span> are the fundamental frequencies in
 Boyer-Lindquist coordinate time evaluated along the trajectory.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
@@ -294,7 +294,7 @@ Boyer-Lindquist coordinate time evaluated along the trajectory.</p>
 <li><p><strong>x0</strong> (as for <code class="xref py py-meth docutils literal notranslate"><span class="pre">__call__()</span></code>.)</p></li>
 <li><p><strong>backward</strong> (<em>bool</em>) – If <code class="docutils literal notranslate"><span class="pre">True</span></code>, integrate backward from the separatrix.  The
 returned time axis <code class="docutils literal notranslate"><span class="pre">t</span></code> is time before plunge
-(<span class="math notranslate nohighlight">\(\\tau = T_{\\rm plunge} - t\)</span>), so <code class="docutils literal notranslate"><span class="pre">t[0]</span> <span class="pre">=</span> <span class="pre">0</span></code> is at
+(<span class="math notranslate nohighlight">\(\tau = T_{\rm plunge} - t\)</span>), so <code class="docutils literal notranslate"><span class="pre">t[0]</span> <span class="pre">=</span> <span class="pre">0</span></code> is at
 plunge and <code class="docutils literal notranslate"><span class="pre">t[-1]</span></code> is <code class="docutils literal notranslate"><span class="pre">T</span></code> years earlier.  Frequency
 decreases as <code class="docutils literal notranslate"><span class="pre">t</span></code> increases.</p></li>
 <li><p><strong>e_f</strong> (<em>float</em><em>, </em><em>optional</em>) – Eccentricity at plunge, required when <code class="docutils literal notranslate"><span class="pre">backward=True</span></code>.

@@ -216,8 +216,8 @@ the trajectory components are JAX arrays.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>M</strong> (<em>float</em>) – Primary BH mass [<span class="math notranslate nohighlight">\(M_\\odot\)</span>].</p></li>
-<li><p><strong>mu</strong> (<em>float</em>) – Secondary mass [<span class="math notranslate nohighlight">\(M_\\odot\)</span>].</p></li>
+<li><p><strong>M</strong> (<em>float</em>) – Primary BH mass [<span class="math notranslate nohighlight">\(M_\odot\)</span>].</p></li>
+<li><p><strong>mu</strong> (<em>float</em>) – Secondary mass [<span class="math notranslate nohighlight">\(M_\odot\)</span>].</p></li>
 <li><p><strong>a</strong> (<em>float</em>) – Dimensionless spin parameter.</p></li>
 <li><p><strong>p0</strong> (<em>float</em>) – Initial semi-latus rectum [<span class="math notranslate nohighlight">\(M\)</span>].</p></li>
 <li><p><strong>e0</strong> (<em>float</em>) – Initial eccentricity.</p></li>
@@ -253,14 +253,14 @@ the trajectory components are JAX arrays.</p>
 <dt class="sig sig-object py" id="fewtrax.waveform.kerr.KerrEccentricEquatorialWaveform.get_harmonic_track">
 <span class="sig-name descname"><span class="pre">get_harmonic_track</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">l</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">m</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">k</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">M</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mu</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">a</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">p0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">e0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">T</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x0</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">backward</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">e_f</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/fewtrax/waveform/kerr.html#KerrEccentricEquatorialWaveform.get_harmonic_track"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#fewtrax.waveform.kerr.KerrEccentricEquatorialWaveform.get_harmonic_track" title="Link to this definition"></a></dt>
 <dd><p>Compute the instantaneous frequency track of a single harmonic mode.</p>
-<p>The instantaneous GW frequency of mode <span class="math notranslate nohighlight">\((\\ell, m, k, n)\)</span> is:</p>
+<p>The instantaneous GW frequency of mode <span class="math notranslate nohighlight">\((\ell, m, k, n)\)</span> is:</p>
 <div class="math notranslate nohighlight">
-\[\begin{split}f_{\\ell m k n}(t) =
-    \\frac{1}{2\\pi}
-    \\left|
-        m \\Omega_\\phi(t) + k \\Omega_\\theta(t) + n \\Omega_r(t)
-    \\right|\end{split}\]</div>
-<p>where <span class="math notranslate nohighlight">\(\\Omega_i\)</span> are the fundamental frequencies in
+\[f_{\ell m k n}(t) =
+    \frac{1}{2\pi}
+    \left|
+        m \Omega_\phi(t) + k \Omega_\theta(t) + n \Omega_r(t)
+    \right|\]</div>
+<p>where <span class="math notranslate nohighlight">\(\Omega_i\)</span> are the fundamental frequencies in
 Boyer-Lindquist coordinate time evaluated along the trajectory.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
@@ -278,7 +278,7 @@ Boyer-Lindquist coordinate time evaluated along the trajectory.</p>
 <li><p><strong>x0</strong> (as for <code class="xref py py-meth docutils literal notranslate"><span class="pre">__call__()</span></code>.)</p></li>
 <li><p><strong>backward</strong> (<em>bool</em>) – If <code class="docutils literal notranslate"><span class="pre">True</span></code>, integrate backward from the separatrix.  The
 returned time axis <code class="docutils literal notranslate"><span class="pre">t</span></code> is time before plunge
-(<span class="math notranslate nohighlight">\(\\tau = T_{\\rm plunge} - t\)</span>), so <code class="docutils literal notranslate"><span class="pre">t[0]</span> <span class="pre">=</span> <span class="pre">0</span></code> is at
+(<span class="math notranslate nohighlight">\(\tau = T_{\rm plunge} - t\)</span>), so <code class="docutils literal notranslate"><span class="pre">t[0]</span> <span class="pre">=</span> <span class="pre">0</span></code> is at
 plunge and <code class="docutils literal notranslate"><span class="pre">t[-1]</span></code> is <code class="docutils literal notranslate"><span class="pre">T</span></code> years earlier.  Frequency
 decreases as <code class="docutils literal notranslate"><span class="pre">t</span></code> increases.</p></li>
 <li><p><strong>e_f</strong> (<em>float</em><em>, </em><em>optional</em>) – Eccentricity at plunge, required when <code class="docutils literal notranslate"><span class="pre">backward=True</span></code>.
@@ -592,7 +592,7 @@ harmonics for <span class="math notranslate nohighlight">\(+m\)</span> and <span
 </ul>
 </dd>
 <dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p>Complex strain <span class="math notranslate nohighlight">\(h_+ - i h_{\\times}\)</span> at each time step.</p>
+<dd class="field-even"><p>Complex strain <span class="math notranslate nohighlight">\(h_+ - i h_{\times}\)</span> at each time step.</p>
 </dd>
 <dt class="field-odd">Return type<span class="colon">:</span></dt>
 <dd class="field-odd"><p>jnp.ndarray, shape (N_t,), complex128</p>
@@ -647,7 +647,7 @@ cubic spline interpolation, then calls <a class="reference internal" href="#fewt
 <dt class="sig sig-object py" id="fewtrax.summation.modes.to_frequency_domain">
 <span class="sig-prename descclassname"><span class="pre">fewtrax.summation.modes.</span></span><span class="sig-name descname"><span class="pre">to_frequency_domain</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">h</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dt</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/fewtrax/summation/modes.html#to_frequency_domain"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#fewtrax.summation.modes.to_frequency_domain" title="Link to this definition"></a></dt>
 <dd><p>Transform the time-domain waveform to the frequency domain.</p>
-<p>Computes <span class="math notranslate nohighlight">\(\tilde{h}(f) = \int h(t) e^{2\pi i f t} dt\)</span> via the
+<p>Computes <span class="math notranslate nohighlight">\(\tilde{h}(f) = \int h(t) e^{-2\pi i f t} dt\)</span> via the
 FFT, normalised to physical units (strain/Hz).</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
@@ -1015,7 +1015,7 @@ case <span class="math notranslate nohighlight">\(x_I = \pm 1\)</span>.</p>
 <dl class="py function">
 <dt class="sig sig-object py" id="fewtrax.utils.geodesic.get_separatrix">
 <span class="sig-prename descclassname"><span class="pre">fewtrax.utils.geodesic.</span></span><span class="sig-name descname"><span class="pre">get_separatrix</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">a</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">e</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/fewtrax/utils/geodesic.html#get_separatrix"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#fewtrax.utils.geodesic.get_separatrix" title="Link to this definition"></a></dt>
-<dd><p>Compute the separatrix semi-latus rectum <span class="math notranslate nohighlight">\(p_{\\rm sep}(a, e, x_I)\)</span>.</p>
+<dd><p>Compute the separatrix semi-latus rectum <span class="math notranslate nohighlight">\(p_{\rm sep}(a, e, x_I)\)</span>.</p>
 <p>The separatrix is the boundary between stable and unstable bound orbits.
 For Schwarzschild it equals <span class="math notranslate nohighlight">\(6 + 2e\)</span>; for Kerr equatorial it is
 found as the root of a polynomial (Glampedakis &amp; Kennefick 2002).</p>
@@ -1029,7 +1029,7 @@ found as the root of a polynomial (Glampedakis &amp; Kennefick 2002).</p>
 </ul>
 </dd>
 <dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p><span class="math notranslate nohighlight">\(p_{\\rm sep}\)</span>.</p>
+<dd class="field-even"><p><span class="math notranslate nohighlight">\(p_{\rm sep}\)</span>.</p>
 </dd>
 <dt class="field-odd">Return type<span class="colon">:</span></dt>
 <dd class="field-odd"><p>float</p>

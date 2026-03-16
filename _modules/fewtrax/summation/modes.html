@@ -199,7 +199,7 @@
 <span class="sd">    Returns</span>
 <span class="sd">    -------</span>
 <span class="sd">    jnp.ndarray, shape (N_t,), complex128</span>
-<span class="sd">        Complex strain :math:`h_+ - i h_{\\times}` at each time step.</span>
+<span class="sd">        Complex strain :math:`h_+ - i h_{\times}` at each time step.</span>
 
 <span class="sd">    Notes</span>
 <span class="sd">    -----</span>
@@ -353,7 +353,7 @@
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">jnp</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">jnp</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]:</span>
 <span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;Transform the time-domain waveform to the frequency domain.</span>
 
-<span class="sd">    Computes :math:`\tilde{h}(f) = \int h(t) e^{2\pi i f t} dt` via the</span>
+<span class="sd">    Computes :math:`\tilde{h}(f) = \int h(t) e^{-2\pi i f t} dt` via the</span>
 <span class="sd">    FFT, normalised to physical units (strain/Hz).</span>
 
 <span class="sd">    Parameters</span>
@@ -465,7 +465,7 @@
 <span class="sd">        t : jnp.ndarray</span>
 <span class="sd">            Time stamps [s].</span>
 <span class="sd">        h : jnp.ndarray, complex</span>
-<span class="sd">            :math:`h_+ - i h_{\\times}` in physical units.</span>
+<span class="sd">            :math:`h_+ - i h_{\times}` in physical units.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="k">if</span> <span class="n">dense</span><span class="p">:</span>
             <span class="n">t_out</span><span class="p">,</span> <span class="n">h</span> <span class="o">=</span> <span class="n">interpolated_mode_sum</span><span class="p">(</span>
