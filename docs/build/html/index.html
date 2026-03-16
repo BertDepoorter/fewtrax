@@ -20,7 +20,7 @@
     <script src="_static/js/theme.js"></script>
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
-    <link rel="next" title="API Reference" href="api.html" /> 
+    <link rel="next" title="Installation" href="installation.html" /> 
 </head>
 
 <body class="wy-body-for-nav"> 
@@ -42,7 +42,21 @@
   </form>
 </div>
         </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
-              <ul>
+              <p class="caption" role="heading"><span class="caption-text">Getting started</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="quickstart.html">Quickstart</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Background</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="math_background.html">Mathematical Background</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Tutorials</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="examples.html">Examples</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Reference</span></p>
+<ul>
 <li class="toctree-l1"><a class="reference internal" href="api.html">API Reference</a></li>
 </ul>
 
@@ -72,7 +86,64 @@
              
   <section id="fewtrax">
 <h1>fewtrax<a class="headerlink" href="#fewtrax" title="Link to this heading"></a></h1>
+<p>JAX implementation of the <strong>KerrEccentricEquatorial</strong> EMRI waveform model
+from <a class="reference external" href="https://github.com/BlackHolePerturbationToolkit/FastEMRIWaveforms">FastEMRIWaveforms</a>,
+with full support for JIT compilation, automatic differentiation, and batched
+evaluation via <code class="docutils literal notranslate"><span class="pre">vmap</span></code>.</p>
 <div class="toctree-wrapper compound">
+<p class="caption" role="heading"><span class="caption-text">Getting started</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="installation.html">Installation</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="installation.html#requirements">Requirements</a></li>
+<li class="toctree-l2"><a class="reference internal" href="installation.html#installing-fewtrax">Installing fewtrax</a></li>
+<li class="toctree-l2"><a class="reference internal" href="installation.html#data-setup">Data setup</a></li>
+<li class="toctree-l2"><a class="reference internal" href="installation.html#verifying-the-installation">Verifying the installation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="installation.html#building-the-documentation-locally">Building the documentation locally</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="quickstart.html">Quickstart</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="quickstart.html#building-the-waveform-generator">1. Building the waveform generator</a></li>
+<li class="toctree-l2"><a class="reference internal" href="quickstart.html#defining-source-parameters">2. Defining source parameters</a></li>
+<li class="toctree-l2"><a class="reference internal" href="quickstart.html#generating-a-waveform">3. Generating a waveform</a></li>
+<li class="toctree-l2"><a class="reference internal" href="quickstart.html#frequency-domain-representation">4. Frequency-domain representation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="quickstart.html#harmonic-frequency-tracks">5. Harmonic frequency tracks</a></li>
+<li class="toctree-l2"><a class="reference internal" href="quickstart.html#automatic-differentiation">6. Automatic differentiation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="quickstart.html#batch-evaluation-with-vmap">7. Batch evaluation with <code class="docutils literal notranslate"><span class="pre">vmap</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="quickstart.html#accessing-the-sparse-trajectory">8. Accessing the sparse trajectory</a></li>
+<li class="toctree-l2"><a class="reference internal" href="quickstart.html#next-steps">Next steps</a></li>
+</ul>
+</li>
+</ul>
+</div>
+<div class="toctree-wrapper compound">
+<p class="caption" role="heading"><span class="caption-text">Background</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="math_background.html">Mathematical Background</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="math_background.html#extreme-mass-ratio-inspirals">Extreme-Mass-Ratio Inspirals</a></li>
+<li class="toctree-l2"><a class="reference internal" href="math_background.html#kerr-geodesics">Kerr Geodesics</a></li>
+<li class="toctree-l2"><a class="reference internal" href="math_background.html#adiabatic-inspiral">Adiabatic Inspiral</a></li>
+<li class="toctree-l2"><a class="reference internal" href="math_background.html#teukolsky-mode-amplitudes">Teukolsky Mode Amplitudes</a></li>
+<li class="toctree-l2"><a class="reference internal" href="math_background.html#amplitude-interpolation">Amplitude Interpolation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="math_background.html#mode-selection">Mode Selection</a></li>
+<li class="toctree-l2"><a class="reference internal" href="math_background.html#waveform-synthesis">Waveform Synthesis</a></li>
+<li class="toctree-l2"><a class="reference internal" href="math_background.html#jax-implementation-details">JAX Implementation Details</a></li>
+<li class="toctree-l2"><a class="reference internal" href="math_background.html#references">References</a></li>
+</ul>
+</li>
+</ul>
+</div>
+<div class="toctree-wrapper compound">
+<p class="caption" role="heading"><span class="caption-text">Tutorials</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="examples.html">Examples</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="examples.html#standalone-quickstart-script">Standalone quickstart script</a></li>
+<li class="toctree-l2"><a class="reference internal" href="examples.html#running-the-notebooks">Running the notebooks</a></li>
+</ul>
+</li>
+</ul>
+</div>
+<div class="toctree-wrapper compound">
+<p class="caption" role="heading"><span class="caption-text">Reference</span></p>
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="api.html">API Reference</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="api.html#pipeline">Pipeline</a></li>
@@ -252,7 +323,7 @@ Obtain this from a forward run:
            </div>
           </div>
           <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
-        <a href="api.html" class="btn btn-neutral float-right" title="API Reference" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+        <a href="installation.html" class="btn btn-neutral float-right" title="Installation" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
     </div>
 
   <hr/>

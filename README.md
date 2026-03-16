@@ -342,7 +342,7 @@ jobs:
 ```
 
 In your repository settings → **Pages**, set the source branch to `gh-pages`.
-The docs will be available at `https://<your-org>.github.io/fewtrax/`.
+The docs will be available at `https://bertdepoorter.github.io/fewtrax/`.
 
 ### Alternative: ReadTheDocs
 

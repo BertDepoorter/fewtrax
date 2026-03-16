@@ -264,7 +264,7 @@ def _bisect_equat(a: float, e: float, lo: float, hi: float, n_iter: int = 50):
 
 @partial(jit, static_argnames=())
 def get_separatrix(a: float, e: float, x: float) -> float:
-    r"""Compute the separatrix semi-latus rectum :math:`p_{\\rm sep}(a, e, x_I)`.
+    r"""Compute the separatrix semi-latus rectum :math:`p_{\rm sep}(a, e, x_I)`.
 
     The separatrix is the boundary between stable and unstable bound orbits.
     For Schwarzschild it equals :math:`6 + 2e`; for Kerr equatorial it is
@@ -284,7 +284,7 @@ def get_separatrix(a: float, e: float, x: float) -> float:
     Returns
     -------
     float
-        :math:`p_{\\rm sep}`.
+        :math:`p_{\rm sep}`.
     """
     # Schwarzschild case
     schw_sep = 6.0 + 2.0 * e

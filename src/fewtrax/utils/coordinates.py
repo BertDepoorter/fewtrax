@@ -121,7 +121,7 @@ def kerrecceq_forward_map_A(
     a, p, e : float
         Orbital parameters.
     pLSO : float
-        Separatrix value :math:`p_{\\rm sep}`.
+        Separatrix value :math:`p_{\rm sep}`.
     alpha, beta : float
         Region A compression parameters.
 
@@ -215,7 +215,7 @@ def kerrecceq_forward_map(
     r"""Map :math:`(a, p, e) \to (u, w, z, \text{in\_A})`.
 
     Automatically selects Region A or B based on
-    :math:`p \le p_{\\rm sep} + \\Delta p_{\\rm max}`.
+    :math:`p \le p_{\rm sep} + \Delta p_{\rm max}`.
 
     Parameters
     ----------

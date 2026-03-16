@@ -1,0 +1,302 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Mathematical Background &mdash; fewtrax 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="_static/jquery.js?v=5d32c60e"></script>
+      <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="_static/documentation_options.js?v=01f34227"></script>
+      <script src="_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+      <script defer="defer" src="https://cdn.jsdelivr.net/npm/mathjax@4/tex-mml-chtml.js"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Examples" href="examples.html" />
+    <link rel="prev" title="Quickstart" href="quickstart.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="index.html" class="icon icon-home">
+            fewtrax
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Getting started</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="quickstart.html">Quickstart</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Background</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Mathematical Background</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#extreme-mass-ratio-inspirals">Extreme-Mass-Ratio Inspirals</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#kerr-geodesics">Kerr Geodesics</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#adiabatic-inspiral">Adiabatic Inspiral</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#teukolsky-mode-amplitudes">Teukolsky Mode Amplitudes</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#amplitude-interpolation">Amplitude Interpolation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#mode-selection">Mode Selection</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#waveform-synthesis">Waveform Synthesis</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#jax-implementation-details">JAX Implementation Details</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#references">References</a></li>
+</ul>
+</li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Tutorials</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="examples.html">Examples</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="api.html">API Reference</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">fewtrax</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Mathematical Background</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/math_background.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="mathematical-background">
+<h1>Mathematical Background<a class="headerlink" href="#mathematical-background" title="Link to this heading"></a></h1>
+<p>This page summarises the physics and mathematics underlying the EMRI waveform
+model implemented in fewtrax.  For full derivations see the references at the
+bottom of this page.</p>
+<section id="extreme-mass-ratio-inspirals">
+<h2>Extreme-Mass-Ratio Inspirals<a class="headerlink" href="#extreme-mass-ratio-inspirals" title="Link to this heading"></a></h2>
+<p>An <strong>extreme-mass-ratio inspiral</strong> (EMRI) consists of a stellar-mass compact
+object (mass <span class="math notranslate nohighlight">\(\mu \sim 1\text{–}100\,M_\odot\)</span>) orbiting a massive black
+hole (mass <span class="math notranslate nohighlight">\(M \sim 10^5\text{–}10^7\,M_\odot\)</span>) with mass ratio
+<span class="math notranslate nohighlight">\(\varepsilon \equiv \mu/M \ll 1\)</span>.  The large mass ratio means</p>
+<ul class="simple">
+<li><p>the small body follows a geodesic of the Kerr background to leading order,</p></li>
+<li><p>radiation-reaction drives a slow, <em>adiabatic</em> inspiral on a timescale
+<span class="math notranslate nohighlight">\(\mathcal{T}_{\rm insp} \sim M/\varepsilon \gg M\)</span>.</p></li>
+</ul>
+<p>The gravitational radiation emitted during the inspiral lies in the millihertz
+band detectable by LISA.</p>
+</section>
+<section id="kerr-geodesics">
+<h2>Kerr Geodesics<a class="headerlink" href="#kerr-geodesics" title="Link to this heading"></a></h2>
+<p>The background spacetime is described by the Kerr metric with mass <span class="math notranslate nohighlight">\(M\)</span>
+and dimensionless spin <span class="math notranslate nohighlight">\(a \in [0,1)\)</span>.  Bound equatorial geodesics are
+characterised by two orbital parameters:</p>
+<ul class="simple">
+<li><p><span class="math notranslate nohighlight">\(p\)</span> — the <strong>semilatus rectum</strong> (in units of <span class="math notranslate nohighlight">\(M\)</span>)</p></li>
+<li><p><span class="math notranslate nohighlight">\(e\)</span> — the <strong>eccentricity</strong></p></li>
+</ul>
+<p>The radial turning points are</p>
+<div class="math notranslate nohighlight">
+\[r_{\rm min} = \frac{pM}{1+e}, \qquad r_{\rm max} = \frac{pM}{1-e}.\]</div>
+<p>Three fundamental frequencies govern the quasi-periodic motion:</p>
+<div class="math notranslate nohighlight">
+\[\Omega_\phi = \frac{d\Phi_\phi}{dt}, \qquad
+\Omega_\theta = \frac{d\Phi_\theta}{dt}, \qquad
+\Omega_r = \frac{d\Phi_r}{dt},\]</div>
+<p>where <span class="math notranslate nohighlight">\(\Phi_\phi\)</span>, <span class="math notranslate nohighlight">\(\Phi_\theta\)</span>, <span class="math notranslate nohighlight">\(\Phi_r\)</span> are the
+accumulated azimuthal, polar, and radial phases respectively.  For equatorial
+orbits <span class="math notranslate nohighlight">\(\Omega_\theta = \Omega_\phi\)</span>.</p>
+<p>The <strong>separatrix</strong> <span class="math notranslate nohighlight">\(p_{\rm sep}(a,e)\)</span> is the boundary between bound and
+plunging orbits.  Inspiral terminates when <span class="math notranslate nohighlight">\(p \to p_{\rm sep}\)</span>.</p>
+</section>
+<section id="adiabatic-inspiral">
+<h2>Adiabatic Inspiral<a class="headerlink" href="#adiabatic-inspiral" title="Link to this heading"></a></h2>
+<p>In the adiabatic approximation the orbital parameters evolve according to
+orbit-averaged energy and angular-momentum flux balance laws:</p>
+<div class="math notranslate nohighlight">
+\[\frac{dp}{dt} = f_p(p, e; a), \qquad
+\frac{de}{dt} = f_e(p, e; a),\]</div>
+<p>where the flux functions <span class="math notranslate nohighlight">\(f_p\)</span> and <span class="math notranslate nohighlight">\(f_e\)</span> are pre-computed from
+Teukolsky perturbation theory and stored in the HDF5 data file
+<code class="docutils literal notranslate"><span class="pre">KerrEccEqFluxData.h5</span></code>.</p>
+<p>fewtrax integrates these equations using the <strong>Tsit5</strong> explicit Runge–Kutta
+solver from <a class="reference external" href="https://github.com/patrick-kidger/diffrax">diffrax</a> with
+adaptive step-size control.  Simultaneously, the three orbital phases
+<span class="math notranslate nohighlight">\(\Phi_\phi\)</span>, <span class="math notranslate nohighlight">\(\Phi_\theta\)</span>, <span class="math notranslate nohighlight">\(\Phi_r\)</span> are accumulated.
+The result is a <em>sparse</em> trajectory of <span class="math notranslate nohighlight">\(N_{\rm sparse}\)</span> points spanning
+the observation time <span class="math notranslate nohighlight">\(T\)</span>.</p>
+</section>
+<section id="teukolsky-mode-amplitudes">
+<h2>Teukolsky Mode Amplitudes<a class="headerlink" href="#teukolsky-mode-amplitudes" title="Link to this heading"></a></h2>
+<p>The gravitational-wave strain at a detector is expanded in spin-weighted
+spherical harmonics <span class="math notranslate nohighlight">\({}_{-2}Y_{\ell m}(\theta_S, \phi_S)\)</span>:</p>
+<div class="math notranslate nohighlight">
+\[h_+ - i\,h_\times =
+\frac{\mu}{d_L}
+\sum_{\ell m k n}
+A_{\ell m k n}(p, e; a)\;
+{}_{-2}Y_{\ell m}(\theta_S,\phi_S)\;
+e^{i\Phi_{\ell m k n}(t)},\]</div>
+<p>where</p>
+<ul>
+<li><p><span class="math notranslate nohighlight">\(A_{\ell m k n}\)</span> are the Teukolsky mode amplitudes, tabulated in
+<code class="docutils literal notranslate"><span class="pre">ZNAmps_l10_m10_n55_DS2Outer.h5</span></code> as a function of <span class="math notranslate nohighlight">\((p, e)\)</span> for each
+harmonic index <span class="math notranslate nohighlight">\((\ell, m, k, n)\)</span>,</p></li>
+<li><p><span class="math notranslate nohighlight">\(d_L\)</span> is the luminosity distance,</p></li>
+<li><p><span class="math notranslate nohighlight">\(\theta_S, \phi_S\)</span> are the sky angles of the source,</p></li>
+<li><p>the harmonic phase is</p>
+<div class="math notranslate nohighlight">
+\[\Phi_{\ell m k n}(t) =
+  m\,\Phi_\phi(t) + k\,\Phi_\theta(t) + n\,\Phi_r(t).\]</div>
+</li>
+</ul>
+<p>The harmonic indices satisfy <span class="math notranslate nohighlight">\(\ell \geq 2\)</span>, <span class="math notranslate nohighlight">\(|m| \leq \ell\)</span>, and
+<span class="math notranslate nohighlight">\(k,n \in \mathbb{Z}\)</span>.</p>
+</section>
+<section id="amplitude-interpolation">
+<h2>Amplitude Interpolation<a class="headerlink" href="#amplitude-interpolation" title="Link to this heading"></a></h2>
+<p>Because evaluating the Teukolsky amplitudes at arbitrary <span class="math notranslate nohighlight">\((p, e)\)</span> is
+expensive, fewtrax pre-computes them on a sparse grid during the ODE
+integration and then uses <strong>B-spline interpolation</strong> (via
+<a class="reference external" href="https://github.com/f0uriest/interpax">interpax</a>) to reconstruct the
+amplitudes at arbitrary trajectory points.</p>
+</section>
+<section id="mode-selection">
+<h2>Mode Selection<a class="headerlink" href="#mode-selection" title="Link to this heading"></a></h2>
+<p>A single EMRI can contribute thousands of <span class="math notranslate nohighlight">\((\ell, m, k, n)\)</span> modes.
+fewtrax retains only those modes whose relative power exceeds a threshold
+<span class="math notranslate nohighlight">\(\epsilon_{\rm thresh}\)</span> (controlled by <code class="docutils literal notranslate"><span class="pre">mode_selection_threshold</span></code>):</p>
+<div class="math notranslate nohighlight">
+\[\frac{|A_{\ell m k n}|^2}{\max_{\ell' m' k' n'} |A_{\ell' m' k' n'}|^2}
+\geq \epsilon_{\rm thresh}.\]</div>
+<p>The default value <span class="math notranslate nohighlight">\(\epsilon_{\rm thresh} = 10^{-5}\)</span> retains all modes
+that contribute more than <span class="math notranslate nohighlight">\(0.001\%\)</span> of the peak power, giving an
+excellent balance between accuracy and computational cost.</p>
+</section>
+<section id="waveform-synthesis">
+<h2>Waveform Synthesis<a class="headerlink" href="#waveform-synthesis" title="Link to this heading"></a></h2>
+<p>Given the sparse trajectory and interpolated amplitudes, fewtrax synthesises
+the time-domain strain via:</p>
+<ol class="arabic simple">
+<li><p><strong>Interpolation</strong> of <span class="math notranslate nohighlight">\(A_{\ell m k n}(t)\)</span> and
+<span class="math notranslate nohighlight">\(\Phi_{\ell m k n}(t)\)</span> from the sparse grid to the full time series
+at cadence <span class="math notranslate nohighlight">\(\Delta t\)</span>.</p></li>
+<li><p><strong>Coherent summation</strong> of all selected modes, projecting onto
+<span class="math notranslate nohighlight">\(h_+\)</span> and <span class="math notranslate nohighlight">\(h_\times\)</span> via the spin-weighted spherical harmonics
+and the antenna pattern functions.</p></li>
+</ol>
+<p>The complete two-polarisation strain returned by
+<a class="reference internal" href="api.html#fewtrax.waveform.kerr.KerrEccentricEquatorialWaveform" title="fewtrax.waveform.kerr.KerrEccentricEquatorialWaveform"><code class="xref py py-class docutils literal notranslate"><span class="pre">KerrEccentricEquatorialWaveform</span></code></a> is</p>
+<div class="math notranslate nohighlight">
+\[h_+(t) = \text{Re}\!\left[
+  \frac{\mu}{d_L}
+  \sum_{\ell m k n} A_{\ell m k n}(t)\;
+  {}_{-2}Y_{\ell m}(\theta_S,\phi_S)\;
+  e^{i\Phi_{\ell m k n}(t)}
+\right],\]</div>
+<p>with an analogous expression for <span class="math notranslate nohighlight">\(h_\times\)</span>.</p>
+</section>
+<section id="jax-implementation-details">
+<h2>JAX Implementation Details<a class="headerlink" href="#jax-implementation-details" title="Link to this heading"></a></h2>
+<p>fewtrax leverages the JAX ecosystem for high-performance computing:</p>
+<ul class="simple">
+<li><p><strong>JIT compilation</strong> (<code class="docutils literal notranslate"><span class="pre">jax.jit</span></code> / <code class="docutils literal notranslate"><span class="pre">equinox.filter_jit</span></code>) — the full
+trajectory + summation pipeline is compiled to XLA for CPU/GPU execution.</p></li>
+<li><p><strong>Automatic differentiation</strong> (<code class="docutils literal notranslate"><span class="pre">jax.grad</span></code>, <code class="docutils literal notranslate"><span class="pre">jax.jacfwd</span></code>) — gradients
+propagate through the ODE solver (via diffrax’s adjoint methods) and the
+B-spline interpolation.</p></li>
+<li><p><strong>Vectorisation</strong> (<code class="docutils literal notranslate"><span class="pre">jax.vmap</span></code>) — batched evaluation over populations
+without explicit loops.</p></li>
+<li><p><strong>64-bit precision</strong> — <code class="docutils literal notranslate"><span class="pre">jax.config.update(&quot;jax_enable_x64&quot;,</span> <span class="pre">True)</span></code> must
+be set before importing fewtrax to achieve the phase accuracy required for
+EMRI parameter estimation.</p></li>
+</ul>
+</section>
+<section id="references">
+<h2>References<a class="headerlink" href="#references" title="Link to this heading"></a></h2>
+<div role="list" class="citation-list">
+<div class="citation" id="katz2021" role="doc-biblioentry">
+<span class="label"><span class="fn-bracket">[</span>Katz2021<span class="fn-bracket">]</span></span>
+<p>Katz <em>et al.</em>, <em>Phys. Rev. D</em> <strong>104</strong>, 064047 (2021).
+<a class="reference external" href="https://arxiv.org/abs/2104.04582">arXiv:2104.04582</a></p>
+</div>
+<div class="citation" id="hughes2021" role="doc-biblioentry">
+<span class="label"><span class="fn-bracket">[</span>Hughes2021<span class="fn-bracket">]</span></span>
+<p>Hughes <em>et al.</em>, <em>Phys. Rev. D</em> <strong>103</strong>, 104014 (2021).
+<a class="reference external" href="https://arxiv.org/abs/2102.02713">arXiv:2102.02713</a></p>
+</div>
+<div class="citation" id="drasco2006" role="doc-biblioentry">
+<span class="label"><span class="fn-bracket">[</span>Drasco2006<span class="fn-bracket">]</span></span>
+<p>Drasco &amp; Hughes, <em>Phys. Rev. D</em> <strong>73</strong>, 024027 (2006).
+<a class="reference external" href="https://arxiv.org/abs/gr-qc/0509101">arXiv:gr-qc/0509101</a></p>
+</div>
+<div class="citation" id="barack2018" role="doc-biblioentry">
+<span class="label"><span class="fn-bracket">[</span>Barack2018<span class="fn-bracket">]</span></span>
+<p>Barack &amp; Pound, <em>Rep. Prog. Phys.</em> <strong>82</strong>, 016904 (2019).
+<a class="reference external" href="https://arxiv.org/abs/1805.10385">arXiv:1805.10385</a></p>
+</div>
+</div>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="quickstart.html" class="btn btn-neutral float-left" title="Quickstart" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="examples.html" class="btn btn-neutral float-right" title="Examples" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2026, Bert Depoorter.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

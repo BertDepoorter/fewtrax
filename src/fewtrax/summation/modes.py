@@ -113,7 +113,7 @@ def direct_mode_sum(
     Returns
     -------
     jnp.ndarray, shape (N_t,), complex128
-        Complex strain :math:`h_+ - i h_{\\times}` at each time step.
+        Complex strain :math:`h_+ - i h_{\times}` at each time step.
 
     Notes
     -----
@@ -261,7 +261,7 @@ def to_frequency_domain(
 ) -> tuple[jnp.ndarray, jnp.ndarray]:
     r"""Transform the time-domain waveform to the frequency domain.
 
-    Computes :math:`\tilde{h}(f) = \int h(t) e^{2\pi i f t} dt` via the
+    Computes :math:`\tilde{h}(f) = \int h(t) e^{-2\pi i f t} dt` via the
     FFT, normalised to physical units (strain/Hz).
 
     Parameters
@@ -370,7 +370,7 @@ class ModeSum:
         t : jnp.ndarray
             Time stamps [s].
         h : jnp.ndarray, complex
-            :math:`h_+ - i h_{\\times}` in physical units.
+            :math:`h_+ - i h_{\times}` in physical units.
         """
         if dense:
             t_out, h = interpolated_mode_sum(

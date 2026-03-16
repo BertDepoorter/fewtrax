@@ -1,0 +1,274 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Quickstart &mdash; fewtrax 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="_static/jquery.js?v=5d32c60e"></script>
+      <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="_static/documentation_options.js?v=01f34227"></script>
+      <script src="_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+      <script defer="defer" src="https://cdn.jsdelivr.net/npm/mathjax@4/tex-mml-chtml.js"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Mathematical Background" href="math_background.html" />
+    <link rel="prev" title="Installation" href="installation.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="index.html" class="icon icon-home">
+            fewtrax
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Getting started</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="installation.html">Installation</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Quickstart</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#building-the-waveform-generator">1. Building the waveform generator</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#defining-source-parameters">2. Defining source parameters</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#generating-a-waveform">3. Generating a waveform</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#frequency-domain-representation">4. Frequency-domain representation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#harmonic-frequency-tracks">5. Harmonic frequency tracks</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#automatic-differentiation">6. Automatic differentiation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#batch-evaluation-with-vmap">7. Batch evaluation with <code class="docutils literal notranslate"><span class="pre">vmap</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#accessing-the-sparse-trajectory">8. Accessing the sparse trajectory</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#next-steps">Next steps</a></li>
+</ul>
+</li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Background</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="math_background.html">Mathematical Background</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Tutorials</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="examples.html">Examples</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="api.html">API Reference</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">fewtrax</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Quickstart</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/quickstart.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="quickstart">
+<h1>Quickstart<a class="headerlink" href="#quickstart" title="Link to this heading"></a></h1>
+<p>This page walks you through the most common fewtrax workflows.
+For a standalone runnable script see <code class="docutils literal notranslate"><span class="pre">examples/quickstart.py</span></code>.</p>
+<p>Before running any code, enable 64-bit floating-point arithmetic — this is
+required for the numerical accuracy that EMRI waveform generation demands:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">jax</span>
+<span class="n">jax</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="s2">&quot;jax_enable_x64&quot;</span><span class="p">,</span> <span class="kc">True</span><span class="p">)</span>
+</pre></div>
+</div>
+<section id="building-the-waveform-generator">
+<h2>1. Building the waveform generator<a class="headerlink" href="#building-the-waveform-generator" title="Link to this heading"></a></h2>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">fewtrax</span><span class="w"> </span><span class="kn">import</span> <span class="n">KerrEccentricEquatorialWaveform</span>
+
+<span class="n">wf</span> <span class="o">=</span> <span class="n">KerrEccentricEquatorialWaveform</span><span class="p">(</span>
+    <span class="n">data_dir</span><span class="o">=</span><span class="s2">&quot;/path/to/few/data&quot;</span><span class="p">,</span>        <span class="c1"># or set FEW_DATA_DIR env var</span>
+    <span class="n">mode_selection_threshold</span><span class="o">=</span><span class="mf">1e-5</span><span class="p">,</span>       <span class="c1"># relative power threshold for mode selection</span>
+    <span class="n">dense_steps</span><span class="o">=</span><span class="mi">100</span><span class="p">,</span>                     <span class="c1"># number of sparse trajectory points</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="defining-source-parameters">
+<h2>2. Defining source parameters<a class="headerlink" href="#defining-source-parameters" title="Link to this heading"></a></h2>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">params</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span>
+    <span class="n">M</span><span class="o">=</span><span class="mf">1e6</span><span class="p">,</span>          <span class="c1"># primary BH mass          [M_sun]</span>
+    <span class="n">mu</span><span class="o">=</span><span class="mf">10.0</span><span class="p">,</span>        <span class="c1"># secondary (compact-object) mass  [M_sun]</span>
+    <span class="n">a</span><span class="o">=</span><span class="mf">0.3</span><span class="p">,</span>          <span class="c1"># dimensionless Kerr spin parameter</span>
+    <span class="n">p0</span><span class="o">=</span><span class="mf">10.0</span><span class="p">,</span>        <span class="c1"># initial semilatus rectum [M]</span>
+    <span class="n">e0</span><span class="o">=</span><span class="mf">0.4</span><span class="p">,</span>         <span class="c1"># initial eccentricity</span>
+    <span class="n">x0</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span>         <span class="c1"># prograde equatorial orbit (must be ±1)</span>
+    <span class="n">dist</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span>       <span class="c1"># luminosity distance       [Gpc]</span>
+    <span class="n">qS</span><span class="o">=</span><span class="mf">0.2</span><span class="p">,</span>         <span class="c1"># sky polar angle           [rad]</span>
+    <span class="n">phiS</span><span class="o">=</span><span class="mf">0.2</span><span class="p">,</span>       <span class="c1"># sky azimuthal angle       [rad]</span>
+    <span class="n">qK</span><span class="o">=</span><span class="mf">0.8</span><span class="p">,</span>         <span class="c1"># BH spin polar angle       [rad]</span>
+    <span class="n">phiK</span><span class="o">=</span><span class="mf">0.8</span><span class="p">,</span>       <span class="c1"># BH spin azimuthal angle   [rad]</span>
+    <span class="n">Phi_phi0</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span>   <span class="c1"># initial azimuthal phase   [rad]</span>
+    <span class="n">Phi_theta0</span><span class="o">=</span><span class="mf">2.0</span><span class="p">,</span> <span class="c1"># initial polar phase       [rad]</span>
+    <span class="n">Phi_r0</span><span class="o">=</span><span class="mf">3.0</span><span class="p">,</span>     <span class="c1"># initial radial phase      [rad]</span>
+    <span class="n">T</span><span class="o">=</span><span class="mf">0.1</span><span class="p">,</span>          <span class="c1"># observation time          [years]</span>
+    <span class="n">dt</span><span class="o">=</span><span class="mf">10.0</span><span class="p">,</span>        <span class="c1"># sampling interval         [s]</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="generating-a-waveform">
+<h2>3. Generating a waveform<a class="headerlink" href="#generating-a-waveform" title="Link to this heading"></a></h2>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">hp</span><span class="p">,</span> <span class="n">hx</span> <span class="o">=</span> <span class="n">wf</span><span class="p">(</span><span class="o">**</span><span class="n">params</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">hp</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span>   <span class="c1"># (N_samples,)</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">hp</span></code> and <code class="docutils literal notranslate"><span class="pre">hx</span></code> are JAX arrays containing the plus and cross gravitational-wave
+polarisations sampled at intervals of <code class="docutils literal notranslate"><span class="pre">dt</span></code> seconds.</p>
+</section>
+<section id="frequency-domain-representation">
+<h2>4. Frequency-domain representation<a class="headerlink" href="#frequency-domain-representation" title="Link to this heading"></a></h2>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">jax.numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">jnp</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">fewtrax.summation.modes</span><span class="w"> </span><span class="kn">import</span> <span class="n">to_frequency_domain</span>
+
+<span class="n">freqs</span><span class="p">,</span> <span class="n">h_tilde</span> <span class="o">=</span> <span class="n">to_frequency_domain</span><span class="p">(</span><span class="n">hp</span> <span class="o">+</span> <span class="mi">1</span><span class="n">j</span> <span class="o">*</span> <span class="n">hx</span><span class="p">,</span> <span class="n">dt</span><span class="o">=</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;dt&quot;</span><span class="p">])</span>
+<span class="n">f_peak</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">freqs</span><span class="p">[</span><span class="n">jnp</span><span class="o">.</span><span class="n">argmax</span><span class="p">(</span><span class="n">jnp</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">h_tilde</span><span class="p">))])</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Peak frequency: </span><span class="si">{</span><span class="n">f_peak</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="mf">1e3</span><span class="si">:</span><span class="s2">.3f</span><span class="si">}</span><span class="s2"> mHz&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="harmonic-frequency-tracks">
+<h2>5. Harmonic frequency tracks<a class="headerlink" href="#harmonic-frequency-tracks" title="Link to this heading"></a></h2>
+<p>Each EMRI mode <span class="math notranslate nohighlight">\((\ell, m, k, n)\)</span> sweeps in frequency as the orbit
+decays.  <code class="docutils literal notranslate"><span class="pre">get_harmonic_track</span></code> returns the instantaneous frequency along the
+inspiral:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">t_track</span><span class="p">,</span> <span class="n">f_track</span> <span class="o">=</span> <span class="n">wf</span><span class="o">.</span><span class="n">get_harmonic_track</span><span class="p">(</span>
+    <span class="n">l</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">m</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">k</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">n</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+    <span class="n">M</span><span class="o">=</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;M&quot;</span><span class="p">],</span> <span class="n">mu</span><span class="o">=</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;mu&quot;</span><span class="p">],</span>
+    <span class="n">a</span><span class="o">=</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;a&quot;</span><span class="p">],</span> <span class="n">p0</span><span class="o">=</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;p0&quot;</span><span class="p">],</span>
+    <span class="n">e0</span><span class="o">=</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;e0&quot;</span><span class="p">],</span> <span class="n">T</span><span class="o">=</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;T&quot;</span><span class="p">],</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+<p>Typical dominant modes: <code class="docutils literal notranslate"><span class="pre">(2,2,0,1)</span></code>, <code class="docutils literal notranslate"><span class="pre">(2,2,0,2)</span></code>, <code class="docutils literal notranslate"><span class="pre">(3,2,0,1)</span></code>.</p>
+</section>
+<section id="automatic-differentiation">
+<h2>6. Automatic differentiation<a class="headerlink" href="#automatic-differentiation" title="Link to this heading"></a></h2>
+<p>The entire pipeline — trajectory ODE, amplitude interpolation, and mode
+summation — is differentiable through JAX.  Below we compute the gradient of
+the total accumulated azimuthal phase with respect to the initial semilatus
+rectum <span class="math notranslate nohighlight">\(p_0\)</span>:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">jax</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">fewtrax.trajectory</span><span class="w"> </span><span class="kn">import</span> <span class="n">EMRIInspiral</span>
+
+<span class="n">traj</span> <span class="o">=</span> <span class="n">EMRIInspiral</span><span class="p">(</span><span class="n">wf</span><span class="o">.</span><span class="n">_flux_data</span><span class="p">,</span> <span class="n">a</span><span class="o">=</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;a&quot;</span><span class="p">])</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">phase_at_end</span><span class="p">(</span><span class="n">p0</span><span class="p">):</span>
+    <span class="n">_</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">Phi_phi</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">traj</span><span class="p">(</span>
+        <span class="n">p0</span><span class="o">=</span><span class="n">p0</span><span class="p">,</span> <span class="n">e0</span><span class="o">=</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;e0&quot;</span><span class="p">],</span> <span class="n">T</span><span class="o">=</span><span class="mf">0.05</span><span class="p">,</span>
+        <span class="n">M</span><span class="o">=</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;M&quot;</span><span class="p">],</span> <span class="n">mu</span><span class="o">=</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;mu&quot;</span><span class="p">],</span>
+        <span class="n">dense_steps</span><span class="o">=</span><span class="mi">20</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">valid</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">isfinite</span><span class="p">(</span><span class="n">Phi_phi</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">jnp</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">jnp</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">valid</span><span class="p">,</span> <span class="n">Phi_phi</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">))</span>
+
+<span class="n">grad_fn</span> <span class="o">=</span> <span class="n">jax</span><span class="o">.</span><span class="n">grad</span><span class="p">(</span><span class="n">phase_at_end</span><span class="p">)</span>
+<span class="n">dPhi_dp0</span> <span class="o">=</span> <span class="n">grad_fn</span><span class="p">(</span><span class="n">jnp</span><span class="o">.</span><span class="n">float64</span><span class="p">(</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;p0&quot;</span><span class="p">]))</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;dΦ_φ/dp₀ = </span><span class="si">{</span><span class="nb">float</span><span class="p">(</span><span class="n">dPhi_dp0</span><span class="p">)</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2"> rad/M&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="batch-evaluation-with-vmap">
+<h2>7. Batch evaluation with <code class="docutils literal notranslate"><span class="pre">vmap</span></code><a class="headerlink" href="#batch-evaluation-with-vmap" title="Link to this heading"></a></h2>
+<p>Use <code class="docutils literal notranslate"><span class="pre">jax.vmap</span></code> to evaluate waveforms for a population of sources in a
+single vectorised call:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">jax</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">jax.numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">jnp</span>
+
+<span class="n">p0_values</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">linspace</span><span class="p">(</span><span class="mf">8.0</span><span class="p">,</span> <span class="mf">12.0</span><span class="p">,</span> <span class="mi">8</span><span class="p">)</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">single_waveform</span><span class="p">(</span><span class="n">p0</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">wf</span><span class="p">(</span><span class="o">**</span><span class="p">{</span><span class="o">**</span><span class="n">params</span><span class="p">,</span> <span class="s2">&quot;p0&quot;</span><span class="p">:</span> <span class="n">p0</span><span class="p">})</span>
+
+<span class="n">hp_batch</span><span class="p">,</span> <span class="n">hx_batch</span> <span class="o">=</span> <span class="n">jax</span><span class="o">.</span><span class="n">vmap</span><span class="p">(</span><span class="n">single_waveform</span><span class="p">)(</span><span class="n">p0_values</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">hp_batch</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span>   <span class="c1"># (8, N_samples)</span>
+</pre></div>
+</div>
+</section>
+<section id="accessing-the-sparse-trajectory">
+<h2>8. Accessing the sparse trajectory<a class="headerlink" href="#accessing-the-sparse-trajectory" title="Link to this heading"></a></h2>
+<p>For diagnostics you can retrieve the sparse orbital trajectory before waveform
+synthesis:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">result</span> <span class="o">=</span> <span class="n">wf</span><span class="o">.</span><span class="n">generate_sparse</span><span class="p">(</span><span class="o">**</span><span class="n">params</span><span class="p">)</span>
+<span class="c1"># Keys: t, p, e, Phi_phi, Phi_theta, Phi_r, amplitudes, modes</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">result</span><span class="p">[</span><span class="s2">&quot;p&quot;</span><span class="p">])</span>   <span class="c1"># (dense_steps,) array of semilatus rectum values</span>
+</pre></div>
+</div>
+</section>
+<section id="next-steps">
+<h2>Next steps<a class="headerlink" href="#next-steps" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p>See <a class="reference internal" href="examples.html"><span class="doc">Examples</span></a> for detailed Jupyter notebooks covering each component.</p></li>
+<li><p>See <a class="reference internal" href="math_background.html"><span class="doc">Mathematical Background</span></a> for the underlying physics.</p></li>
+<li><p>See <a class="reference internal" href="api.html"><span class="doc">API Reference</span></a> for the full API reference.</p></li>
+</ul>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="installation.html" class="btn btn-neutral float-left" title="Installation" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="math_background.html" class="btn btn-neutral float-right" title="Mathematical Background" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2026, Bert Depoorter.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

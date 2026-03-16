@@ -147,9 +147,9 @@ class KerrEccentricEquatorialWaveform:
         Parameters
         ----------
         M : float
-            Primary BH mass [:math:`M_\\odot`].
+            Primary BH mass [:math:`M_\odot`].
         mu : float
-            Secondary mass [:math:`M_\\odot`].
+            Secondary mass [:math:`M_\odot`].
         a : float
             Dimensionless spin parameter.
         p0 : float
@@ -240,9 +240,9 @@ class KerrEccentricEquatorialWaveform:
         Parameters
         ----------
         M : float
-            Primary BH mass [:math:`M_\\odot`].
+            Primary BH mass [:math:`M_\odot`].
         mu : float
-            Secondary mass [:math:`M_\\odot`].
+            Secondary mass [:math:`M_\odot`].
         a : float
             Dimensionless spin parameter, :math:`|a| < 1`.
         p0 : float
@@ -275,7 +275,7 @@ class KerrEccentricEquatorialWaveform:
         hp : jnp.ndarray, shape (N,)
             Plus-polarisation strain :math:`h_+` at the detector [dimensionless].
         hx : jnp.ndarray, shape (N,)
-            Cross-polarisation strain :math:`h_{\\times}` [dimensionless].
+            Cross-polarisation strain :math:`h_{\times}` [dimensionless].
         (optional) sparse_dict : dict
             Returned if ``return_sparse=True``.
 
@@ -283,8 +283,8 @@ class KerrEccentricEquatorialWaveform:
         -----
         The frame transformations from the source frame to the SSB (Solar
         System Barycentre) frame follow the convention in FEW.  The
-        angles :math:`(\\theta_S, \\phi_S)` are the ecliptic co-latitude
-        and longitude of the source, and :math:`(\\theta_K, \\phi_K)` are
+        angles :math:`(\theta_S, \phi_S)` are the ecliptic co-latitude
+        and longitude of the source, and :math:`(\theta_K, \phi_K)` are
         the polar and azimuthal angles of the BH spin in the SSB frame.
         """
         if mode_selection_threshold is not None:
@@ -362,17 +362,17 @@ class KerrEccentricEquatorialWaveform:
     ) -> tuple[jnp.ndarray, jnp.ndarray]:
         r"""Compute the instantaneous frequency track of a single harmonic mode.
 
-        The instantaneous GW frequency of mode :math:`(\\ell, m, k, n)` is:
+        The instantaneous GW frequency of mode :math:`(\ell, m, k, n)` is:
 
         .. math::
 
-            f_{\\ell m k n}(t) =
-                \\frac{1}{2\\pi}
-                \\left|
-                    m \\Omega_\\phi(t) + k \\Omega_\\theta(t) + n \\Omega_r(t)
-                \\right|
+            f_{\ell m k n}(t) =
+                \frac{1}{2\pi}
+                \left|
+                    m \Omega_\phi(t) + k \Omega_\theta(t) + n \Omega_r(t)
+                \right|
 
-        where :math:`\\Omega_i` are the fundamental frequencies in
+        where :math:`\Omega_i` are the fundamental frequencies in
         Boyer-Lindquist coordinate time evaluated along the trajectory.
 
         Parameters
@@ -383,7 +383,7 @@ class KerrEccentricEquatorialWaveform:
         backward : bool
             If ``True``, integrate backward from the separatrix.  The
             returned time axis ``t`` is time before plunge
-            (:math:`\\tau = T_{\\rm plunge} - t`), so ``t[0] = 0`` is at
+            (:math:`\tau = T_{\rm plunge} - t`), so ``t[0] = 0`` is at
             plunge and ``t[-1]`` is ``T`` years earlier.  Frequency
             decreases as ``t`` increases.
         e_f : float, optional

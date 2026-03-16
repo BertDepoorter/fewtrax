@@ -340,7 +340,7 @@ class EMRIInspiral(eqx.Module):
         e_f : float, optional
             Eccentricity at plunge, required when ``backward=True``.
             The corresponding semi-latus rectum is set to
-            :math:`p_{\rm sep}(e_f, a) + \\epsilon` automatically.
+            :math:`p_{\rm sep}(e_f, a) + \epsilon` automatically.
             To obtain a consistent value, run a forward integration first
             and read off ``e`` at the last valid (non-NaN) trajectory point.
 
