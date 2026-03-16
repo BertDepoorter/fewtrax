@@ -1,0 +1,518 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../../">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>fewtrax.summation.modes &mdash; fewtrax 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../../../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../../index.html" class="icon icon-home">
+            fewtrax
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Getting started</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../quickstart.html">Quickstart</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Background</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../math_background.html">Mathematical Background</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Tutorials</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../examples.html">Examples</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../api.html">API Reference</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../index.html">fewtrax</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">fewtrax.summation.modes</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for fewtrax.summation.modes</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;Harmonic mode summation for EMRI waveforms.</span>
+
+<span class="sd">This module implements the coherent summation of Teukolsky harmonic modes</span>
+<span class="sd">to produce the gravitational-wave strain:</span>
+
+<span class="sd">.. math::</span>
+
+<span class="sd">    h_+ - i h_{\\times} =</span>
+<span class="sd">        \\frac{\\mu}{d_L}</span>
+<span class="sd">        \\sum_{\\ell, m, k, n}</span>
+<span class="sd">        A_{\\ell m k n}(t) \\;</span>
+<span class="sd">        {}_{-2}Y_{\\ell m}(\\theta, \\phi) \\;</span>
+<span class="sd">        e^{-i \\Phi_{\\ell m k n}(t)}</span>
+<span class="sd">        + \\text{c.c.}</span>
+
+<span class="sd">where the phase is</span>
+
+<span class="sd">.. math::</span>
+
+<span class="sd">    \\Phi_{\\ell m k n}(t) = m \\Phi_\\phi(t) + k \\Phi_\\theta(t) + n \\Phi_r(t)</span>
+
+<span class="sd">and the complex conjugate (c.c.) term accounts for :math:`m &lt; 0` modes.</span>
+
+<span class="sd">The summation is performed by :func:`direct_mode_sum`, which is a</span>
+<span class="sd">pure JAX function that can be JIT-compiled and differentiated:</span>
+
+<span class="sd">.. code-block:: python</span>
+
+<span class="sd">    import jax</span>
+<span class="sd">    jit_sum = jax.jit(direct_mode_sum)</span>
+<span class="sd">    h = jit_sum(teuk_modes, ylms_pos, ylms_neg, Phi_phi, Phi_theta, Phi_r,</span>
+<span class="sd">                l_arr, m_arr, k_arr, n_arr)</span>
+
+<span class="sd">For parameter estimation, the derivative of the strain with respect</span>
+<span class="sd">to waveform parameters is obtained simply by:</span>
+
+<span class="sd">.. code-block:: python</span>
+
+<span class="sd">    dh_dp0 = jax.grad(lambda p0: jnp.sum(jnp.abs(</span>
+<span class="sd">        jit_sum(..., Phi_phi(p0), ...))**2))(p0)</span>
+
+<span class="sd">Utilities</span>
+<span class="sd">---------</span>
+<span class="sd">:func:`interpolated_mode_sum`</span>
+<span class="sd">    Upsamples the sparse trajectory to a dense time grid before</span>
+<span class="sd">    summation using cubic spline interpolation of the phases.</span>
+<span class="sd">:class:`ModeSum`</span>
+<span class="sd">    Stateful wrapper that caches the trajectory phases and amplitudes.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Optional</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">jax</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">jax.numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">jnp</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">jax</span><span class="w"> </span><span class="kn">import</span> <span class="n">jit</span><span class="p">,</span> <span class="n">vmap</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">functools</span><span class="w"> </span><span class="kn">import</span> <span class="n">partial</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">fewtrax.utils.constants</span><span class="w"> </span><span class="kn">import</span> <span class="n">MTSUN_SI</span><span class="p">,</span> <span class="n">GPC_SI</span><span class="p">,</span> <span class="n">YEAR_SI</span>
+
+
+<span class="c1"># ---------------------------------------------------------------------------</span>
+<span class="c1"># Core summation (pure JAX, fully JIT-compilable)</span>
+<span class="c1"># ---------------------------------------------------------------------------</span>
+
+<div class="viewcode-block" id="direct_mode_sum">
+<a class="viewcode-back" href="../../../api.html#fewtrax.summation.modes.direct_mode_sum">[docs]</a>
+<span class="nd">@partial</span><span class="p">(</span><span class="n">jit</span><span class="p">,</span> <span class="n">static_argnames</span><span class="o">=</span><span class="p">())</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">direct_mode_sum</span><span class="p">(</span>
+    <span class="n">teuk_modes</span><span class="p">:</span> <span class="n">jnp</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+    <span class="n">ylms_pos</span><span class="p">:</span> <span class="n">jnp</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+    <span class="n">ylms_neg</span><span class="p">:</span> <span class="n">jnp</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+    <span class="n">Phi_phi</span><span class="p">:</span> <span class="n">jnp</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+    <span class="n">Phi_theta</span><span class="p">:</span> <span class="n">jnp</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+    <span class="n">Phi_r</span><span class="p">:</span> <span class="n">jnp</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+    <span class="n">l_arr</span><span class="p">:</span> <span class="n">jnp</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+    <span class="n">m_arr</span><span class="p">:</span> <span class="n">jnp</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+    <span class="n">k_arr</span><span class="p">:</span> <span class="n">jnp</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+    <span class="n">n_arr</span><span class="p">:</span> <span class="n">jnp</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">jnp</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+<span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;Coherently sum Teukolsky modes to produce the GW strain.</span>
+
+<span class="sd">    Computes</span>
+
+<span class="sd">    .. math::</span>
+
+<span class="sd">        h(t) =</span>
+<span class="sd">            \sum_{(\ell,m,k,n),\; m \ge 0}</span>
+<span class="sd">            Y_{+}(\ell,m) \; A_{\ell m k n}(t) \;</span>
+<span class="sd">            e^{-i(m \Phi_\phi + k \Phi_\theta + n \Phi_r)}</span>
+<span class="sd">            +</span>
+<span class="sd">            \sum_{(\ell,m,k,n),\; m &gt; 0}</span>
+<span class="sd">            (-1)^\ell \; Y_{-}(\ell,m) \;</span>
+<span class="sd">            \bar{A}_{\ell m k n}(t) \;</span>
+<span class="sd">            e^{+i(m \Phi_\phi + k \Phi_\theta + n \Phi_r)}</span>
+
+<span class="sd">    where :math:`Y_{+}` and :math:`Y_{-}` are the spin-weighted spherical</span>
+<span class="sd">    harmonics for :math:`+m` and :math:`-m`.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    teuk_modes : jnp.ndarray, shape (N_t, N_modes), complex128</span>
+<span class="sd">        Teukolsky mode amplitudes at each time step.  Assumed to be for</span>
+<span class="sd">        :math:`m \ge 0` modes only (the negative-m term uses conjugation).</span>
+<span class="sd">    ylms_pos : jnp.ndarray, shape (N_modes,), complex128</span>
+<span class="sd">        :math:`{}_{-2}Y_{\ell m}(\theta, \phi)` for each mode.</span>
+<span class="sd">    ylms_neg : jnp.ndarray, shape (N_modes,), complex128</span>
+<span class="sd">        :math:`{}_{-2}Y_{\ell, -m}(\theta, \phi)` for each mode.</span>
+<span class="sd">    Phi_phi, Phi_theta, Phi_r : jnp.ndarray, shape (N_t,)</span>
+<span class="sd">        Orbital phases.</span>
+<span class="sd">    l_arr, m_arr, k_arr, n_arr : jnp.ndarray, shape (N_modes,), int</span>
+<span class="sd">        Mode index arrays.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    jnp.ndarray, shape (N_t,), complex128</span>
+<span class="sd">        Complex strain :math:`h_+ - i h_{\\times}` at each time step.</span>
+
+<span class="sd">    Notes</span>
+<span class="sd">    -----</span>
+<span class="sd">    The amplitude arrays ``teuk_modes`` are passed as regular (non-JAX</span>
+<span class="sd">    static) arrays and can originate from numpy.  They will be converted</span>
+<span class="sd">    to JAX arrays on first call.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="c1"># Ensure JAX types</span>
+    <span class="n">teuk_modes</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">teuk_modes</span><span class="p">)</span>
+    <span class="n">l_arr</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">l_arr</span><span class="p">)</span>
+    <span class="n">m_arr</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">m_arr</span><span class="p">)</span>
+    <span class="n">k_arr</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">k_arr</span><span class="p">)</span>
+    <span class="n">n_arr</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">n_arr</span><span class="p">)</span>
+
+    <span class="c1"># Phase: shape (N_t, N_modes)</span>
+    <span class="n">phase</span> <span class="o">=</span> <span class="p">(</span>
+        <span class="n">m_arr</span><span class="p">[</span><span class="n">jnp</span><span class="o">.</span><span class="n">newaxis</span><span class="p">,</span> <span class="p">:]</span> <span class="o">*</span> <span class="n">Phi_phi</span><span class="p">[:,</span> <span class="n">jnp</span><span class="o">.</span><span class="n">newaxis</span><span class="p">]</span>
+        <span class="o">+</span> <span class="n">k_arr</span><span class="p">[</span><span class="n">jnp</span><span class="o">.</span><span class="n">newaxis</span><span class="p">,</span> <span class="p">:]</span> <span class="o">*</span> <span class="n">Phi_theta</span><span class="p">[:,</span> <span class="n">jnp</span><span class="o">.</span><span class="n">newaxis</span><span class="p">]</span>
+        <span class="o">+</span> <span class="n">n_arr</span><span class="p">[</span><span class="n">jnp</span><span class="o">.</span><span class="n">newaxis</span><span class="p">,</span> <span class="p">:]</span> <span class="o">*</span> <span class="n">Phi_r</span><span class="p">[:,</span> <span class="n">jnp</span><span class="o">.</span><span class="n">newaxis</span><span class="p">]</span>
+    <span class="p">)</span>
+
+    <span class="c1"># Positive-m contribution (all modes, including m=0)</span>
+    <span class="n">w1</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span>
+        <span class="n">ylms_pos</span><span class="p">[</span><span class="n">jnp</span><span class="o">.</span><span class="n">newaxis</span><span class="p">,</span> <span class="p">:]</span> <span class="o">*</span> <span class="n">teuk_modes</span> <span class="o">*</span> <span class="n">jnp</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="n">j</span> <span class="o">*</span> <span class="n">phase</span><span class="p">),</span>
+        <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+    <span class="p">)</span>
+
+    <span class="c1"># Negative-m contribution (only m &gt; 0 modes, using symmetry)</span>
+    <span class="n">m_pos_mask</span> <span class="o">=</span> <span class="p">(</span><span class="n">m_arr</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">)</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">jnp</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
+    <span class="n">sign_l</span> <span class="o">=</span> <span class="p">(</span><span class="o">-</span><span class="mf">1.0</span><span class="p">)</span> <span class="o">**</span> <span class="n">l_arr</span>
+    <span class="n">w2</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span>
+        <span class="n">m_pos_mask</span><span class="p">[</span><span class="n">jnp</span><span class="o">.</span><span class="n">newaxis</span><span class="p">,</span> <span class="p">:]</span>
+        <span class="o">*</span> <span class="n">sign_l</span><span class="p">[</span><span class="n">jnp</span><span class="o">.</span><span class="n">newaxis</span><span class="p">,</span> <span class="p">:]</span>
+        <span class="o">*</span> <span class="n">ylms_neg</span><span class="p">[</span><span class="n">jnp</span><span class="o">.</span><span class="n">newaxis</span><span class="p">,</span> <span class="p">:]</span>
+        <span class="o">*</span> <span class="n">jnp</span><span class="o">.</span><span class="n">conj</span><span class="p">(</span><span class="n">teuk_modes</span><span class="p">)</span>
+        <span class="o">*</span> <span class="n">jnp</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="mi">1</span><span class="n">j</span> <span class="o">*</span> <span class="n">phase</span><span class="p">),</span>
+        <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+    <span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">w1</span> <span class="o">+</span> <span class="n">w2</span></div>
+
+
+
+<span class="c1"># ---------------------------------------------------------------------------</span>
+<span class="c1"># Interpolated mode sum (dense waveform from sparse trajectory)</span>
+<span class="c1"># ---------------------------------------------------------------------------</span>
+
+<div class="viewcode-block" id="interpolated_mode_sum">
+<a class="viewcode-back" href="../../../api.html#fewtrax.summation.modes.interpolated_mode_sum">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">interpolated_mode_sum</span><span class="p">(</span>
+    <span class="n">t_traj</span><span class="p">:</span> <span class="n">jnp</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+    <span class="n">teuk_modes</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+    <span class="n">ylms_pos</span><span class="p">:</span> <span class="n">jnp</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+    <span class="n">ylms_neg</span><span class="p">:</span> <span class="n">jnp</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+    <span class="n">Phi_phi</span><span class="p">:</span> <span class="n">jnp</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+    <span class="n">Phi_theta</span><span class="p">:</span> <span class="n">jnp</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+    <span class="n">Phi_r</span><span class="p">:</span> <span class="n">jnp</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+    <span class="n">l_arr</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+    <span class="n">m_arr</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+    <span class="n">k_arr</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+    <span class="n">n_arr</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+    <span class="n">dt</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">10.0</span><span class="p">,</span>
+    <span class="n">M</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1.0</span><span class="p">,</span>
+    <span class="n">T</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">jnp</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">jnp</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]:</span>
+<span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;Produce a densely sampled waveform by interpolating the phases.</span>
+
+<span class="sd">    The trajectory is computed on a sparse grid; this function upsamples</span>
+<span class="sd">    the phases to a uniformly spaced time grid with step ``dt`` using</span>
+<span class="sd">    cubic spline interpolation, then calls :func:`direct_mode_sum`.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    t_traj : jnp.ndarray, shape (N_traj,)</span>
+<span class="sd">        Sparse trajectory time stamps [s].</span>
+<span class="sd">    teuk_modes : array_like, shape (N_traj, N_modes)</span>
+<span class="sd">        Mode amplitudes at each trajectory point.</span>
+<span class="sd">    ylms_pos, ylms_neg : jnp.ndarray, shape (N_modes,)</span>
+<span class="sd">        Spherical harmonics.</span>
+<span class="sd">    Phi_phi, Phi_theta, Phi_r : jnp.ndarray, shape (N_traj,)</span>
+<span class="sd">        Orbital phases at trajectory points.</span>
+<span class="sd">    l_arr, m_arr, k_arr, n_arr : array_like of int</span>
+<span class="sd">        Mode index arrays.</span>
+<span class="sd">    dt : float</span>
+<span class="sd">        Output sampling interval [s].</span>
+<span class="sd">    M : float</span>
+<span class="sd">        Primary mass :math:`[M_\\odot]`.</span>
+<span class="sd">    T : float, optional</span>
+<span class="sd">        Total duration [years].  If not provided, uses ``t_traj[-1]``.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    t_dense : jnp.ndarray, shape (N_dense,)</span>
+<span class="sd">        Dense time stamps [s].</span>
+<span class="sd">    h : jnp.ndarray, shape (N_dense,), complex128</span>
+<span class="sd">        Waveform strain.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">interpax</span><span class="w"> </span><span class="kn">import</span> <span class="n">Interpolator1D</span>
+
+    <span class="n">t_np</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">t_traj</span><span class="p">)</span>
+    <span class="c1"># Mask out NaN values (can arise from event termination)</span>
+    <span class="n">valid</span> <span class="o">=</span> <span class="o">~</span><span class="n">np</span><span class="o">.</span><span class="n">isnan</span><span class="p">(</span><span class="n">t_np</span><span class="p">)</span> <span class="o">&amp;</span> <span class="o">~</span><span class="n">np</span><span class="o">.</span><span class="n">isinf</span><span class="p">(</span><span class="n">t_np</span><span class="p">)</span>
+    <span class="n">t_np</span> <span class="o">=</span> <span class="n">t_np</span><span class="p">[</span><span class="n">valid</span><span class="p">]</span>
+    <span class="n">N_valid</span> <span class="o">=</span> <span class="n">t_np</span><span class="o">.</span><span class="n">size</span>
+
+    <span class="k">if</span> <span class="n">N_valid</span> <span class="o">&lt;</span> <span class="mi">2</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Not enough valid trajectory points for interpolation.&quot;</span><span class="p">)</span>
+
+    <span class="n">T_s</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">t_np</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">])</span> <span class="k">if</span> <span class="n">T</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">T</span> <span class="o">*</span> <span class="n">YEAR_SI</span>
+
+    <span class="n">n_dense</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="nb">int</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">round</span><span class="p">(</span><span class="n">T_s</span> <span class="o">/</span> <span class="n">dt</span><span class="p">))</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span>
+    <span class="n">t_dense</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">linspace</span><span class="p">(</span><span class="nb">float</span><span class="p">(</span><span class="n">t_np</span><span class="p">[</span><span class="mi">0</span><span class="p">]),</span> <span class="nb">float</span><span class="p">(</span><span class="n">t_np</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]),</span> <span class="n">n_dense</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_interp</span><span class="p">(</span><span class="n">arr</span><span class="p">):</span>
+        <span class="n">arr_np</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">arr</span><span class="p">)[</span><span class="n">valid</span><span class="p">]</span>
+        <span class="n">spl</span> <span class="o">=</span> <span class="n">Interpolator1D</span><span class="p">(</span><span class="n">t_np</span><span class="p">,</span> <span class="n">arr_np</span><span class="p">,</span> <span class="n">method</span><span class="o">=</span><span class="s2">&quot;cubic2&quot;</span><span class="p">,</span> <span class="n">extrap</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">spl</span><span class="p">(</span><span class="n">t_dense</span><span class="p">)</span>
+
+    <span class="n">Phi_phi_d</span> <span class="o">=</span> <span class="n">_interp</span><span class="p">(</span><span class="n">Phi_phi</span><span class="p">)</span>
+    <span class="n">Phi_theta_d</span> <span class="o">=</span> <span class="n">_interp</span><span class="p">(</span><span class="n">Phi_theta</span><span class="p">)</span>
+    <span class="n">Phi_r_d</span> <span class="o">=</span> <span class="n">_interp</span><span class="p">(</span><span class="n">Phi_r</span><span class="p">)</span>
+
+    <span class="c1"># Interpolate amplitude magnitudes and phases separately</span>
+    <span class="n">teuk_np</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">teuk_modes</span><span class="p">)[</span><span class="n">valid</span><span class="p">,</span> <span class="p">:]</span>
+    <span class="n">teuk_dense_list</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">im</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">teuk_np</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]):</span>
+        <span class="n">spl_r</span> <span class="o">=</span> <span class="n">Interpolator1D</span><span class="p">(</span><span class="n">t_np</span><span class="p">,</span> <span class="n">teuk_np</span><span class="p">[:,</span> <span class="n">im</span><span class="p">]</span><span class="o">.</span><span class="n">real</span><span class="p">,</span> <span class="n">method</span><span class="o">=</span><span class="s2">&quot;cubic2&quot;</span><span class="p">,</span> <span class="n">extrap</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+        <span class="n">spl_i</span> <span class="o">=</span> <span class="n">Interpolator1D</span><span class="p">(</span><span class="n">t_np</span><span class="p">,</span> <span class="n">teuk_np</span><span class="p">[:,</span> <span class="n">im</span><span class="p">]</span><span class="o">.</span><span class="n">imag</span><span class="p">,</span> <span class="n">method</span><span class="o">=</span><span class="s2">&quot;cubic2&quot;</span><span class="p">,</span> <span class="n">extrap</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+        <span class="n">teuk_dense_list</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">spl_r</span><span class="p">(</span><span class="n">t_dense</span><span class="p">)</span> <span class="o">+</span> <span class="mi">1</span><span class="n">j</span> <span class="o">*</span> <span class="n">spl_i</span><span class="p">(</span><span class="n">t_dense</span><span class="p">))</span>
+    <span class="n">teuk_dense</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">stack</span><span class="p">(</span><span class="n">teuk_dense_list</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>  <span class="c1"># (N_dense, N_modes)</span>
+
+    <span class="n">h</span> <span class="o">=</span> <span class="n">direct_mode_sum</span><span class="p">(</span>
+        <span class="n">teuk_dense</span><span class="p">,</span> <span class="n">ylms_pos</span><span class="p">,</span> <span class="n">ylms_neg</span><span class="p">,</span>
+        <span class="n">Phi_phi_d</span><span class="p">,</span> <span class="n">Phi_theta_d</span><span class="p">,</span> <span class="n">Phi_r_d</span><span class="p">,</span>
+        <span class="n">jnp</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">l_arr</span><span class="p">),</span> <span class="n">jnp</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">m_arr</span><span class="p">),</span>
+        <span class="n">jnp</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">k_arr</span><span class="p">),</span> <span class="n">jnp</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">n_arr</span><span class="p">),</span>
+    <span class="p">)</span>
+    <span class="k">return</span> <span class="n">t_dense</span><span class="p">,</span> <span class="n">h</span></div>
+
+
+
+<span class="c1"># ---------------------------------------------------------------------------</span>
+<span class="c1"># Frequency-domain transform</span>
+<span class="c1"># ---------------------------------------------------------------------------</span>
+
+<div class="viewcode-block" id="to_frequency_domain">
+<a class="viewcode-back" href="../../../api.html#fewtrax.summation.modes.to_frequency_domain">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">to_frequency_domain</span><span class="p">(</span>
+    <span class="n">h</span><span class="p">:</span> <span class="n">jnp</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+    <span class="n">dt</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">jnp</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">jnp</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]:</span>
+<span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;Transform the time-domain waveform to the frequency domain.</span>
+
+<span class="sd">    Computes :math:`\tilde{h}(f) = \int h(t) e^{2\pi i f t} dt` via the</span>
+<span class="sd">    FFT, normalised to physical units (strain/Hz).</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    h : jnp.ndarray, shape (N,)</span>
+<span class="sd">        Complex or real time-domain strain.</span>
+<span class="sd">    dt : float</span>
+<span class="sd">        Sampling interval [s].</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    freqs : jnp.ndarray, shape (N//2 + 1,)</span>
+<span class="sd">        Positive frequencies [Hz].</span>
+<span class="sd">    h_tilde : jnp.ndarray, shape (N//2 + 1,), complex</span>
+<span class="sd">        One-sided frequency-domain strain.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">N</span> <span class="o">=</span> <span class="n">h</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+    <span class="n">h_tilde</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">fft</span><span class="o">.</span><span class="n">rfft</span><span class="p">(</span><span class="n">h</span><span class="p">)</span> <span class="o">*</span> <span class="n">dt</span>
+    <span class="n">freqs</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">fft</span><span class="o">.</span><span class="n">rfftfreq</span><span class="p">(</span><span class="n">N</span><span class="p">,</span> <span class="n">d</span><span class="o">=</span><span class="n">dt</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">freqs</span><span class="p">,</span> <span class="n">h_tilde</span></div>
+
+
+
+<span class="c1"># ---------------------------------------------------------------------------</span>
+<span class="c1"># Stateful wrapper</span>
+<span class="c1"># ---------------------------------------------------------------------------</span>
+
+<div class="viewcode-block" id="ModeSum">
+<a class="viewcode-back" href="../../../api.html#fewtrax.summation.modes.ModeSum">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">ModeSum</span><span class="p">:</span>
+<span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;Stateful wrapper that caches trajectory data and evaluates the sum.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    l_arr, m_arr, k_arr, n_arr : array_like of int</span>
+<span class="sd">        Mode index arrays.</span>
+<span class="sd">    ylms_pos, ylms_neg : array_like, complex</span>
+<span class="sd">        Spherical harmonics for each mode.</span>
+<span class="sd">    dist : float</span>
+<span class="sd">        Luminosity distance [Gpc].</span>
+<span class="sd">    M : float</span>
+<span class="sd">        Primary mass [:math:`M_\\odot`].</span>
+<span class="sd">    mu : float</span>
+<span class="sd">        Secondary mass [:math:`M_\\odot`].</span>
+
+<span class="sd">    Examples</span>
+<span class="sd">    --------</span>
+<span class="sd">    &gt;&gt;&gt; summer = ModeSum(l_arr, m_arr, k_arr, n_arr, ylms_pos, ylms_neg,</span>
+<span class="sd">    ...                  dist=1.0, M=1e6, mu=10.0)</span>
+<span class="sd">    &gt;&gt;&gt; h = summer(t_traj, teuk_modes, Phi_phi, Phi_theta, Phi_r, dt=10.0)</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">l_arr</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+        <span class="n">m_arr</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+        <span class="n">k_arr</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+        <span class="n">n_arr</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+        <span class="n">ylms_pos</span><span class="p">:</span> <span class="n">jnp</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+        <span class="n">ylms_neg</span><span class="p">:</span> <span class="n">jnp</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+        <span class="n">dist</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1.0</span><span class="p">,</span>
+        <span class="n">M</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1.0</span><span class="p">,</span>
+        <span class="n">mu</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1.0</span><span class="p">,</span>
+    <span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">l_arr</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">l_arr</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">m_arr</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">m_arr</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">k_arr</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">k_arr</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">n_arr</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">n_arr</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">ylms_pos</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">ylms_pos</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">ylms_neg</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">ylms_neg</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">dist</span> <span class="o">=</span> <span class="n">dist</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">M</span> <span class="o">=</span> <span class="n">M</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">mu</span> <span class="o">=</span> <span class="n">mu</span>
+        <span class="c1"># Amplitude prefactor: mu * G / (c^2 * d_L)</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">fewtrax.utils.constants</span><span class="w"> </span><span class="kn">import</span> <span class="n">G_SI</span><span class="p">,</span> <span class="n">C_SI</span><span class="p">,</span> <span class="n">MSUN_SI</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_amp</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="n">mu</span> <span class="o">*</span> <span class="n">MSUN_SI</span> <span class="o">*</span> <span class="n">G_SI</span> <span class="o">/</span> <span class="n">C_SI</span><span class="o">**</span><span class="mi">2</span>
+            <span class="o">/</span> <span class="p">(</span><span class="n">dist</span> <span class="o">*</span> <span class="n">GPC_SI</span><span class="p">)</span>
+        <span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__call__</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">t_traj</span><span class="p">:</span> <span class="n">jnp</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+        <span class="n">teuk_modes</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+        <span class="n">Phi_phi</span><span class="p">:</span> <span class="n">jnp</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+        <span class="n">Phi_theta</span><span class="p">:</span> <span class="n">jnp</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+        <span class="n">Phi_r</span><span class="p">:</span> <span class="n">jnp</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+        <span class="n">dt</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">10.0</span><span class="p">,</span>
+        <span class="n">dense</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">jnp</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">jnp</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]:</span>
+<span class="w">        </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;Evaluate the gravitational-wave strain.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        t_traj : jnp.ndarray, shape (N_traj,)</span>
+<span class="sd">            Sparse trajectory time stamps [s].</span>
+<span class="sd">        teuk_modes : np.ndarray, shape (N_traj, N_modes), complex</span>
+<span class="sd">            Mode amplitudes at trajectory points.</span>
+<span class="sd">        Phi_phi, Phi_theta, Phi_r : jnp.ndarray, shape (N_traj,)</span>
+<span class="sd">            Orbital phases.</span>
+<span class="sd">        dt : float</span>
+<span class="sd">            Waveform sampling interval [s].</span>
+<span class="sd">        dense : bool</span>
+<span class="sd">            If True, upsample to a dense grid.  If False, return the</span>
+<span class="sd">            sparse trajectory summation.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        t : jnp.ndarray</span>
+<span class="sd">            Time stamps [s].</span>
+<span class="sd">        h : jnp.ndarray, complex</span>
+<span class="sd">            :math:`h_+ - i h_{\\times}` in physical units.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">dense</span><span class="p">:</span>
+            <span class="n">t_out</span><span class="p">,</span> <span class="n">h</span> <span class="o">=</span> <span class="n">interpolated_mode_sum</span><span class="p">(</span>
+                <span class="n">t_traj</span><span class="p">,</span> <span class="n">teuk_modes</span><span class="p">,</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">ylms_pos</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">ylms_neg</span><span class="p">,</span>
+                <span class="n">Phi_phi</span><span class="p">,</span> <span class="n">Phi_theta</span><span class="p">,</span> <span class="n">Phi_r</span><span class="p">,</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">l_arr</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">m_arr</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">k_arr</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_arr</span><span class="p">,</span>
+                <span class="n">dt</span><span class="o">=</span><span class="n">dt</span><span class="p">,</span> <span class="n">M</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">M</span><span class="p">,</span>
+            <span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">h</span> <span class="o">=</span> <span class="n">direct_mode_sum</span><span class="p">(</span>
+                <span class="n">jnp</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">teuk_modes</span><span class="p">),</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">ylms_pos</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">ylms_neg</span><span class="p">,</span>
+                <span class="n">Phi_phi</span><span class="p">,</span> <span class="n">Phi_theta</span><span class="p">,</span> <span class="n">Phi_r</span><span class="p">,</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">l_arr</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">m_arr</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">k_arr</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_arr</span><span class="p">,</span>
+            <span class="p">)</span>
+            <span class="n">t_out</span> <span class="o">=</span> <span class="n">t_traj</span>
+
+        <span class="k">return</span> <span class="n">t_out</span><span class="p">,</span> <span class="n">h</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">_amp</span></div>
+
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2026, Bert Depoorter.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

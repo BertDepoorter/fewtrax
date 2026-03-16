@@ -1,0 +1,358 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../../">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>fewtrax.amplitude.interp &mdash; fewtrax 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../../../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../../index.html" class="icon icon-home">
+            fewtrax
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Getting started</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../quickstart.html">Quickstart</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Background</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../math_background.html">Mathematical Background</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Tutorials</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../examples.html">Examples</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../api.html">API Reference</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../index.html">fewtrax</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">fewtrax.amplitude.interp</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for fewtrax.amplitude.interp</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;Teukolsky mode amplitude interpolation from FEW precomputed grids.</span>
+
+<span class="sd">The amplitude HDF5 file stores bicubic B-spline coefficients</span>
+<span class="sd">in ``scipy.interpolate.bisplev`` format (one set per z-slice per mode).</span>
+<span class="sd">This module evaluates those coefficients at query trajectory points using</span>
+<span class="sd">``scipy.interpolate.bisplev`` and linear interpolation in the spin</span>
+<span class="sd">coordinate z, returning complex mode amplitudes as a numpy array.</span>
+
+<span class="sd">The result is then passed to the JAX summation module.</span>
+
+<span class="sd">Design notes</span>
+<span class="sd">------------</span>
+<span class="sd">* The amplitude evaluation is intentionally **numpy-based** rather than</span>
+<span class="sd">  JAX-based.  The spline coefficient arrays are large (several GB for all</span>
+<span class="sd">  6993 modes), and precomputing them as JAX arrays on the GPU would exceed</span>
+<span class="sd">  typical GPU memory budgets.  Instead, the scipy B-spline evaluation runs</span>
+<span class="sd">  on the CPU and only the resulting (N_traj, N_modes) amplitude array is</span>
+<span class="sd">  transferred to the GPU for the mode summation.</span>
+<span class="sd">* Mode selection (thresholding by relative power) is done here to</span>
+<span class="sd">  reduce the number of modes passed to the summation step.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">Sequence</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">fewtrax.utils.coordinates</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">ALPHA_AMP</span><span class="p">,</span> <span class="n">BETA_AMP</span><span class="p">,</span> <span class="n">DELTAPMIN</span><span class="p">,</span> <span class="n">DELTAPMAX</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">fewtrax.data.loader</span><span class="w"> </span><span class="kn">import</span> <span class="n">AmplitudeData</span><span class="p">,</span> <span class="n">_separatrix_numpy</span>
+
+
+<div class="viewcode-block" id="AmplitudeInterpolator">
+<a class="viewcode-back" href="../../../api.html#fewtrax.amplitude.interp.AmplitudeInterpolator">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">AmplitudeInterpolator</span><span class="p">:</span>
+<span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;Evaluate Teukolsky mode amplitudes :math:`A_{\ell mkn}(a, p, e)`.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    amp_data : AmplitudeData</span>
+<span class="sd">        Pre-loaded amplitude data (B-spline coefficients + mode arrays).</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">amp_data</span><span class="p">:</span> <span class="n">AmplitudeData</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">amp_data</span> <span class="o">=</span> <span class="n">amp_data</span>
+
+    <span class="c1"># ------------------------------------------------------------------</span>
+    <span class="c1"># Coordinate helpers</span>
+    <span class="c1"># ------------------------------------------------------------------</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_z_of_a</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">a_abs</span><span class="p">:</span> <span class="nb">float</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Spin → z coordinate.&quot;&quot;&quot;</span>
+        <span class="n">chi_max</span> <span class="o">=</span> <span class="p">(</span><span class="mi">1</span> <span class="o">-</span> <span class="p">(</span><span class="o">-</span><span class="mf">0.999</span><span class="p">))</span><span class="o">**</span><span class="p">(</span><span class="mi">1</span><span class="o">/</span><span class="mi">3</span><span class="p">)</span>
+        <span class="n">chi_min</span> <span class="o">=</span> <span class="p">(</span><span class="mi">1</span> <span class="o">-</span> <span class="mf">0.999</span><span class="p">)</span><span class="o">**</span><span class="p">(</span><span class="mi">1</span><span class="o">/</span><span class="mi">3</span><span class="p">)</span>
+        <span class="n">chi</span> <span class="o">=</span> <span class="p">(</span><span class="mf">1.0</span> <span class="o">-</span> <span class="n">a_abs</span><span class="p">)</span><span class="o">**</span><span class="p">(</span><span class="mi">1</span><span class="o">/</span><span class="mi">3</span><span class="p">)</span>
+        <span class="k">return</span> <span class="nb">float</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">clip</span><span class="p">((</span><span class="n">chi</span> <span class="o">-</span> <span class="n">chi_min</span><span class="p">)</span> <span class="o">/</span> <span class="p">(</span><span class="n">chi_max</span> <span class="o">-</span> <span class="n">chi_min</span><span class="p">),</span> <span class="mf">0.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">))</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_forward_map_A</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">a_abs</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">p</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">e</span><span class="p">:</span> <span class="nb">float</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Map (a, p, e) → (u, w, z) in Region A (amplitude coordinates).&quot;&quot;&quot;</span>
+        <span class="n">pLSO</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">_separatrix_numpy</span><span class="p">(</span><span class="n">a_abs</span><span class="p">,</span> <span class="n">e</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">))</span>
+        <span class="n">dp</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="n">p</span> <span class="o">-</span> <span class="n">pLSO</span> <span class="o">-</span> <span class="n">DELTAPMIN</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">)</span>
+        <span class="n">u_raw</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">log1p</span><span class="p">(</span><span class="n">dp</span> <span class="o">/</span> <span class="p">(</span><span class="n">DELTAPMAX</span> <span class="o">-</span> <span class="n">DELTAPMIN</span><span class="p">))</span> <span class="o">/</span> <span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="mf">2.0</span><span class="p">)</span>
+        <span class="n">u</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">clip</span><span class="p">(</span><span class="n">u_raw</span><span class="o">**</span><span class="n">ALPHA_AMP</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">))</span>
+        <span class="n">z</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_z_of_a</span><span class="p">(</span><span class="n">a_abs</span><span class="p">)</span>
+        <span class="n">ESEP</span><span class="p">,</span> <span class="n">EMAX_LOC</span> <span class="o">=</span> <span class="mf">0.25</span><span class="p">,</span> <span class="mf">0.9</span>
+        <span class="n">check</span> <span class="o">=</span> <span class="n">z</span> <span class="o">+</span> <span class="n">u</span><span class="o">**</span><span class="n">BETA_AMP</span> <span class="o">*</span> <span class="p">(</span><span class="mf">1.0</span> <span class="o">-</span> <span class="n">z</span><span class="p">)</span>
+        <span class="n">sgn</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sign</span><span class="p">(</span><span class="n">check</span><span class="p">)</span>
+        <span class="n">Secc</span> <span class="o">=</span> <span class="n">ESEP</span> <span class="o">+</span> <span class="p">(</span><span class="n">EMAX_LOC</span> <span class="o">-</span> <span class="n">ESEP</span><span class="p">)</span> <span class="o">*</span> <span class="n">sgn</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">sgn</span> <span class="o">*</span> <span class="nb">max</span><span class="p">(</span><span class="n">check</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">))</span>
+        <span class="n">Secc</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="n">Secc</span><span class="p">,</span> <span class="mf">1e-12</span><span class="p">)</span>
+        <span class="n">w</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">clip</span><span class="p">(</span><span class="n">e</span> <span class="o">/</span> <span class="n">Secc</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">))</span>
+        <span class="k">return</span> <span class="n">u</span><span class="p">,</span> <span class="n">w</span><span class="p">,</span> <span class="n">z</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_forward_map_B</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">a_abs</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">p</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">e</span><span class="p">:</span> <span class="nb">float</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Map (a, p, e) → (u, w, z) in Region B (amplitude coordinates).&quot;&quot;&quot;</span>
+        <span class="n">pLSO</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">_separatrix_numpy</span><span class="p">(</span><span class="n">a_abs</span><span class="p">,</span> <span class="n">e</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">))</span>
+        <span class="n">DELTAPMIN_B</span> <span class="o">=</span> <span class="mf">9.001</span>
+        <span class="n">PMAX_B</span> <span class="o">=</span> <span class="mf">200.0</span>
+        <span class="n">pc</span> <span class="o">=</span> <span class="n">pLSO</span> <span class="o">+</span> <span class="n">DELTAPMIN_B</span>
+        <span class="n">u</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">clip</span><span class="p">(</span>
+            <span class="p">(</span><span class="n">pc</span><span class="o">**-</span><span class="mf">0.5</span> <span class="o">-</span> <span class="n">p</span><span class="o">**-</span><span class="mf">0.5</span><span class="p">)</span> <span class="o">/</span> <span class="p">(</span><span class="n">pc</span><span class="o">**-</span><span class="mf">0.5</span> <span class="o">-</span> <span class="p">(</span><span class="n">PMAX_B</span> <span class="o">+</span> <span class="n">pc</span><span class="p">)</span><span class="o">**-</span><span class="mf">0.5</span><span class="p">),</span>
+            <span class="mf">0.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">,</span>
+        <span class="p">))</span>
+        <span class="n">EMAX_B</span> <span class="o">=</span> <span class="mf">0.9</span>
+        <span class="n">w</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">clip</span><span class="p">(</span><span class="n">e</span> <span class="o">/</span> <span class="n">EMAX_B</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">))</span>
+        <span class="n">z</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_z_of_a</span><span class="p">(</span><span class="n">a_abs</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">u</span><span class="p">,</span> <span class="n">w</span><span class="p">,</span> <span class="n">z</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_in_region_A</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">a_abs</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">p</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">e</span><span class="p">:</span> <span class="nb">float</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+        <span class="n">pLSO</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">_separatrix_numpy</span><span class="p">(</span><span class="n">a_abs</span><span class="p">,</span> <span class="n">e</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">))</span>
+        <span class="k">return</span> <span class="p">(</span><span class="n">p</span> <span class="o">-</span> <span class="n">pLSO</span><span class="p">)</span> <span class="o">&lt;=</span> <span class="n">DELTAPMAX</span>
+
+    <span class="c1"># ------------------------------------------------------------------</span>
+    <span class="c1"># Amplitude evaluation</span>
+    <span class="c1"># ------------------------------------------------------------------</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_eval_block</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">a_abs</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">p_arr</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">e_arr</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Evaluate amplitudes at all trajectory points.  Returns (N, n_modes).&quot;&quot;&quot;</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">scipy.interpolate</span><span class="w"> </span><span class="kn">import</span> <span class="n">bisplev</span>
+
+        <span class="n">ad</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">amp_data</span>
+        <span class="n">N</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">p_arr</span><span class="p">)</span>
+        <span class="n">n_modes</span> <span class="o">=</span> <span class="n">ad</span><span class="o">.</span><span class="n">n_modes</span>
+        <span class="n">amps</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">N</span><span class="p">,</span> <span class="n">n_modes</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">complex</span><span class="p">)</span>
+
+        <span class="k">for</span> <span class="n">it</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">N</span><span class="p">):</span>
+            <span class="n">p</span><span class="p">,</span> <span class="n">e</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">p_arr</span><span class="p">[</span><span class="n">it</span><span class="p">]),</span> <span class="nb">float</span><span class="p">(</span><span class="n">e_arr</span><span class="p">[</span><span class="n">it</span><span class="p">])</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">np</span><span class="o">.</span><span class="n">isfinite</span><span class="p">(</span><span class="n">p</span><span class="p">)</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">np</span><span class="o">.</span><span class="n">isfinite</span><span class="p">(</span><span class="n">e</span><span class="p">)</span> <span class="ow">or</span> <span class="n">p</span> <span class="o">&lt;=</span> <span class="mi">0</span><span class="p">:</span>
+                <span class="k">continue</span>
+
+            <span class="n">in_A</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_in_region_A</span><span class="p">(</span><span class="n">a_abs</span><span class="p">,</span> <span class="n">p</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">in_A</span><span class="p">:</span>
+                <span class="n">u</span><span class="p">,</span> <span class="n">w</span><span class="p">,</span> <span class="n">z</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_forward_map_A</span><span class="p">(</span><span class="n">a_abs</span><span class="p">,</span> <span class="n">p</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
+                <span class="n">coeffs</span> <span class="o">=</span> <span class="n">ad</span><span class="o">.</span><span class="n">coeffs_A</span>
+                <span class="n">u_kn</span><span class="p">,</span> <span class="n">w_kn</span><span class="p">,</span> <span class="n">z_kn</span> <span class="o">=</span> <span class="n">ad</span><span class="o">.</span><span class="n">u_knots_A</span><span class="p">,</span> <span class="n">ad</span><span class="o">.</span><span class="n">w_knots_A</span><span class="p">,</span> <span class="n">ad</span><span class="o">.</span><span class="n">z_knots_A</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">ad</span><span class="o">.</span><span class="n">coeffs_B</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                    <span class="k">continue</span>
+                <span class="n">u</span><span class="p">,</span> <span class="n">w</span><span class="p">,</span> <span class="n">z</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_forward_map_B</span><span class="p">(</span><span class="n">a_abs</span><span class="p">,</span> <span class="n">p</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
+                <span class="n">coeffs</span> <span class="o">=</span> <span class="n">ad</span><span class="o">.</span><span class="n">coeffs_B</span>
+                <span class="n">u_kn</span><span class="p">,</span> <span class="n">w_kn</span><span class="p">,</span> <span class="n">z_kn</span> <span class="o">=</span> <span class="n">ad</span><span class="o">.</span><span class="n">u_knots_B</span><span class="p">,</span> <span class="n">ad</span><span class="o">.</span><span class="n">w_knots_B</span><span class="p">,</span> <span class="n">ad</span><span class="o">.</span><span class="n">z_knots_B</span>
+
+            <span class="n">n_z</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">z_kn</span><span class="p">)</span>
+            <span class="n">iz</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">clip</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">searchsorted</span><span class="p">(</span><span class="n">z_kn</span><span class="p">,</span> <span class="n">z</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="n">n_z</span> <span class="o">-</span> <span class="mi">2</span><span class="p">))</span>
+            <span class="n">z_lo</span><span class="p">,</span> <span class="n">z_hi</span> <span class="o">=</span> <span class="n">z_kn</span><span class="p">[</span><span class="n">iz</span><span class="p">],</span> <span class="n">z_kn</span><span class="p">[</span><span class="n">iz</span> <span class="o">+</span> <span class="mi">1</span><span class="p">]</span>
+            <span class="n">alpha</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">clip</span><span class="p">((</span><span class="n">z</span> <span class="o">-</span> <span class="n">z_lo</span><span class="p">)</span> <span class="o">/</span> <span class="p">(</span><span class="n">z_hi</span> <span class="o">-</span> <span class="n">z_lo</span> <span class="o">+</span> <span class="mf">1e-30</span><span class="p">),</span> <span class="mf">0.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">))</span>
+
+            <span class="c1"># FEW stores coefficients in (w, u) axis order; bisplev first arg</span>
+            <span class="c1"># is the query in the first axis direction (w), second is u.</span>
+            <span class="n">w_pt</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="n">w</span><span class="p">])</span>
+            <span class="n">u_pt</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="n">u</span><span class="p">])</span>
+            <span class="k">for</span> <span class="n">iz2</span><span class="p">,</span> <span class="n">fac</span> <span class="ow">in</span> <span class="p">[(</span><span class="n">iz</span><span class="p">,</span> <span class="mf">1.0</span> <span class="o">-</span> <span class="n">alpha</span><span class="p">),</span> <span class="p">(</span><span class="n">iz</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span> <span class="n">alpha</span><span class="p">)]:</span>
+                <span class="k">if</span> <span class="n">fac</span> <span class="o">&lt;</span> <span class="mf">1e-10</span><span class="p">:</span>
+                    <span class="k">continue</span>
+                <span class="n">c_block</span> <span class="o">=</span> <span class="n">coeffs</span><span class="p">[</span><span class="n">iz2</span><span class="p">]</span>   <span class="c1"># (n_modes, 2, n_coeffs)</span>
+                <span class="k">for</span> <span class="n">im</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">n_modes</span><span class="p">):</span>
+                    <span class="n">vr</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">bisplev</span><span class="p">(</span><span class="n">w_pt</span><span class="p">,</span> <span class="n">u_pt</span><span class="p">,</span> <span class="p">(</span><span class="n">w_kn</span><span class="p">,</span> <span class="n">u_kn</span><span class="p">,</span> <span class="n">c_block</span><span class="p">[</span><span class="n">im</span><span class="p">,</span> <span class="mi">0</span><span class="p">],</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">3</span><span class="p">)))</span>
+                    <span class="n">vi</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">bisplev</span><span class="p">(</span><span class="n">w_pt</span><span class="p">,</span> <span class="n">u_pt</span><span class="p">,</span> <span class="p">(</span><span class="n">w_kn</span><span class="p">,</span> <span class="n">u_kn</span><span class="p">,</span> <span class="n">c_block</span><span class="p">[</span><span class="n">im</span><span class="p">,</span> <span class="mi">1</span><span class="p">],</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">3</span><span class="p">)))</span>
+                    <span class="n">amps</span><span class="p">[</span><span class="n">it</span><span class="p">,</span> <span class="n">im</span><span class="p">]</span> <span class="o">+=</span> <span class="nb">complex</span><span class="p">(</span><span class="n">vr</span><span class="p">,</span> <span class="n">vi</span><span class="p">)</span> <span class="o">*</span> <span class="n">fac</span>
+
+        <span class="k">return</span> <span class="n">amps</span>
+
+    <span class="c1"># ------------------------------------------------------------------</span>
+    <span class="c1"># Convenience properties (forwarded from amp_data)</span>
+    <span class="c1"># ------------------------------------------------------------------</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">n_modes</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">amp_data</span><span class="o">.</span><span class="n">n_modes</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">l_arr</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">amp_data</span><span class="o">.</span><span class="n">l_arr</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">m_arr</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">amp_data</span><span class="o">.</span><span class="n">m_arr</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">k_arr</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">amp_data</span><span class="o">.</span><span class="n">k_arr</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">n_arr</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">amp_data</span><span class="o">.</span><span class="n">n_arr</span>
+
+    <span class="c1"># ------------------------------------------------------------------</span>
+    <span class="c1"># Public API</span>
+    <span class="c1"># ------------------------------------------------------------------</span>
+
+<div class="viewcode-block" id="AmplitudeInterpolator.evaluate">
+<a class="viewcode-back" href="../../../api.html#fewtrax.amplitude.interp.AmplitudeInterpolator.evaluate">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">evaluate</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">a</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
+        <span class="n">p</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+        <span class="n">e</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+        <span class="n">x</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1.0</span><span class="p">,</span>
+        <span class="n">specific_modes</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Sequence</span><span class="p">[</span><span class="nb">int</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+<span class="w">        </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;Evaluate Teukolsky mode amplitudes along a trajectory.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        a : float</span>
+<span class="sd">            Dimensionless BH spin.</span>
+<span class="sd">        p, e : np.ndarray, shape (N,)</span>
+<span class="sd">            Semi-latus rectum and eccentricity.</span>
+<span class="sd">        x : float</span>
+<span class="sd">            Inclination cosine (±1).</span>
+<span class="sd">        specific_modes : sequence of int, optional</span>
+<span class="sd">            Mode indices to evaluate.  Default: all modes.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        amps : np.ndarray, shape (N, n_modes) complex</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">a_abs</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">a</span><span class="p">))</span>
+        <span class="n">p_arr</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">p</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">float</span><span class="p">)</span>
+        <span class="n">e_arr</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">e</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">float</span><span class="p">)</span>
+        <span class="n">amps</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_eval_block</span><span class="p">(</span><span class="n">a_abs</span><span class="p">,</span> <span class="n">p_arr</span><span class="p">,</span> <span class="n">e_arr</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">specific_modes</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">amps</span> <span class="o">=</span> <span class="n">amps</span><span class="p">[:,</span> <span class="n">specific_modes</span><span class="p">]</span>
+        <span class="k">return</span> <span class="n">amps</span></div>
+
+
+<div class="viewcode-block" id="AmplitudeInterpolator.get_mode_power">
+<a class="viewcode-back" href="../../../api.html#fewtrax.amplitude.interp.AmplitudeInterpolator.get_mode_power">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_mode_power</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">a</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
+        <span class="n">p</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+        <span class="n">e</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+        <span class="n">x</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1.0</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return mean |A|² per mode, shape (n_modes,).&quot;&quot;&quot;</span>
+        <span class="n">amps</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">evaluate</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">p</span><span class="p">,</span> <span class="n">e</span><span class="p">,</span> <span class="n">x</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">amps</span><span class="p">)</span><span class="o">**</span><span class="mi">2</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="AmplitudeInterpolator.select_modes">
+<a class="viewcode-back" href="../../../api.html#fewtrax.amplitude.interp.AmplitudeInterpolator.select_modes">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">select_modes</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">a</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
+        <span class="n">p</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+        <span class="n">e</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+        <span class="n">threshold</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1e-5</span><span class="p">,</span>
+        <span class="n">x</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1.0</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return indices of modes with relative power ≥ ``threshold × max``.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        indices : np.ndarray of int</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">power</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_mode_power</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">p</span><span class="p">,</span> <span class="n">e</span><span class="p">,</span> <span class="n">x</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">power</span><span class="o">.</span><span class="n">max</span><span class="p">()</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">power</span><span class="p">))</span>
+        <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">power</span> <span class="o">&gt;=</span> <span class="n">threshold</span> <span class="o">*</span> <span class="n">power</span><span class="o">.</span><span class="n">max</span><span class="p">())[</span><span class="mi">0</span><span class="p">]</span></div>
+</div>
+
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2026, Bert Depoorter.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

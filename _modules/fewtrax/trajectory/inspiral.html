@@ -1,0 +1,636 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../../">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>fewtrax.trajectory.inspiral &mdash; fewtrax 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../../../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../../index.html" class="icon icon-home">
+            fewtrax
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Getting started</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../quickstart.html">Quickstart</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Background</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../math_background.html">Mathematical Background</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Tutorials</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../examples.html">Examples</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../api.html">API Reference</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../index.html">fewtrax</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">fewtrax.trajectory.inspiral</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for fewtrax.trajectory.inspiral</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;EMRI orbital trajectory integration via diffrax.</span>
+
+<span class="sd">The trajectory ODE integrates</span>
+
+<span class="sd">.. math::</span>
+
+<span class="sd">    \\frac{dp}{dt} &amp;= \\left(\\frac{\\partial E}{\\partial p}\\right)^{-1}_{\\rm eff}\\,\\dot{E}_{\\rm GR} + \\cdots \\\\</span>
+<span class="sd">    \\frac{de}{dt} &amp;= \\cdots \\\\</span>
+<span class="sd">    \\frac{d\\Phi_\\phi}{dt} &amp;= \\Omega_\\phi(a, p, e) \\\\</span>
+<span class="sd">    \\frac{d\\Phi_\\theta}{dt} &amp;= \\Omega_\\theta(a, p, e) \\\\</span>
+<span class="sd">    \\frac{d\\Phi_r}{dt} &amp;= \\Omega_r(a, p, e)</span>
+
+<span class="sd">where time is in units of :math:`M`.</span>
+
+<span class="sd">The radiation-reaction terms are obtained by interpolating the PN-normalised</span>
+<span class="sd">:math:`\\dot{E}` and :math:`\\dot{L}` grids from :mod:`fewtrax.data.loader`</span>
+<span class="sd">and converting them to :math:`\\dot{p}`, :math:`\\dot{e}` via the</span>
+<span class="sd">Jacobian :math:`\\partial(E,L)/\\partial(p,e)` computed analytically with</span>
+<span class="sd">:func:`jax.jacfwd`.</span>
+
+<span class="sd">Solver: :class:`diffrax.Tsit5` (4th/5th order Runge-Kutta, efficient for</span>
+<span class="sd">smooth problems) with :class:`diffrax.PIDController` adaptive step-size</span>
+<span class="sd">control.  The system is stopped when the orbit approaches the separatrix.</span>
+
+<span class="sd">The ODE is fully JIT-compilable and differentiable with respect to the</span>
+<span class="sd">initial conditions :math:`(p_0, e_0)`.</span>
+
+<span class="sd">To vmap over a batch of initial conditions::</span>
+
+<span class="sd">    from jax import vmap</span>
+<span class="sd">    batch_traj = vmap(traj)(p0_arr, e0_arr)</span>
+
+<span class="sd">Backward integration</span>
+<span class="sd">--------------------</span>
+<span class="sd">Setting ``backward=True`` integrates the time-reversed ODE, starting at the</span>
+<span class="sd">separatrix and moving outward.  This anchors the track to the plunge rather</span>
+<span class="sd">than to uncertain initial conditions, and is more stable near merger because</span>
+<span class="sd">the ODE moves *away* from the separatrix.</span>
+
+<span class="sd">The backward ODE is simply the negation of the forward ODE:</span>
+
+<span class="sd">.. math::</span>
+
+<span class="sd">    \\frac{d y}{d\\tau} = -\\frac{d y}{dt}</span>
+
+<span class="sd">where :math:`\\tau = T_{\\rm plunge} - t` is time before plunge.  Initial</span>
+<span class="sd">conditions are set to :math:`(p_{\\rm sep}(e_f, a) + \\epsilon, e_f, 0, 0, 0)`</span>
+<span class="sd">and the integration runs for duration :math:`T` years.</span>
+
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Optional</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">jax</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">jax.numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">jnp</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">diffrax</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">equinox</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">eqx</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">fewtrax.utils.constants</span><span class="w"> </span><span class="kn">import</span> <span class="n">MTSUN_SI</span><span class="p">,</span> <span class="n">YEAR_SI</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">fewtrax.utils.geodesic</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">get_separatrix</span><span class="p">,</span>
+    <span class="n">get_fundamental_frequencies</span><span class="p">,</span>
+    <span class="n">kerr_geo_energy_equatorial</span><span class="p">,</span>
+    <span class="n">kerr_geo_angular_momentum_equatorial</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">fewtrax.utils.coordinates</span><span class="w"> </span><span class="kn">import</span> <span class="n">kerrecceq_forward_map</span><span class="p">,</span> <span class="n">DELTAPMIN</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">fewtrax.data.loader</span><span class="w"> </span><span class="kn">import</span> <span class="n">FluxData</span><span class="p">,</span> <span class="n">_PN_Edot_jax</span><span class="p">,</span> <span class="n">_PN_Ldot_jax</span>
+
+<span class="n">SEPARATRIX_BUFFER</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">2.0</span> <span class="o">*</span> <span class="n">DELTAPMIN</span>
+
+
+<div class="viewcode-block" id="EMRIInspiral">
+<a class="viewcode-back" href="../../../api.html#fewtrax.trajectory.inspiral.EMRIInspiral">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">EMRIInspiral</span><span class="p">(</span><span class="n">eqx</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
+<span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;Adiabatic EMRI trajectory integrator (JIT/vmap-compatible).</span>
+
+<span class="sd">    Integrates the adiabatic inspiral ODE using :class:`diffrax.Tsit5`</span>
+<span class="sd">    with adaptive step-size control.  The radiation-reaction force</span>
+<span class="sd">    (:math:`\dot{p}`, :math:`\dot{e}`) is computed from the FEW flux</span>
+<span class="sd">    tables by:</span>
+
+<span class="sd">    1. Interpolating the PN-normalised flux ratios</span>
+<span class="sd">       :math:`r_E = \dot{E}_{\rm GR}/\dot{E}_{\rm PN}` and</span>
+<span class="sd">       :math:`r_L = \dot{L}_{\rm GR}/\dot{L}_{\rm PN}`.</span>
+<span class="sd">    2. Multiplying by the Peters (1964) PN functions.</span>
+<span class="sd">    3. Applying the Jacobian :math:`\partial(E,L)/\partial(p,e)` via</span>
+<span class="sd">       :func:`jax.jacfwd` to obtain :math:`(\dot{p}, \dot{e})`.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    flux_data : FluxData</span>
+<span class="sd">        Pre-loaded flux interpolators.</span>
+<span class="sd">    a : float</span>
+<span class="sd">        Dimensionless BH spin.</span>
+<span class="sd">    x0 : float</span>
+<span class="sd">        Inclination cosine (+1 prograde, -1 retrograde).</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">flux_data</span><span class="p">:</span> <span class="n">FluxData</span>
+    <span class="n">a</span><span class="p">:</span> <span class="nb">float</span>
+    <span class="n">x0</span><span class="p">:</span> <span class="nb">float</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">flux_data</span><span class="p">:</span> <span class="n">FluxData</span><span class="p">,</span> <span class="n">a</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">x0</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1.0</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">flux_data</span> <span class="o">=</span> <span class="n">flux_data</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">a</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">a</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">x0</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">x0</span><span class="p">)</span>
+
+    <span class="c1"># ------------------------------------------------------------------</span>
+    <span class="c1"># Internal helpers</span>
+    <span class="c1"># ------------------------------------------------------------------</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_x_sign</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Sign of inclination (±1).&quot;&quot;&quot;</span>
+        <span class="n">ax</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">sign</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">a</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">x0</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">jnp</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">ax</span> <span class="o">==</span> <span class="mf">0.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">,</span> <span class="n">ax</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_flux_EL</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">p</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">e</span><span class="p">:</span> <span class="nb">float</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">]:</span>
+<span class="w">        </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;Return physical :math:`(\dot{E}, \dot{L})` from the spline tables.</span>
+
+<span class="sd">        Evaluates the stored PN-normalised ratios and multiplies by the</span>
+<span class="sd">        leading-order PN functions.  Returns **negative** values</span>
+<span class="sd">        (energy/angular-momentum is being radiated away).</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">a_abs</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">a</span><span class="p">)</span>
+        <span class="n">x_in</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_x_sign</span><span class="p">()</span>
+        <span class="n">u</span><span class="p">,</span> <span class="n">w</span><span class="p">,</span> <span class="n">z</span><span class="p">,</span> <span class="n">in_A</span> <span class="o">=</span> <span class="n">kerrecceq_forward_map</span><span class="p">(</span><span class="n">a_abs</span><span class="p">,</span> <span class="n">p</span><span class="p">,</span> <span class="n">e</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="s2">&quot;flux&quot;</span><span class="p">)</span>
+
+        <span class="n">rE_A</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">flux_data</span><span class="o">.</span><span class="n">Edot_A</span><span class="p">(</span><span class="n">u</span><span class="p">,</span> <span class="n">w</span><span class="p">,</span> <span class="n">z</span><span class="p">)</span>
+        <span class="n">rL_A</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">flux_data</span><span class="o">.</span><span class="n">Ldot_A</span><span class="p">(</span><span class="n">u</span><span class="p">,</span> <span class="n">w</span><span class="p">,</span> <span class="n">z</span><span class="p">)</span>
+        <span class="n">rE_B</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">flux_data</span><span class="o">.</span><span class="n">Edot_B</span><span class="p">(</span><span class="n">u</span><span class="p">,</span> <span class="n">w</span><span class="p">,</span> <span class="n">z</span><span class="p">)</span>
+        <span class="n">rL_B</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">flux_data</span><span class="o">.</span><span class="n">Ldot_B</span><span class="p">(</span><span class="n">u</span><span class="p">,</span> <span class="n">w</span><span class="p">,</span> <span class="n">z</span><span class="p">)</span>
+
+        <span class="n">rE</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">in_A</span><span class="p">,</span> <span class="n">rE_A</span><span class="p">,</span> <span class="n">rE_B</span><span class="p">)</span>
+        <span class="n">rL</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">in_A</span><span class="p">,</span> <span class="n">rL_A</span><span class="p">,</span> <span class="n">rL_B</span><span class="p">)</span>
+
+        <span class="n">Epn</span> <span class="o">=</span> <span class="n">_PN_Edot_jax</span><span class="p">(</span><span class="n">p</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
+        <span class="n">Lpn</span> <span class="o">=</span> <span class="n">_PN_Ldot_jax</span><span class="p">(</span><span class="n">p</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
+
+        <span class="c1"># Negative: orbit is inspiraling (losing energy/angular momentum)</span>
+        <span class="n">Edot</span> <span class="o">=</span> <span class="o">-</span><span class="n">rE</span> <span class="o">*</span> <span class="n">Epn</span>
+        <span class="n">Ldot</span> <span class="o">=</span> <span class="o">-</span><span class="n">rL</span> <span class="o">*</span> <span class="n">Lpn</span>
+        <span class="c1"># For retrograde orbit, Ldot has opposite sign convention</span>
+        <span class="n">Ldot</span> <span class="o">=</span> <span class="n">Ldot</span> <span class="o">*</span> <span class="n">x_in</span>
+        <span class="k">return</span> <span class="n">Edot</span><span class="p">,</span> <span class="n">Ldot</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_ELdot_to_pedot</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">p</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">e</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">Edot</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">Ldot</span><span class="p">:</span> <span class="nb">float</span><span class="p">):</span>
+<span class="w">        </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;Convert :math:`(\dot{E}, \dot{L})` to :math:`(\dot{p}, \dot{e})`.</span>
+
+<span class="sd">        Uses :func:`jax.jacfwd` to differentiate the geodesic energy and</span>
+<span class="sd">        angular momentum functions :math:`E(p,e)`, :math:`L(p,e)`, then</span>
+<span class="sd">        solves the :math:`2 \times 2` linear system.</span>
+
+<span class="sd">        Near-circular limit (``e &lt; 1e-4``): the Jacobian second column</span>
+<span class="sd">        :math:`\\partial(E,L)/\\partial e \\propto e` vanishes, making the</span>
+<span class="sd">        system singular.  In that regime we fall back to</span>
+<span class="sd">        :math:`\\dot{p} = \\dot{E}/(\\partial E/\\partial p)`,</span>
+<span class="sd">        :math:`\\dot{e} = 0`, which is the physically correct adiabatic</span>
+<span class="sd">        answer for circular orbits.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">E_CIRC</span> <span class="o">=</span> <span class="mf">1e-4</span>  <span class="c1"># threshold below which orbit is treated as circular</span>
+        <span class="n">a_abs</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">a</span><span class="p">)</span>
+        <span class="n">x_in</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_x_sign</span><span class="p">()</span>
+
+        <span class="c1"># Evaluate Jacobian at e_safe to prevent singular matrix.</span>
+        <span class="c1"># For the circular branch the J columns ∂/∂e → 0, so we clamp e to</span>
+        <span class="c1"># E_CIRC; the constant floor has zero tangent w.r.t. e for AD purposes.</span>
+        <span class="n">e_safe</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">maximum</span><span class="p">(</span><span class="n">jnp</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">e</span><span class="p">),</span> <span class="n">E_CIRC</span><span class="p">)</span>
+
+        <span class="k">def</span><span class="w"> </span><span class="nf">EL_of_pe</span><span class="p">(</span><span class="n">pe</span><span class="p">):</span>
+            <span class="n">p_</span><span class="p">,</span> <span class="n">e_</span> <span class="o">=</span> <span class="n">pe</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">pe</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+            <span class="n">E_</span> <span class="o">=</span> <span class="n">kerr_geo_energy_equatorial</span><span class="p">(</span><span class="n">a_abs</span><span class="p">,</span> <span class="n">p_</span><span class="p">,</span> <span class="n">e_</span><span class="p">,</span> <span class="n">x_in</span><span class="p">)</span>
+            <span class="n">L_</span> <span class="o">=</span> <span class="n">kerr_geo_angular_momentum_equatorial</span><span class="p">(</span><span class="n">a_abs</span><span class="p">,</span> <span class="n">p_</span><span class="p">,</span> <span class="n">e_</span><span class="p">,</span> <span class="n">x_in</span><span class="p">,</span> <span class="n">E_</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">jnp</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="n">E_</span><span class="p">,</span> <span class="n">L_</span><span class="p">])</span>
+
+        <span class="n">J</span> <span class="o">=</span> <span class="n">jax</span><span class="o">.</span><span class="n">jacfwd</span><span class="p">(</span><span class="n">EL_of_pe</span><span class="p">)(</span><span class="n">jnp</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="n">p</span><span class="p">,</span> <span class="n">e_safe</span><span class="p">]))</span>   <span class="c1"># shape (2, 2)</span>
+
+        <span class="c1"># Full Jacobian inversion (valid for e &gt;= E_CIRC)</span>
+        <span class="n">rhs</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="n">Edot</span><span class="p">,</span> <span class="n">Ldot</span><span class="p">])</span>
+        <span class="n">pe_dot</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">solve</span><span class="p">(</span><span class="n">J</span><span class="p">,</span> <span class="n">rhs</span><span class="p">)</span>
+
+        <span class="c1"># Circular-orbit fallback: pdot from ∂E/∂p alone, edot = 0</span>
+        <span class="n">dEdp</span> <span class="o">=</span> <span class="n">J</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span>
+        <span class="n">pdot_circ</span> <span class="o">=</span> <span class="n">Edot</span> <span class="o">/</span> <span class="n">jnp</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">jnp</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">dEdp</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mf">1e-30</span><span class="p">,</span> <span class="n">dEdp</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">)</span>
+
+        <span class="n">use_circ</span> <span class="o">=</span> <span class="n">e</span> <span class="o">&lt;</span> <span class="n">E_CIRC</span>
+        <span class="n">pdot</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">use_circ</span><span class="p">,</span> <span class="n">pdot_circ</span><span class="p">,</span> <span class="n">pe_dot</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+        <span class="n">edot</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">use_circ</span><span class="p">,</span> <span class="n">jnp</span><span class="o">.</span><span class="n">zeros_like</span><span class="p">(</span><span class="n">e</span><span class="p">),</span> <span class="n">pe_dot</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
+        <span class="k">return</span> <span class="n">pdot</span><span class="p">,</span> <span class="n">edot</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_ode_rhs</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">t</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">y</span><span class="p">:</span> <span class="n">jnp</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">args</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">jnp</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+<span class="w">        </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;ODE right-hand side: :math:`dy/dt` for :math:`y=(p,e,\Phi_\phi,\Phi_\theta,\Phi_r)`.</span>
+
+<span class="sd">        ``args`` carries ``mu_over_M = mu / M`` so the flux-table derivatives</span>
+<span class="sd">        (normalised to μ=M=1) are properly scaled to the physical mass ratio.</span>
+<span class="sd">        The orbital phases evolve at the Boyer-Lindquist frequencies and are</span>
+<span class="sd">        *not* affected by the mass ratio.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">mu_over_M</span> <span class="o">=</span> <span class="n">args</span>
+        <span class="n">p</span><span class="p">,</span> <span class="n">e</span> <span class="o">=</span> <span class="n">y</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">y</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+        <span class="n">a_abs</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">a</span><span class="p">)</span>
+        <span class="n">x_in</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_x_sign</span><span class="p">()</span>
+
+        <span class="n">Edot</span><span class="p">,</span> <span class="n">Ldot</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_flux_EL</span><span class="p">(</span><span class="n">p</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
+        <span class="n">pdot</span><span class="p">,</span> <span class="n">edot</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_ELdot_to_pedot</span><span class="p">(</span><span class="n">p</span><span class="p">,</span> <span class="n">e</span><span class="p">,</span> <span class="n">Edot</span><span class="p">,</span> <span class="n">Ldot</span><span class="p">)</span>
+        <span class="n">Omega_phi</span><span class="p">,</span> <span class="n">Omega_theta</span><span class="p">,</span> <span class="n">Omega_r</span> <span class="o">=</span> <span class="n">get_fundamental_frequencies</span><span class="p">(</span><span class="n">a_abs</span><span class="p">,</span> <span class="n">p</span><span class="p">,</span> <span class="n">e</span><span class="p">,</span> <span class="n">x_in</span><span class="p">)</span>
+        <span class="c1"># pdot/edot come from flux tables normalised to μ=M=1; scale to physical ratio</span>
+        <span class="k">return</span> <span class="n">jnp</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="n">pdot</span> <span class="o">*</span> <span class="n">mu_over_M</span><span class="p">,</span> <span class="n">edot</span> <span class="o">*</span> <span class="n">mu_over_M</span><span class="p">,</span>
+                          <span class="n">Omega_phi</span><span class="p">,</span> <span class="n">Omega_theta</span><span class="p">,</span> <span class="n">Omega_r</span><span class="p">])</span>
+
+    <span class="c1"># ------------------------------------------------------------------</span>
+    <span class="c1"># JIT-compiled ODE solve (inner loop)</span>
+    <span class="c1"># ------------------------------------------------------------------</span>
+
+    <span class="nd">@eqx</span><span class="o">.</span><span class="n">filter_jit</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_solve</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">y0</span><span class="p">:</span> <span class="n">jnp</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+        <span class="n">t_save</span><span class="p">:</span> <span class="n">jnp</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+        <span class="n">T_geo</span><span class="p">:</span> <span class="n">jnp</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+        <span class="n">mu_over_M</span><span class="p">:</span> <span class="n">jnp</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+        <span class="n">atol</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
+        <span class="n">rtol</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
+        <span class="n">max_steps</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+    <span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;JIT-compiled diffrax solve.  All shape-determining args are static.&quot;&quot;&quot;</span>
+        <span class="k">def</span><span class="w"> </span><span class="nf">_event_cond</span><span class="p">(</span><span class="n">t</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+            <span class="n">p</span><span class="p">,</span> <span class="n">e</span> <span class="o">=</span> <span class="n">y</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">y</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+            <span class="n">p_sep</span> <span class="o">=</span> <span class="n">get_separatrix</span><span class="p">(</span><span class="n">jnp</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">a</span><span class="p">),</span> <span class="n">e</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_x_sign</span><span class="p">())</span>
+            <span class="k">return</span> <span class="n">p</span> <span class="o">&lt;</span> <span class="n">p_sep</span> <span class="o">+</span> <span class="n">SEPARATRIX_BUFFER</span>
+
+        <span class="k">return</span> <span class="n">diffrax</span><span class="o">.</span><span class="n">diffeqsolve</span><span class="p">(</span>
+            <span class="n">diffrax</span><span class="o">.</span><span class="n">ODETerm</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_ode_rhs</span><span class="p">),</span>
+            <span class="n">diffrax</span><span class="o">.</span><span class="n">Tsit5</span><span class="p">(),</span>
+            <span class="n">t0</span><span class="o">=</span><span class="n">jnp</span><span class="o">.</span><span class="n">zeros</span><span class="p">((),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">jnp</span><span class="o">.</span><span class="n">float64</span><span class="p">),</span>
+            <span class="n">t1</span><span class="o">=</span><span class="n">T_geo</span><span class="p">,</span>
+            <span class="n">dt0</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+            <span class="n">y0</span><span class="o">=</span><span class="n">y0</span><span class="p">,</span>
+            <span class="n">saveat</span><span class="o">=</span><span class="n">diffrax</span><span class="o">.</span><span class="n">SaveAt</span><span class="p">(</span><span class="n">ts</span><span class="o">=</span><span class="n">t_save</span><span class="p">),</span>
+            <span class="n">stepsize_controller</span><span class="o">=</span><span class="n">diffrax</span><span class="o">.</span><span class="n">PIDController</span><span class="p">(</span><span class="n">rtol</span><span class="o">=</span><span class="n">rtol</span><span class="p">,</span> <span class="n">atol</span><span class="o">=</span><span class="n">atol</span><span class="p">),</span>
+            <span class="n">max_steps</span><span class="o">=</span><span class="n">max_steps</span><span class="p">,</span>
+            <span class="n">event</span><span class="o">=</span><span class="n">diffrax</span><span class="o">.</span><span class="n">Event</span><span class="p">(</span><span class="n">_event_cond</span><span class="p">),</span>
+            <span class="n">args</span><span class="o">=</span><span class="n">mu_over_M</span><span class="p">,</span>
+        <span class="p">)</span>
+
+    <span class="nd">@eqx</span><span class="o">.</span><span class="n">filter_jit</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_solve_backward</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">y0</span><span class="p">:</span> <span class="n">jnp</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+        <span class="n">t_save</span><span class="p">:</span> <span class="n">jnp</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+        <span class="n">T_geo</span><span class="p">:</span> <span class="n">jnp</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+        <span class="n">mu_over_M</span><span class="p">:</span> <span class="n">jnp</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+        <span class="n">atol</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
+        <span class="n">rtol</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
+        <span class="n">max_steps</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+    <span class="p">):</span>
+<span class="w">        </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;JIT-compiled backward diffrax solve.</span>
+
+<span class="sd">        Integrates the time-reversed ODE</span>
+
+<span class="sd">        .. math::</span>
+
+<span class="sd">            \frac{dy}{d\tau} = -\frac{dy}{dt}</span>
+
+<span class="sd">        where :math:`\tau = T_{\rm plunge} - t` is time before plunge.</span>
+<span class="sd">        There is no separatrix event condition: the integration moves</span>
+<span class="sd">        *away* from the separatrix, so no termination is needed.</span>
+
+<span class="sd">        Parameters are identical to :meth:`_solve`.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">diffrax</span><span class="o">.</span><span class="n">diffeqsolve</span><span class="p">(</span>
+            <span class="n">diffrax</span><span class="o">.</span><span class="n">ODETerm</span><span class="p">(</span><span class="k">lambda</span> <span class="n">t</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="n">args</span><span class="p">:</span> <span class="o">-</span><span class="bp">self</span><span class="o">.</span><span class="n">_ode_rhs</span><span class="p">(</span><span class="n">t</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="n">args</span><span class="p">)),</span>
+            <span class="n">diffrax</span><span class="o">.</span><span class="n">Tsit5</span><span class="p">(),</span>
+            <span class="n">t0</span><span class="o">=</span><span class="n">jnp</span><span class="o">.</span><span class="n">zeros</span><span class="p">((),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">jnp</span><span class="o">.</span><span class="n">float64</span><span class="p">),</span>
+            <span class="n">t1</span><span class="o">=</span><span class="n">T_geo</span><span class="p">,</span>
+            <span class="n">dt0</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+            <span class="n">y0</span><span class="o">=</span><span class="n">y0</span><span class="p">,</span>
+            <span class="n">saveat</span><span class="o">=</span><span class="n">diffrax</span><span class="o">.</span><span class="n">SaveAt</span><span class="p">(</span><span class="n">ts</span><span class="o">=</span><span class="n">t_save</span><span class="p">),</span>
+            <span class="n">stepsize_controller</span><span class="o">=</span><span class="n">diffrax</span><span class="o">.</span><span class="n">PIDController</span><span class="p">(</span><span class="n">rtol</span><span class="o">=</span><span class="n">rtol</span><span class="p">,</span> <span class="n">atol</span><span class="o">=</span><span class="n">atol</span><span class="p">),</span>
+            <span class="n">max_steps</span><span class="o">=</span><span class="n">max_steps</span><span class="p">,</span>
+            <span class="n">args</span><span class="o">=</span><span class="n">mu_over_M</span><span class="p">,</span>
+        <span class="p">)</span>
+
+    <span class="c1"># ------------------------------------------------------------------</span>
+    <span class="c1"># Public interface</span>
+    <span class="c1"># ------------------------------------------------------------------</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__call__</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">p0</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
+        <span class="n">e0</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
+        <span class="n">T</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
+        <span class="n">dt</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">10.0</span><span class="p">,</span>
+        <span class="n">M</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1e6</span><span class="p">,</span>
+        <span class="n">mu</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">10.0</span><span class="p">,</span>
+        <span class="n">Phi_phi0</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.0</span><span class="p">,</span>
+        <span class="n">Phi_theta0</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.0</span><span class="p">,</span>
+        <span class="n">Phi_r0</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.0</span><span class="p">,</span>
+        <span class="n">atol</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1e-9</span><span class="p">,</span>
+        <span class="n">rtol</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1e-9</span><span class="p">,</span>
+        <span class="n">max_steps</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">4096</span><span class="p">,</span>
+        <span class="n">dense_steps</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">100</span><span class="p">,</span>
+        <span class="n">backward</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+        <span class="n">e_f</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">jnp</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="o">...</span><span class="p">]:</span>
+<span class="w">        </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;Integrate the EMRI inspiral trajectory.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        p0, e0 : float</span>
+<span class="sd">            Initial orbital parameters (forward mode).  Ignored in backward</span>
+<span class="sd">            mode; the starting point is determined from ``e_f`` instead.</span>
+<span class="sd">        T : float</span>
+<span class="sd">            Observation time [years].</span>
+<span class="sd">        dt : float</span>
+<span class="sd">            Waveform sampling interval [s] (not the ODE step size).</span>
+<span class="sd">        M, mu : float</span>
+<span class="sd">            Primary and secondary masses [:math:`M_\odot`].</span>
+<span class="sd">        Phi_phi0, Phi_theta0, Phi_r0 : float</span>
+<span class="sd">            Initial orbital phases [rad].  In backward mode these are the</span>
+<span class="sd">            phases at plunge (:math:`\tau = 0`); they are often left at zero</span>
+<span class="sd">            since only the instantaneous frequency matters for track generation.</span>
+<span class="sd">        atol, rtol : float</span>
+<span class="sd">            Adaptive solver tolerances.</span>
+<span class="sd">        max_steps : int</span>
+<span class="sd">            Maximum number of ODE internal steps.  The Tsit5 solver</span>
+<span class="sd">            typically uses ≪100 steps for a year-long EMRI inspiral;</span>
+<span class="sd">            the default of 4096 accommodates edge cases without</span>
+<span class="sd">            significant runtime cost (execution scales with actual</span>
+<span class="sd">            step count, not max_steps).</span>
+<span class="sd">        dense_steps : int</span>
+<span class="sd">            Number of output trajectory points.</span>
+<span class="sd">        backward : bool</span>
+<span class="sd">            If ``True``, integrate the time-reversed ODE starting from the</span>
+<span class="sd">            separatrix.  The output time axis represents</span>
+<span class="sd">            :math:`\tau = T_{\rm plunge} - t` (time before plunge), so</span>
+<span class="sd">            ``t[0] = 0`` is at plunge and ``t[-1]`` is ``T`` years earlier.</span>
+<span class="sd">            In backward mode ``p`` and ``e`` *increase* along the output</span>
+<span class="sd">            arrays (moving away from the separatrix), and the phases</span>
+<span class="sd">            *decrease* (since :math:`d\Phi/d\tau &lt; 0`).</span>
+<span class="sd">        e_f : float, optional</span>
+<span class="sd">            Eccentricity at plunge, required when ``backward=True``.</span>
+<span class="sd">            The corresponding semi-latus rectum is set to</span>
+<span class="sd">            :math:`p_{\rm sep}(e_f, a) + \\epsilon` automatically.</span>
+<span class="sd">            To obtain a consistent value, run a forward integration first</span>
+<span class="sd">            and read off ``e`` at the last valid (non-NaN) trajectory point.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        t, p, e, Phi_phi, Phi_theta, Phi_r : jnp.ndarray, shape (dense_steps,)</span>
+<span class="sd">            Trajectory arrays.  ``t`` is in seconds; phases in radians.</span>
+<span class="sd">            In backward mode ``t`` is time before plunge (:math:`\tau`).</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">M_s</span> <span class="o">=</span> <span class="n">M</span> <span class="o">*</span> <span class="n">MTSUN_SI</span>                        <span class="c1"># primary mass in seconds</span>
+        <span class="n">T_s</span> <span class="o">=</span> <span class="n">T</span> <span class="o">*</span> <span class="n">YEAR_SI</span>                         <span class="c1"># observation time in seconds</span>
+        <span class="n">T_geo</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">T_s</span> <span class="o">/</span> <span class="n">M_s</span><span class="p">)</span>           <span class="c1"># geometric time  (units of M)</span>
+        <span class="n">mu_over_M</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">mu</span> <span class="o">/</span> <span class="n">M</span><span class="p">)</span>
+
+        <span class="n">t_save</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">linspace</span><span class="p">(</span><span class="n">jnp</span><span class="o">.</span><span class="n">zeros</span><span class="p">((),</span> <span class="n">jnp</span><span class="o">.</span><span class="n">float64</span><span class="p">),</span> <span class="n">T_geo</span><span class="p">,</span> <span class="n">dense_steps</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">backward</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">e_f</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                    <span class="s2">&quot;e_f must be provided when backward=True.  &quot;</span>
+                    <span class="s2">&quot;Run a forward integration first and read off e at the &quot;</span>
+                    <span class="s2">&quot;last valid trajectory point.&quot;</span>
+                <span class="p">)</span>
+            <span class="n">e_f_</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="nb">float</span><span class="p">(</span><span class="n">e_f</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">jnp</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
+            <span class="n">p_sep</span> <span class="o">=</span> <span class="n">get_separatrix</span><span class="p">(</span><span class="n">jnp</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="nb">float</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">a</span><span class="p">)),</span> <span class="n">e_f_</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_x_sign</span><span class="p">())</span>
+            <span class="n">p_start</span> <span class="o">=</span> <span class="n">p_sep</span> <span class="o">+</span> <span class="n">SEPARATRIX_BUFFER</span>
+            <span class="n">y0</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">array</span><span class="p">(</span>
+                <span class="p">[</span><span class="n">p_start</span><span class="p">,</span> <span class="n">e_f_</span><span class="p">,</span> <span class="n">Phi_phi0</span><span class="p">,</span> <span class="n">Phi_theta0</span><span class="p">,</span> <span class="n">Phi_r0</span><span class="p">],</span> <span class="n">dtype</span><span class="o">=</span><span class="n">jnp</span><span class="o">.</span><span class="n">float64</span>
+            <span class="p">)</span>
+            <span class="n">sol</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_solve_backward</span><span class="p">(</span><span class="n">y0</span><span class="p">,</span> <span class="n">t_save</span><span class="p">,</span> <span class="n">T_geo</span><span class="p">,</span> <span class="n">mu_over_M</span><span class="p">,</span> <span class="n">atol</span><span class="p">,</span> <span class="n">rtol</span><span class="p">,</span> <span class="n">max_steps</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">y0</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="n">p0</span><span class="p">,</span> <span class="n">e0</span><span class="p">,</span> <span class="n">Phi_phi0</span><span class="p">,</span> <span class="n">Phi_theta0</span><span class="p">,</span> <span class="n">Phi_r0</span><span class="p">],</span> <span class="n">dtype</span><span class="o">=</span><span class="n">jnp</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
+            <span class="n">sol</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_solve</span><span class="p">(</span><span class="n">y0</span><span class="p">,</span> <span class="n">t_save</span><span class="p">,</span> <span class="n">T_geo</span><span class="p">,</span> <span class="n">mu_over_M</span><span class="p">,</span> <span class="n">atol</span><span class="p">,</span> <span class="n">rtol</span><span class="p">,</span> <span class="n">max_steps</span><span class="p">)</span>
+
+        <span class="n">ys</span> <span class="o">=</span> <span class="n">sol</span><span class="o">.</span><span class="n">ys</span>          <span class="c1"># (dense_steps, 5)</span>
+        <span class="n">t_arr</span> <span class="o">=</span> <span class="n">sol</span><span class="o">.</span><span class="n">ts</span>       <span class="c1"># (dense_steps,)</span>
+
+        <span class="n">t_s</span> <span class="o">=</span> <span class="n">t_arr</span> <span class="o">*</span> <span class="n">M_s</span>
+        <span class="n">p_arr</span> <span class="o">=</span> <span class="n">ys</span><span class="p">[:,</span> <span class="mi">0</span><span class="p">]</span>
+        <span class="n">e_arr</span> <span class="o">=</span> <span class="n">ys</span><span class="p">[:,</span> <span class="mi">1</span><span class="p">]</span>
+        <span class="c1"># Phases are Boyer-Lindquist orbital phases [rad]; no mass-ratio scaling needed</span>
+        <span class="n">Phi_phi_arr</span>   <span class="o">=</span> <span class="n">ys</span><span class="p">[:,</span> <span class="mi">2</span><span class="p">]</span>
+        <span class="n">Phi_theta_arr</span> <span class="o">=</span> <span class="n">ys</span><span class="p">[:,</span> <span class="mi">3</span><span class="p">]</span>
+        <span class="n">Phi_r_arr</span>     <span class="o">=</span> <span class="n">ys</span><span class="p">[:,</span> <span class="mi">4</span><span class="p">]</span>
+
+        <span class="k">return</span> <span class="n">t_s</span><span class="p">,</span> <span class="n">p_arr</span><span class="p">,</span> <span class="n">e_arr</span><span class="p">,</span> <span class="n">Phi_phi_arr</span><span class="p">,</span> <span class="n">Phi_theta_arr</span><span class="p">,</span> <span class="n">Phi_r_arr</span>
+
+<div class="viewcode-block" id="EMRIInspiral.get_frequency_track">
+<a class="viewcode-back" href="../../../api.html#fewtrax.trajectory.inspiral.EMRIInspiral.get_frequency_track">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_frequency_track</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">p0</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
+        <span class="n">e0</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
+        <span class="n">T</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
+        <span class="n">M</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
+        <span class="n">mu</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
+        <span class="n">l</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">m</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">k</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">n</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+        <span class="n">dense_steps</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">100</span><span class="p">,</span>
+        <span class="n">backward</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+        <span class="n">e_f</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">jnp</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">jnp</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]:</span>
+<span class="w">        </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;Compute the instantaneous frequency track of harmonic :math:`(l,m,k,n)`.</span>
+
+<span class="sd">        The harmonic frequency is</span>
+
+<span class="sd">        .. math::</span>
+
+<span class="sd">            f_{mkn}(t) = \frac{|m\,\Omega_\phi + k\,\Omega_\theta + n\,\Omega_r|}{2\pi}</span>
+
+<span class="sd">        evaluated along the inspiral trajectory.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        p0, e0 : float</span>
+<span class="sd">            Initial orbital parameters (forward mode; ignored when</span>
+<span class="sd">            ``backward=True``).</span>
+<span class="sd">        T, M, mu : float</span>
+<span class="sd">            Observation time [years], primary and secondary masses.</span>
+<span class="sd">        l, m, k, n : int</span>
+<span class="sd">            Harmonic mode indices.</span>
+<span class="sd">        dense_steps : int</span>
+<span class="sd">            Number of trajectory output points.</span>
+<span class="sd">        backward : bool</span>
+<span class="sd">            If ``True``, integrate backward from the separatrix.  The</span>
+<span class="sd">            returned time axis is time before plunge (:math:`\tau`), so</span>
+<span class="sd">            ``t[0] = 0`` is at plunge.  Frequency decreases as ``t``</span>
+<span class="sd">            increases (moving earlier in the inspiral).</span>
+<span class="sd">        e_f : float, optional</span>
+<span class="sd">            Eccentricity at plunge, required when ``backward=True``.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        t : jnp.ndarray, shape (dense_steps,)</span>
+<span class="sd">            Time [s] (forward: from start; backward: time before plunge).</span>
+<span class="sd">        f : jnp.ndarray, shape (dense_steps,)</span>
+<span class="sd">            Instantaneous frequency [Hz], always non-negative.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">t_s</span><span class="p">,</span> <span class="n">p_arr</span><span class="p">,</span> <span class="n">e_arr</span><span class="p">,</span> <span class="o">*</span><span class="n">_</span> <span class="o">=</span> <span class="bp">self</span><span class="p">(</span>
+            <span class="n">p0</span><span class="o">=</span><span class="n">p0</span><span class="p">,</span> <span class="n">e0</span><span class="o">=</span><span class="n">e0</span><span class="p">,</span> <span class="n">T</span><span class="o">=</span><span class="n">T</span><span class="p">,</span> <span class="n">M</span><span class="o">=</span><span class="n">M</span><span class="p">,</span> <span class="n">mu</span><span class="o">=</span><span class="n">mu</span><span class="p">,</span> <span class="n">dense_steps</span><span class="o">=</span><span class="n">dense_steps</span><span class="p">,</span>
+            <span class="n">backward</span><span class="o">=</span><span class="n">backward</span><span class="p">,</span> <span class="n">e_f</span><span class="o">=</span><span class="n">e_f</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span>
+        <span class="p">)</span>
+        <span class="n">a_abs</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="nb">float</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">a</span><span class="p">))</span>
+        <span class="n">x_in</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_x_sign</span><span class="p">())</span>
+
+        <span class="k">def</span><span class="w"> </span><span class="nf">_freq_at_point</span><span class="p">(</span><span class="n">pe</span><span class="p">):</span>
+            <span class="n">p_</span><span class="p">,</span> <span class="n">e_</span> <span class="o">=</span> <span class="n">pe</span>
+            <span class="n">Om_phi</span><span class="p">,</span> <span class="n">Om_theta</span><span class="p">,</span> <span class="n">Om_r</span> <span class="o">=</span> <span class="n">get_fundamental_frequencies</span><span class="p">(</span><span class="n">a_abs</span><span class="p">,</span> <span class="n">p_</span><span class="p">,</span> <span class="n">e_</span><span class="p">,</span> <span class="n">x_in</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">jnp</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">m</span> <span class="o">*</span> <span class="n">Om_phi</span> <span class="o">+</span> <span class="n">k</span> <span class="o">*</span> <span class="n">Om_theta</span> <span class="o">+</span> <span class="n">n</span> <span class="o">*</span> <span class="n">Om_r</span><span class="p">)</span> <span class="o">/</span> <span class="p">(</span><span class="mf">2.0</span> <span class="o">*</span> <span class="n">jnp</span><span class="o">.</span><span class="n">pi</span><span class="p">)</span>
+
+        <span class="c1"># Physical frequency: convert Mino-time Ω (rad/M) to Hz</span>
+        <span class="c1"># Ω [rad/M] × (M_s)^{-1} [1/s] / (2π) [already included above]</span>
+        <span class="n">M_s</span> <span class="o">=</span> <span class="n">M</span> <span class="o">*</span> <span class="n">MTSUN_SI</span>
+        <span class="n">f_arr</span> <span class="o">=</span> <span class="n">jax</span><span class="o">.</span><span class="n">vmap</span><span class="p">(</span><span class="n">_freq_at_point</span><span class="p">)(</span><span class="n">jnp</span><span class="o">.</span><span class="n">stack</span><span class="p">([</span><span class="n">p_arr</span><span class="p">,</span> <span class="n">e_arr</span><span class="p">],</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">))</span> <span class="o">/</span> <span class="n">M_s</span>
+        <span class="k">return</span> <span class="n">t_s</span><span class="p">,</span> <span class="n">f_arr</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="run_inspiral">
+<a class="viewcode-back" href="../../../api.html#fewtrax.trajectory.inspiral.run_inspiral">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">run_inspiral</span><span class="p">(</span>
+    <span class="n">a</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
+    <span class="n">p0</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
+    <span class="n">e0</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
+    <span class="n">T</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
+    <span class="n">flux_data</span><span class="p">:</span> <span class="n">FluxData</span><span class="p">,</span>
+    <span class="n">M</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1e6</span><span class="p">,</span>
+    <span class="n">mu</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">10.0</span><span class="p">,</span>
+    <span class="n">dt</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">10.0</span><span class="p">,</span>
+    <span class="n">x0</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1.0</span><span class="p">,</span>
+    <span class="n">Phi_phi0</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.0</span><span class="p">,</span>
+    <span class="n">Phi_theta0</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.0</span><span class="p">,</span>
+    <span class="n">Phi_r0</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.0</span><span class="p">,</span>
+    <span class="n">dense_steps</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">100</span><span class="p">,</span>
+    <span class="n">backward</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+    <span class="n">e_f</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">jnp</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="o">...</span><span class="p">]:</span>
+<span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;Convenience wrapper: integrate an EMRI inspiral trajectory.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    a : float</span>
+<span class="sd">        BH spin parameter.</span>
+<span class="sd">    p0, e0 : float</span>
+<span class="sd">        Initial orbital parameters (forward mode; ignored when</span>
+<span class="sd">        ``backward=True``).</span>
+<span class="sd">    T : float</span>
+<span class="sd">        Observation time [years].</span>
+<span class="sd">    flux_data : FluxData</span>
+<span class="sd">        Pre-loaded flux data.</span>
+<span class="sd">    M, mu : float</span>
+<span class="sd">        Primary and secondary masses [:math:`M_\odot`].</span>
+<span class="sd">    dt : float</span>
+<span class="sd">        Waveform sampling interval [s] (not ODE step size).</span>
+<span class="sd">    x0 : float</span>
+<span class="sd">        Inclination cosine.</span>
+<span class="sd">    dense_steps : int</span>
+<span class="sd">        Number of output trajectory points.</span>
+<span class="sd">    backward : bool</span>
+<span class="sd">        If ``True``, integrate the time-reversed ODE from the separatrix.</span>
+<span class="sd">    e_f : float, optional</span>
+<span class="sd">        Eccentricity at plunge, required when ``backward=True``.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    t, p, e, Phi_phi, Phi_theta, Phi_r : jnp.ndarray</span>
+<span class="sd">        Trajectory arrays.  In backward mode ``t`` is time before plunge.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">traj</span> <span class="o">=</span> <span class="n">EMRIInspiral</span><span class="p">(</span><span class="n">flux_data</span><span class="p">,</span> <span class="n">a</span><span class="o">=</span><span class="n">a</span><span class="p">,</span> <span class="n">x0</span><span class="o">=</span><span class="n">x0</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">traj</span><span class="p">(</span>
+        <span class="n">p0</span><span class="o">=</span><span class="n">p0</span><span class="p">,</span> <span class="n">e0</span><span class="o">=</span><span class="n">e0</span><span class="p">,</span> <span class="n">T</span><span class="o">=</span><span class="n">T</span><span class="p">,</span> <span class="n">dt</span><span class="o">=</span><span class="n">dt</span><span class="p">,</span> <span class="n">M</span><span class="o">=</span><span class="n">M</span><span class="p">,</span> <span class="n">mu</span><span class="o">=</span><span class="n">mu</span><span class="p">,</span>
+        <span class="n">Phi_phi0</span><span class="o">=</span><span class="n">Phi_phi0</span><span class="p">,</span> <span class="n">Phi_theta0</span><span class="o">=</span><span class="n">Phi_theta0</span><span class="p">,</span> <span class="n">Phi_r0</span><span class="o">=</span><span class="n">Phi_r0</span><span class="p">,</span>
+        <span class="n">dense_steps</span><span class="o">=</span><span class="n">dense_steps</span><span class="p">,</span> <span class="n">backward</span><span class="o">=</span><span class="n">backward</span><span class="p">,</span> <span class="n">e_f</span><span class="o">=</span><span class="n">e_f</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
+    <span class="p">)</span></div>
+
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2026, Bert Depoorter.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

@@ -1,0 +1,589 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../../">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>fewtrax.data.loader &mdash; fewtrax 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../../../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../../index.html" class="icon icon-home">
+            fewtrax
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Getting started</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../quickstart.html">Quickstart</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Background</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../math_background.html">Mathematical Background</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Tutorials</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../examples.html">Examples</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../api.html">API Reference</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../index.html">fewtrax</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">fewtrax.data.loader</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for fewtrax.data.loader</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;HDF5 data loading and JAX interpolator construction.</span>
+
+<span class="sd">Flux data (``KerrEccEqFluxData.h5``) is loaded using the **ELQ convention**:</span>
+<span class="sd">the stored :math:`\\dot{E}` and :math:`\\dot{L}` grids are normalised by the</span>
+<span class="sd">leading-order Peters (1964) PN expressions, which are smooth and free of</span>
+<span class="sd">separatrix singularities.  At ODE run-time the stored ratio is multiplied by</span>
+<span class="sd">the PN function to recover the physical flux, and then the (Ė, L̇) → (ṗ, ė)</span>
+<span class="sd">Jacobian is applied using JAX automatic differentiation.</span>
+
+<span class="sd">Amplitude data (``ZNAmps_l10_m10_n55_DS2Outer.h5``) stores bicubic B-spline</span>
+<span class="sd">coefficients (``multispline`` format).  These are evaluated at query points</span>
+<span class="sd">using ``scipy.interpolate.bisplev``, which can be called from the amplitude</span>
+<span class="sd">interpolation module.  The coefficients themselves are stored in the</span>
+<span class="sd">:class:`AmplitudeData` container as raw numpy arrays.</span>
+
+<span class="sd">Data directory discovery (in order):</span>
+<span class="sd">1. Explicit ``data_dir`` argument.</span>
+<span class="sd">2. ``FEW_DATA_DIR`` environment variable.</span>
+<span class="sd">3. FEW package file-manager cache.</span>
+<span class="sd">4. ``~/.fewtrax/data/``.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">logging</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">dataclasses</span><span class="w"> </span><span class="kn">import</span> <span class="n">dataclass</span>  <span class="c1"># kept for AmplitudeData only</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Optional</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">h5py</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">equinox</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">eqx</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">fewtrax.utils.splines</span><span class="w"> </span><span class="kn">import</span> <span class="n">CubicSpline3D</span>
+
+<span class="n">log</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
+
+
+<span class="c1"># ---------------------------------------------------------------------------</span>
+<span class="c1"># Coordinate helpers needed at load time (pure numpy)</span>
+<span class="c1"># ---------------------------------------------------------------------------</span>
+
+<span class="n">_ALPHA_FLUX</span> <span class="o">=</span> <span class="mf">0.5</span>
+<span class="n">_BETA_FLUX</span> <span class="o">=</span> <span class="mf">2.0</span>
+<span class="n">_ALPHA_AMP</span> <span class="o">=</span> <span class="mf">1.0</span> <span class="o">/</span> <span class="mf">3.0</span>
+<span class="n">_BETA_AMP</span> <span class="o">=</span> <span class="mf">3.0</span>
+<span class="n">_ESEP</span> <span class="o">=</span> <span class="mf">0.25</span>
+<span class="n">_EMAX</span> <span class="o">=</span> <span class="mf">0.9</span>
+<span class="n">_DELTAPMIN</span> <span class="o">=</span> <span class="mf">0.001</span>
+<span class="n">_DELTAPMAX</span> <span class="o">=</span> <span class="mf">9.001</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_separatrix_numpy</span><span class="p">(</span><span class="n">a_arr</span><span class="p">,</span> <span class="n">e_arr</span><span class="p">,</span> <span class="n">x_arr</span><span class="p">,</span> <span class="n">tol</span><span class="o">=</span><span class="mf">1e-12</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Scalar/array separatrix via Brent root-finding (numpy).&quot;&quot;&quot;</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">scipy.optimize</span><span class="w"> </span><span class="kn">import</span> <span class="n">brentq</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_poly</span><span class="p">(</span><span class="n">p</span><span class="p">,</span> <span class="n">a</span><span class="p">,</span> <span class="n">e</span><span class="p">):</span>
+        <span class="k">return</span> <span class="p">(</span>
+            <span class="n">a</span><span class="o">**</span><span class="mi">4</span> <span class="o">*</span> <span class="p">(</span><span class="o">-</span><span class="mi">3</span> <span class="o">-</span> <span class="mi">2</span><span class="o">*</span><span class="n">e</span> <span class="o">+</span> <span class="n">e</span><span class="o">**</span><span class="mi">2</span><span class="p">)</span><span class="o">**</span><span class="mi">2</span>
+            <span class="o">+</span> <span class="n">p</span><span class="o">**</span><span class="mi">2</span> <span class="o">*</span> <span class="p">(</span><span class="o">-</span><span class="mi">6</span> <span class="o">-</span> <span class="mi">2</span><span class="o">*</span><span class="n">e</span> <span class="o">+</span> <span class="n">p</span><span class="p">)</span><span class="o">**</span><span class="mi">2</span>
+            <span class="o">-</span> <span class="mi">2</span><span class="o">*</span><span class="n">a</span><span class="o">**</span><span class="mi">2</span> <span class="o">*</span> <span class="p">(</span><span class="mi">1</span><span class="o">+</span><span class="n">e</span><span class="p">)</span> <span class="o">*</span> <span class="n">p</span> <span class="o">*</span> <span class="p">(</span><span class="mi">14</span> <span class="o">+</span> <span class="mi">2</span><span class="o">*</span><span class="n">e</span><span class="o">**</span><span class="mi">2</span> <span class="o">+</span> <span class="mi">3</span><span class="o">*</span><span class="n">p</span> <span class="o">-</span> <span class="n">e</span><span class="o">*</span><span class="n">p</span><span class="p">)</span>
+        <span class="p">)</span>
+
+    <span class="n">scalar</span> <span class="o">=</span> <span class="ow">not</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">a_arr</span><span class="p">,</span> <span class="s2">&quot;__len__&quot;</span><span class="p">)</span>
+    <span class="n">a_arr</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">atleast_1d</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">a_arr</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">float</span><span class="p">))</span>
+    <span class="n">e_arr</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">atleast_1d</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">e_arr</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">float</span><span class="p">))</span>
+    <span class="n">x_arr</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">atleast_1d</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">x_arr</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">float</span><span class="p">))</span>
+    <span class="n">out</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">empty</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">a_arr</span><span class="p">))</span>
+    <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">e</span><span class="p">,</span> <span class="n">x</span><span class="p">)</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="nb">zip</span><span class="p">(</span><span class="n">a_arr</span><span class="p">,</span> <span class="n">e_arr</span><span class="p">,</span> <span class="n">x_arr</span><span class="p">)):</span>
+        <span class="k">if</span> <span class="n">a</span> <span class="o">==</span> <span class="mf">0.0</span><span class="p">:</span>
+            <span class="n">out</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="mf">6.0</span> <span class="o">+</span> <span class="mf">2.0</span><span class="o">*</span><span class="n">e</span>
+        <span class="k">elif</span> <span class="n">a</span> <span class="o">*</span> <span class="n">x</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="n">out</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">brentq</span><span class="p">(</span><span class="n">_poly</span><span class="p">,</span> <span class="mi">1</span><span class="o">+</span><span class="n">e</span><span class="p">,</span> <span class="mi">6</span><span class="o">+</span><span class="mi">2</span><span class="o">*</span><span class="n">e</span><span class="p">,</span> <span class="n">args</span><span class="o">=</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">e</span><span class="p">),</span> <span class="n">xtol</span><span class="o">=</span><span class="n">tol</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">out</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">brentq</span><span class="p">(</span><span class="n">_poly</span><span class="p">,</span> <span class="mi">6</span><span class="o">+</span><span class="mi">2</span><span class="o">*</span><span class="n">e</span><span class="p">,</span> <span class="mi">5</span><span class="o">+</span><span class="n">e</span><span class="o">+</span><span class="mi">4</span><span class="o">*</span><span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="mi">1</span><span class="o">+</span><span class="n">e</span><span class="p">),</span> <span class="n">args</span><span class="o">=</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">e</span><span class="p">),</span> <span class="n">xtol</span><span class="o">=</span><span class="n">tol</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">out</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">if</span> <span class="n">scalar</span> <span class="k">else</span> <span class="n">out</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_apex_A_numpy</span><span class="p">(</span><span class="n">u</span><span class="p">,</span> <span class="n">w</span><span class="p">,</span> <span class="n">z</span><span class="p">,</span> <span class="n">alpha</span><span class="p">,</span> <span class="n">beta</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Region-A inverse map: (u, w, z) → (a, p, e) [numpy].&quot;&quot;&quot;</span>
+    <span class="n">chi_max</span> <span class="o">=</span> <span class="p">(</span><span class="mi">1</span> <span class="o">-</span> <span class="p">(</span><span class="o">-</span><span class="mf">0.999</span><span class="p">))</span><span class="o">**</span><span class="p">(</span><span class="mi">1</span><span class="o">/</span><span class="mi">3</span><span class="p">)</span>
+    <span class="n">chi_min</span> <span class="o">=</span> <span class="p">(</span><span class="mi">1</span> <span class="o">-</span> <span class="mf">0.999</span><span class="p">)</span><span class="o">**</span><span class="p">(</span><span class="mi">1</span><span class="o">/</span><span class="mi">3</span><span class="p">)</span>
+    <span class="n">chi</span> <span class="o">=</span> <span class="n">chi_min</span> <span class="o">+</span> <span class="n">z</span> <span class="o">*</span> <span class="p">(</span><span class="n">chi_max</span> <span class="o">-</span> <span class="n">chi_min</span><span class="p">)</span>
+    <span class="n">a</span> <span class="o">=</span> <span class="mf">1.0</span> <span class="o">-</span> <span class="n">chi</span><span class="o">**</span><span class="mi">3</span>
+
+    <span class="n">check</span> <span class="o">=</span> <span class="n">z</span> <span class="o">+</span> <span class="n">u</span><span class="o">**</span><span class="n">beta</span> <span class="o">*</span> <span class="p">(</span><span class="mi">1</span> <span class="o">-</span> <span class="n">z</span><span class="p">)</span>
+    <span class="n">sgn</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sign</span><span class="p">(</span><span class="n">check</span><span class="p">)</span>
+    <span class="n">Secc</span> <span class="o">=</span> <span class="n">_ESEP</span> <span class="o">+</span> <span class="p">(</span><span class="n">_EMAX</span> <span class="o">-</span> <span class="n">_ESEP</span><span class="p">)</span> <span class="o">*</span> <span class="n">sgn</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">sgn</span> <span class="o">*</span> <span class="n">check</span><span class="p">)</span>
+    <span class="n">e</span> <span class="o">=</span> <span class="n">Secc</span> <span class="o">*</span> <span class="n">w</span>
+    <span class="n">a_abs</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">a</span><span class="p">)</span>
+    <span class="n">x</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sign</span><span class="p">(</span><span class="n">a</span><span class="p">);</span> <span class="n">x</span><span class="p">[</span><span class="n">x</span> <span class="o">==</span> <span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="mf">1.0</span>
+    <span class="n">pLSO</span> <span class="o">=</span> <span class="n">_separatrix_numpy</span><span class="p">(</span><span class="n">a_abs</span><span class="p">,</span> <span class="n">e</span><span class="p">,</span> <span class="n">x</span><span class="p">)</span>
+    <span class="n">p</span> <span class="o">=</span> <span class="p">(</span><span class="n">pLSO</span> <span class="o">+</span> <span class="n">_DELTAPMIN</span><span class="p">)</span> <span class="o">+</span> <span class="p">(</span><span class="n">_DELTAPMAX</span> <span class="o">-</span> <span class="n">_DELTAPMIN</span><span class="p">)</span> <span class="o">*</span> <span class="p">(</span>
+        <span class="n">np</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">u</span><span class="p">)</span><span class="o">**</span><span class="p">(</span><span class="mf">1.0</span><span class="o">/</span><span class="n">alpha</span><span class="p">)</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="mf">2.0</span><span class="p">))</span> <span class="o">-</span> <span class="mf">1.0</span>
+    <span class="p">)</span>
+    <span class="k">return</span> <span class="n">a</span><span class="p">,</span> <span class="n">p</span><span class="p">,</span> <span class="n">e</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_apex_B_numpy</span><span class="p">(</span><span class="n">U</span><span class="p">,</span> <span class="n">W</span><span class="p">,</span> <span class="n">Z</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Region-B inverse map: (U, W, Z) → (a, p, e) [numpy].&quot;&quot;&quot;</span>
+    <span class="n">chi_max</span> <span class="o">=</span> <span class="p">(</span><span class="mi">1</span> <span class="o">-</span> <span class="p">(</span><span class="o">-</span><span class="mf">0.999</span><span class="p">))</span><span class="o">**</span><span class="p">(</span><span class="mi">1</span><span class="o">/</span><span class="mi">3</span><span class="p">)</span>
+    <span class="n">chi_min</span> <span class="o">=</span> <span class="p">(</span><span class="mi">1</span> <span class="o">-</span> <span class="mf">0.999</span><span class="p">)</span><span class="o">**</span><span class="p">(</span><span class="mi">1</span><span class="o">/</span><span class="mi">3</span><span class="p">)</span>
+    <span class="n">chi</span> <span class="o">=</span> <span class="n">chi_min</span> <span class="o">+</span> <span class="n">Z</span> <span class="o">*</span> <span class="p">(</span><span class="n">chi_max</span> <span class="o">-</span> <span class="n">chi_min</span><span class="p">)</span>
+    <span class="n">a</span> <span class="o">=</span> <span class="mf">1.0</span> <span class="o">-</span> <span class="n">chi</span><span class="o">**</span><span class="mi">3</span>
+    <span class="n">e</span> <span class="o">=</span> <span class="n">W</span> <span class="o">*</span> <span class="n">_EMAX</span>
+    <span class="n">a_abs</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">a</span><span class="p">)</span>
+    <span class="n">x</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sign</span><span class="p">(</span><span class="n">a</span><span class="p">);</span> <span class="n">x</span><span class="p">[</span><span class="n">x</span> <span class="o">==</span> <span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="mf">1.0</span>
+    <span class="n">pLSO</span> <span class="o">=</span> <span class="n">_separatrix_numpy</span><span class="p">(</span><span class="n">a_abs</span><span class="p">,</span> <span class="n">e</span><span class="p">,</span> <span class="n">x</span><span class="p">)</span>
+    <span class="n">DELTAPMIN_B</span> <span class="o">=</span> <span class="mf">9.0</span>
+    <span class="n">PMAX_B</span> <span class="o">=</span> <span class="mf">200.0</span>
+    <span class="n">p</span> <span class="o">=</span> <span class="p">(</span><span class="n">DELTAPMIN_B</span><span class="o">**-</span><span class="mf">0.5</span> <span class="o">-</span> <span class="n">U</span> <span class="o">*</span> <span class="p">(</span><span class="n">DELTAPMIN_B</span><span class="o">**-</span><span class="mf">0.5</span> <span class="o">-</span> <span class="p">(</span><span class="n">PMAX_B</span> <span class="o">-</span> <span class="n">pLSO</span><span class="p">)</span><span class="o">**-</span><span class="mf">0.5</span><span class="p">))</span><span class="o">**-</span><span class="mi">2</span> <span class="o">+</span> <span class="n">pLSO</span>
+    <span class="k">return</span> <span class="n">a</span><span class="p">,</span> <span class="n">p</span><span class="p">,</span> <span class="n">e</span>
+
+
+<span class="c1"># ---------------------------------------------------------------------------</span>
+<span class="c1"># Leading-order PN normalization functions (Peters 1964)</span>
+<span class="c1"># ---------------------------------------------------------------------------</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_PN_Edot</span><span class="p">(</span><span class="n">p</span><span class="p">,</span> <span class="n">e</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Leading-order GW energy flux (Peters 1964), dimensionless.&quot;&quot;&quot;</span>
+    <span class="n">one_me2</span> <span class="o">=</span> <span class="p">(</span><span class="mf">1.0</span> <span class="o">-</span> <span class="n">e</span><span class="o">**</span><span class="mi">2</span><span class="p">)</span><span class="o">**</span><span class="mf">1.5</span>
+    <span class="k">return</span> <span class="p">(</span><span class="mf">32.0</span><span class="o">/</span><span class="mf">5.0</span><span class="p">)</span> <span class="o">*</span> <span class="n">p</span><span class="o">**</span><span class="p">(</span><span class="o">-</span><span class="mi">5</span><span class="p">)</span> <span class="o">*</span> <span class="n">one_me2</span> <span class="o">*</span> <span class="p">(</span><span class="mf">1.0</span> <span class="o">+</span> <span class="mf">73.0</span><span class="o">/</span><span class="mf">24.0</span><span class="o">*</span><span class="n">e</span><span class="o">**</span><span class="mi">2</span> <span class="o">+</span> <span class="mf">37.0</span><span class="o">/</span><span class="mf">96.0</span><span class="o">*</span><span class="n">e</span><span class="o">**</span><span class="mi">4</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_PN_Ldot</span><span class="p">(</span><span class="n">p</span><span class="p">,</span> <span class="n">e</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Leading-order GW angular-momentum flux (Peters 1964), dimensionless.&quot;&quot;&quot;</span>
+    <span class="n">one_me2</span> <span class="o">=</span> <span class="p">(</span><span class="mf">1.0</span> <span class="o">-</span> <span class="n">e</span><span class="o">**</span><span class="mi">2</span><span class="p">)</span><span class="o">**</span><span class="mf">1.5</span>
+    <span class="k">return</span> <span class="p">(</span><span class="mf">32.0</span><span class="o">/</span><span class="mf">5.0</span><span class="p">)</span> <span class="o">*</span> <span class="n">p</span><span class="o">**</span><span class="p">(</span><span class="o">-</span><span class="mf">3.5</span><span class="p">)</span> <span class="o">*</span> <span class="n">one_me2</span> <span class="o">*</span> <span class="p">(</span><span class="mf">1.0</span> <span class="o">+</span> <span class="mf">7.0</span><span class="o">/</span><span class="mf">8.0</span><span class="o">*</span><span class="n">e</span><span class="o">**</span><span class="mi">2</span><span class="p">)</span>
+
+
+<span class="c1"># JAX versions used at ODE runtime</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">_PN_Edot_jax</span><span class="p">(</span><span class="n">p</span><span class="p">,</span> <span class="n">e</span><span class="p">):</span>
+    <span class="n">one_me2</span> <span class="o">=</span> <span class="p">(</span><span class="mf">1.0</span> <span class="o">-</span> <span class="n">e</span><span class="o">**</span><span class="mi">2</span><span class="p">)</span><span class="o">**</span><span class="mf">1.5</span>
+    <span class="k">return</span> <span class="p">(</span><span class="mf">32.0</span><span class="o">/</span><span class="mf">5.0</span><span class="p">)</span> <span class="o">*</span> <span class="n">p</span><span class="o">**</span><span class="p">(</span><span class="o">-</span><span class="mi">5</span><span class="p">)</span> <span class="o">*</span> <span class="n">one_me2</span> <span class="o">*</span> <span class="p">(</span><span class="mf">1.0</span> <span class="o">+</span> <span class="mf">73.0</span><span class="o">/</span><span class="mf">24.0</span><span class="o">*</span><span class="n">e</span><span class="o">**</span><span class="mi">2</span> <span class="o">+</span> <span class="mf">37.0</span><span class="o">/</span><span class="mf">96.0</span><span class="o">*</span><span class="n">e</span><span class="o">**</span><span class="mi">4</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_PN_Ldot_jax</span><span class="p">(</span><span class="n">p</span><span class="p">,</span> <span class="n">e</span><span class="p">):</span>
+    <span class="n">one_me2</span> <span class="o">=</span> <span class="p">(</span><span class="mf">1.0</span> <span class="o">-</span> <span class="n">e</span><span class="o">**</span><span class="mi">2</span><span class="p">)</span><span class="o">**</span><span class="mf">1.5</span>
+    <span class="k">return</span> <span class="p">(</span><span class="mf">32.0</span><span class="o">/</span><span class="mf">5.0</span><span class="p">)</span> <span class="o">*</span> <span class="n">p</span><span class="o">**</span><span class="p">(</span><span class="o">-</span><span class="mf">3.5</span><span class="p">)</span> <span class="o">*</span> <span class="n">one_me2</span> <span class="o">*</span> <span class="p">(</span><span class="mf">1.0</span> <span class="o">+</span> <span class="mf">7.0</span><span class="o">/</span><span class="mf">8.0</span><span class="o">*</span><span class="n">e</span><span class="o">**</span><span class="mi">2</span><span class="p">)</span>
+
+
+<span class="c1"># ---------------------------------------------------------------------------</span>
+<span class="c1"># Data containers</span>
+<span class="c1"># ---------------------------------------------------------------------------</span>
+
+<div class="viewcode-block" id="FluxData">
+<a class="viewcode-back" href="../../../api.html#fewtrax.data.loader.FluxData">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">FluxData</span><span class="p">(</span><span class="n">eqx</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
+<span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;Container for the Kerr eccentric equatorial flux interpolators.</span>
+
+<span class="sd">    Stores the ratio ``Edot_GR / Edot_PN`` and ``Ldot_GR / Ldot_PN``</span>
+<span class="sd">    (ELQ convention), where the PN normalisation is the leading-order</span>
+<span class="sd">    Peters (1964) expression.  At ODE run-time the ratio is multiplied by</span>
+<span class="sd">    the PN function to recover the physical flux; the Jacobian</span>
+<span class="sd">    (Ė, L̇) → (ṗ, ė) is then applied via JAX automatic differentiation.</span>
+
+<span class="sd">    Inherits from :class:`equinox.Module` so it is a valid JAX pytree and</span>
+<span class="sd">    can be used inside JIT-compiled functions and vmapped code.</span>
+
+<span class="sd">    Attributes</span>
+<span class="sd">    ----------</span>
+<span class="sd">    Edot_A, Ldot_A : CubicSpline3D</span>
+<span class="sd">        Energy- and angular-momentum-flux ratio interpolators for Region A.</span>
+<span class="sd">        Inputs are normalised coordinates (u, w, z) ∈ [0, 1]³.</span>
+<span class="sd">    Edot_B, Ldot_B : CubicSpline3D</span>
+<span class="sd">        Same for Region B.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">Edot_A</span><span class="p">:</span> <span class="n">CubicSpline3D</span>
+    <span class="n">Ldot_A</span><span class="p">:</span> <span class="n">CubicSpline3D</span>
+    <span class="n">Edot_B</span><span class="p">:</span> <span class="n">CubicSpline3D</span>
+    <span class="n">Ldot_B</span><span class="p">:</span> <span class="n">CubicSpline3D</span></div>
+
+
+
+<div class="viewcode-block" id="AmplitudeData">
+<a class="viewcode-back" href="../../../api.html#fewtrax.data.loader.AmplitudeData">[docs]</a>
+<span class="nd">@dataclass</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">AmplitudeData</span><span class="p">:</span>
+<span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;Container for Teukolsky mode amplitude data.</span>
+
+<span class="sd">    The amplitude HDF5 file stores bicubic B-spline coefficients in the</span>
+<span class="sd">    ``multispline``/``scipy.bisplev`` format.  They are kept as raw numpy</span>
+<span class="sd">    arrays and evaluated at query points using ``scipy.interpolate.bisplev``.</span>
+
+<span class="sd">    Attributes</span>
+<span class="sd">    ----------</span>
+<span class="sd">    coeffs_A : np.ndarray, shape (n_z, n_modes, 2, n_coeffs_A)</span>
+<span class="sd">        B-spline coefficients for Region A.  Axis 2 indexes [real, imag].</span>
+<span class="sd">    coeffs_B : np.ndarray or None</span>
+<span class="sd">        Same for Region B.</span>
+<span class="sd">    u_knots_A, w_knots_A : np.ndarray</span>
+<span class="sd">        B-spline knot sequences (including boundary repetitions) for Region A.</span>
+<span class="sd">    u_knots_B, w_knots_B : np.ndarray or None</span>
+<span class="sd">        Same for Region B.</span>
+<span class="sd">    z_knots_A, z_knots_B : np.ndarray</span>
+<span class="sd">        Spin-grid values used for linear interpolation between z-slices.</span>
+<span class="sd">    l_arr, m_arr, k_arr, n_arr : np.ndarray of int</span>
+<span class="sd">        Mode index arrays, shape (n_modes,).</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">coeffs_A</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span>
+    <span class="n">coeffs_B</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]</span>
+    <span class="n">u_knots_A</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span>
+    <span class="n">w_knots_A</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span>
+    <span class="n">u_knots_B</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]</span>
+    <span class="n">w_knots_B</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]</span>
+    <span class="n">z_knots_A</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span>
+    <span class="n">z_knots_B</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]</span>
+    <span class="n">l_arr</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span>
+    <span class="n">m_arr</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span>
+    <span class="n">k_arr</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span>
+    <span class="n">n_arr</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">n_modes</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+        <span class="k">return</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">l_arr</span><span class="p">)</span></div>
+
+
+
+<span class="c1"># ---------------------------------------------------------------------------</span>
+<span class="c1"># Data directory discovery</span>
+<span class="c1"># ---------------------------------------------------------------------------</span>
+
+<div class="viewcode-block" id="find_few_data_dir">
+<a class="viewcode-back" href="../../../api.html#fewtrax.data.loader.find_few_data_dir">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">find_few_data_dir</span><span class="p">(</span><span class="n">data_dir</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span> <span class="o">|</span> <span class="n">Path</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Path</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Locate the FEW data directory.</span>
+
+<span class="sd">    Searches (in order): explicit argument → ``FEW_DATA_DIR`` env var →</span>
+<span class="sd">    FEW package file-manager cache → ``~/.fewtrax/data/``.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    data_dir : str or Path, optional</span>
+<span class="sd">        Explicit data directory override.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    Path</span>
+
+<span class="sd">    Raises</span>
+<span class="sd">    ------</span>
+<span class="sd">    FileNotFoundError</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">candidates</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">Path</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">if</span> <span class="n">data_dir</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">candidates</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">Path</span><span class="p">(</span><span class="n">data_dir</span><span class="p">))</span>
+    <span class="n">env</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;FEW_DATA_DIR&quot;</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">env</span><span class="p">:</span>
+        <span class="n">candidates</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">Path</span><span class="p">(</span><span class="n">env</span><span class="p">))</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">few.utils.globals</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_file_manager</span>
+        <span class="n">fm</span> <span class="o">=</span> <span class="n">get_file_manager</span><span class="p">()</span>
+        <span class="n">fp</span> <span class="o">=</span> <span class="n">fm</span><span class="o">.</span><span class="n">get_file</span><span class="p">(</span><span class="s2">&quot;KerrEccEqFluxData.h5&quot;</span><span class="p">,</span> <span class="n">raise_on_error</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">fp</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">candidates</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">Path</span><span class="p">(</span><span class="n">fp</span><span class="p">)</span><span class="o">.</span><span class="n">parent</span><span class="p">)</span>
+    <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
+        <span class="k">pass</span>
+    <span class="n">candidates</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">Path</span><span class="o">.</span><span class="n">home</span><span class="p">()</span> <span class="o">/</span> <span class="s2">&quot;.fewtrax&quot;</span> <span class="o">/</span> <span class="s2">&quot;data&quot;</span><span class="p">)</span>
+
+    <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">candidates</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">p</span><span class="o">.</span><span class="n">is_dir</span><span class="p">()</span> <span class="ow">and</span> <span class="p">(</span><span class="n">p</span> <span class="o">/</span> <span class="s2">&quot;KerrEccEqFluxData.h5&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
+            <span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Using FEW data directory: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">p</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">p</span>
+
+    <span class="k">raise</span> <span class="ne">FileNotFoundError</span><span class="p">(</span>
+        <span class="s2">&quot;FEW data directory not found. &quot;</span>
+        <span class="s2">&quot;Pass data_dir= explicitly or set the FEW_DATA_DIR environment variable.&quot;</span>
+    <span class="p">)</span></div>
+
+
+
+<span class="c1"># ---------------------------------------------------------------------------</span>
+<span class="c1"># Flux data loader</span>
+<span class="c1"># ---------------------------------------------------------------------------</span>
+
+<div class="viewcode-block" id="load_flux_data">
+<a class="viewcode-back" href="../../../api.html#fewtrax.data.loader.load_flux_data">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">load_flux_data</span><span class="p">(</span>
+    <span class="n">data_dir</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span> <span class="o">|</span> <span class="n">Path</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">downsample</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">list</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">FluxData</span><span class="p">:</span>
+<span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;Load Kerr eccentric equatorial flux data (ELQ convention).</span>
+
+<span class="sd">    Reads ``KerrEccEqFluxData.h5`` and builds JAX 3-D cubic-spline</span>
+<span class="sd">    interpolators for the PN-normalised energy and angular-momentum flux</span>
+<span class="sd">    ratios.  The normalisation uses the leading-order Peters (1964)</span>
+<span class="sd">    expressions, which have no separatrix singularity.</span>
+
+<span class="sd">    At ODE run-time, the physical fluxes are recovered by multiplying the</span>
+<span class="sd">    stored ratio by the PN function.  The Jacobian</span>
+<span class="sd">    (Ė, L̇) → (ṗ, ė) is then applied via JAX automatic differentiation</span>
+<span class="sd">    inside :class:`~fewtrax.trajectory.EMRIInspiral`.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    data_dir : str or Path, optional</span>
+<span class="sd">        Directory containing ``KerrEccEqFluxData.h5``.</span>
+<span class="sd">    downsample : list of two 3-tuples, optional</span>
+<span class="sd">        ``[(dU_A, dW_A, dZ_A), (dU_B, dW_B, dZ_B)]`` downsampling factors.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    FluxData</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">data_path</span> <span class="o">=</span> <span class="n">find_few_data_dir</span><span class="p">(</span><span class="n">data_dir</span><span class="p">)</span>
+    <span class="n">fp</span> <span class="o">=</span> <span class="n">data_path</span> <span class="o">/</span> <span class="s2">&quot;KerrEccEqFluxData.h5&quot;</span>
+    <span class="k">if</span> <span class="n">downsample</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">downsample</span> <span class="o">=</span> <span class="p">[(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">)]</span>
+    <span class="n">ds_A</span><span class="p">,</span> <span class="n">ds_B</span> <span class="o">=</span> <span class="n">downsample</span>
+
+    <span class="k">with</span> <span class="n">h5py</span><span class="o">.</span><span class="n">File</span><span class="p">(</span><span class="n">fp</span><span class="p">,</span> <span class="s2">&quot;r&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+        <span class="n">rA</span> <span class="o">=</span> <span class="n">f</span><span class="p">[</span><span class="s2">&quot;regionA&quot;</span><span class="p">]</span>
+        <span class="n">NU_A</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">rA</span><span class="o">.</span><span class="n">attrs</span><span class="p">[</span><span class="s2">&quot;NU&quot;</span><span class="p">]);</span> <span class="n">NW_A</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">rA</span><span class="o">.</span><span class="n">attrs</span><span class="p">[</span><span class="s2">&quot;NW&quot;</span><span class="p">]);</span> <span class="n">NZ_A</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">rA</span><span class="o">.</span><span class="n">attrs</span><span class="p">[</span><span class="s2">&quot;NZ&quot;</span><span class="p">])</span>
+        <span class="n">u_A</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linspace</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="n">NU_A</span><span class="p">)[::</span><span class="n">ds_A</span><span class="p">[</span><span class="mi">0</span><span class="p">]]</span>
+        <span class="n">w_A</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linspace</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="n">NW_A</span><span class="p">)[::</span><span class="n">ds_A</span><span class="p">[</span><span class="mi">1</span><span class="p">]]</span>
+        <span class="n">z_A</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linspace</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="n">NZ_A</span><span class="p">)[::</span><span class="n">ds_A</span><span class="p">[</span><span class="mi">2</span><span class="p">]]</span>
+        <span class="n">Edot_A</span> <span class="o">=</span> <span class="n">rA</span><span class="p">[</span><span class="s2">&quot;Edot&quot;</span><span class="p">][()][::</span><span class="n">ds_A</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="p">::</span><span class="n">ds_A</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="p">::</span><span class="n">ds_A</span><span class="p">[</span><span class="mi">2</span><span class="p">]]</span>
+        <span class="n">Ldot_A</span> <span class="o">=</span> <span class="n">rA</span><span class="p">[</span><span class="s2">&quot;Ldot&quot;</span><span class="p">][()][::</span><span class="n">ds_A</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="p">::</span><span class="n">ds_A</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="p">::</span><span class="n">ds_A</span><span class="p">[</span><span class="mi">2</span><span class="p">]]</span>
+
+        <span class="n">rB</span> <span class="o">=</span> <span class="n">f</span><span class="p">[</span><span class="s2">&quot;regionB&quot;</span><span class="p">]</span>
+        <span class="n">NU_B</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">rB</span><span class="o">.</span><span class="n">attrs</span><span class="p">[</span><span class="s2">&quot;NU&quot;</span><span class="p">]);</span> <span class="n">NW_B</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">rB</span><span class="o">.</span><span class="n">attrs</span><span class="p">[</span><span class="s2">&quot;NW&quot;</span><span class="p">]);</span> <span class="n">NZ_B</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">rB</span><span class="o">.</span><span class="n">attrs</span><span class="p">[</span><span class="s2">&quot;NZ&quot;</span><span class="p">])</span>
+        <span class="n">u_B</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linspace</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="n">NU_B</span><span class="p">)[::</span><span class="n">ds_B</span><span class="p">[</span><span class="mi">0</span><span class="p">]]</span>
+        <span class="n">w_B</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linspace</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="n">NW_B</span><span class="p">)[::</span><span class="n">ds_B</span><span class="p">[</span><span class="mi">1</span><span class="p">]]</span>
+        <span class="n">z_B</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linspace</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="n">NZ_B</span><span class="p">)[::</span><span class="n">ds_B</span><span class="p">[</span><span class="mi">2</span><span class="p">]]</span>
+        <span class="n">Edot_B</span> <span class="o">=</span> <span class="n">rB</span><span class="p">[</span><span class="s2">&quot;Edot&quot;</span><span class="p">][()][::</span><span class="n">ds_B</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="p">::</span><span class="n">ds_B</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="p">::</span><span class="n">ds_B</span><span class="p">[</span><span class="mi">2</span><span class="p">]]</span>
+        <span class="n">Ldot_B</span> <span class="o">=</span> <span class="n">rB</span><span class="p">[</span><span class="s2">&quot;Ldot&quot;</span><span class="p">][()][::</span><span class="n">ds_B</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="p">::</span><span class="n">ds_B</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="p">::</span><span class="n">ds_B</span><span class="p">[</span><span class="mi">2</span><span class="p">]]</span>
+
+    <span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+        <span class="s2">&quot;Flux grids — Region A: (</span><span class="si">%d</span><span class="s2">, </span><span class="si">%d</span><span class="s2">, </span><span class="si">%d</span><span class="s2">),  Region B: (</span><span class="si">%d</span><span class="s2">, </span><span class="si">%d</span><span class="s2">, </span><span class="si">%d</span><span class="s2">)&quot;</span><span class="p">,</span>
+        <span class="n">u_A</span><span class="o">.</span><span class="n">size</span><span class="p">,</span> <span class="n">w_A</span><span class="o">.</span><span class="n">size</span><span class="p">,</span> <span class="n">z_A</span><span class="o">.</span><span class="n">size</span><span class="p">,</span> <span class="n">u_B</span><span class="o">.</span><span class="n">size</span><span class="p">,</span> <span class="n">w_B</span><span class="o">.</span><span class="n">size</span><span class="p">,</span> <span class="n">z_B</span><span class="o">.</span><span class="n">size</span><span class="p">,</span>
+    <span class="p">)</span>
+
+    <span class="c1"># Compute PN normalisation on the grid points for each region</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_pn_normalise</span><span class="p">(</span><span class="n">u_g</span><span class="p">,</span> <span class="n">w_g</span><span class="p">,</span> <span class="n">z_g</span><span class="p">,</span> <span class="n">Edot_raw</span><span class="p">,</span> <span class="n">Ldot_raw</span><span class="p">,</span> <span class="n">is_A</span><span class="p">:</span> <span class="nb">bool</span><span class="p">):</span>
+        <span class="n">uu</span><span class="p">,</span> <span class="n">ww</span><span class="p">,</span> <span class="n">zz</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">meshgrid</span><span class="p">(</span><span class="n">u_g</span><span class="p">,</span> <span class="n">w_g</span><span class="p">,</span> <span class="n">z_g</span><span class="p">,</span> <span class="n">indexing</span><span class="o">=</span><span class="s2">&quot;ij&quot;</span><span class="p">)</span>
+        <span class="n">uu</span> <span class="o">=</span> <span class="n">uu</span><span class="o">.</span><span class="n">ravel</span><span class="p">();</span> <span class="n">ww</span> <span class="o">=</span> <span class="n">ww</span><span class="o">.</span><span class="n">ravel</span><span class="p">();</span> <span class="n">zz</span> <span class="o">=</span> <span class="n">zz</span><span class="o">.</span><span class="n">ravel</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">is_A</span><span class="p">:</span>
+            <span class="n">_</span><span class="p">,</span> <span class="n">p_g</span><span class="p">,</span> <span class="n">e_g</span> <span class="o">=</span> <span class="n">_apex_A_numpy</span><span class="p">(</span><span class="n">uu</span><span class="p">,</span> <span class="n">ww</span><span class="p">,</span> <span class="n">zz</span><span class="p">,</span> <span class="n">_ALPHA_FLUX</span><span class="p">,</span> <span class="n">_BETA_FLUX</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">_</span><span class="p">,</span> <span class="n">p_g</span><span class="p">,</span> <span class="n">e_g</span> <span class="o">=</span> <span class="n">_apex_B_numpy</span><span class="p">(</span><span class="n">uu</span><span class="p">,</span> <span class="n">ww</span><span class="p">,</span> <span class="n">zz</span><span class="p">)</span>
+        <span class="n">Epn</span> <span class="o">=</span> <span class="n">_PN_Edot</span><span class="p">(</span><span class="n">p_g</span><span class="p">,</span> <span class="n">e_g</span><span class="p">)</span>
+        <span class="n">Lpn</span> <span class="o">=</span> <span class="n">_PN_Ldot</span><span class="p">(</span><span class="n">p_g</span><span class="p">,</span> <span class="n">e_g</span><span class="p">)</span>
+        <span class="n">shape</span> <span class="o">=</span> <span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">u_g</span><span class="p">),</span> <span class="nb">len</span><span class="p">(</span><span class="n">w_g</span><span class="p">),</span> <span class="nb">len</span><span class="p">(</span><span class="n">z_g</span><span class="p">))</span>
+        <span class="k">with</span> <span class="n">np</span><span class="o">.</span><span class="n">errstate</span><span class="p">(</span><span class="n">divide</span><span class="o">=</span><span class="s2">&quot;ignore&quot;</span><span class="p">,</span> <span class="n">invalid</span><span class="o">=</span><span class="s2">&quot;ignore&quot;</span><span class="p">):</span>
+            <span class="n">r_E</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">Epn</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">,</span> <span class="n">Edot_raw</span><span class="o">.</span><span class="n">ravel</span><span class="p">()</span> <span class="o">/</span> <span class="n">Epn</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">)</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">shape</span><span class="p">)</span>
+            <span class="n">r_L</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">Lpn</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">,</span> <span class="n">Ldot_raw</span><span class="o">.</span><span class="n">ravel</span><span class="p">()</span> <span class="o">/</span> <span class="n">Lpn</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">)</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">shape</span><span class="p">)</span>
+        <span class="c1"># Replace any residual NaN/Inf (should not occur with Peters PN)</span>
+        <span class="n">r_E</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">isfinite</span><span class="p">(</span><span class="n">r_E</span><span class="p">),</span> <span class="n">r_E</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">)</span>
+        <span class="n">r_L</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">isfinite</span><span class="p">(</span><span class="n">r_L</span><span class="p">),</span> <span class="n">r_L</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">r_E</span><span class="p">,</span> <span class="n">r_L</span>
+
+    <span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Normalising Region A flux …&quot;</span><span class="p">)</span>
+    <span class="n">rE_A</span><span class="p">,</span> <span class="n">rL_A</span> <span class="o">=</span> <span class="n">_pn_normalise</span><span class="p">(</span><span class="n">u_A</span><span class="p">,</span> <span class="n">w_A</span><span class="p">,</span> <span class="n">z_A</span><span class="p">,</span> <span class="n">Edot_A</span><span class="p">,</span> <span class="n">Ldot_A</span><span class="p">,</span> <span class="kc">True</span><span class="p">)</span>
+    <span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Normalising Region B flux …&quot;</span><span class="p">)</span>
+    <span class="n">rE_B</span><span class="p">,</span> <span class="n">rL_B</span> <span class="o">=</span> <span class="n">_pn_normalise</span><span class="p">(</span><span class="n">u_B</span><span class="p">,</span> <span class="n">w_B</span><span class="p">,</span> <span class="n">z_B</span><span class="p">,</span> <span class="n">Edot_B</span><span class="p">,</span> <span class="n">Ldot_B</span><span class="p">,</span> <span class="kc">False</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">FluxData</span><span class="p">(</span>
+        <span class="n">Edot_A</span><span class="o">=</span><span class="n">CubicSpline3D</span><span class="p">(</span><span class="n">u_A</span><span class="p">,</span> <span class="n">w_A</span><span class="p">,</span> <span class="n">z_A</span><span class="p">,</span> <span class="n">rE_A</span><span class="p">),</span>
+        <span class="n">Ldot_A</span><span class="o">=</span><span class="n">CubicSpline3D</span><span class="p">(</span><span class="n">u_A</span><span class="p">,</span> <span class="n">w_A</span><span class="p">,</span> <span class="n">z_A</span><span class="p">,</span> <span class="n">rL_A</span><span class="p">),</span>
+        <span class="n">Edot_B</span><span class="o">=</span><span class="n">CubicSpline3D</span><span class="p">(</span><span class="n">u_B</span><span class="p">,</span> <span class="n">w_B</span><span class="p">,</span> <span class="n">z_B</span><span class="p">,</span> <span class="n">rE_B</span><span class="p">),</span>
+        <span class="n">Ldot_B</span><span class="o">=</span><span class="n">CubicSpline3D</span><span class="p">(</span><span class="n">u_B</span><span class="p">,</span> <span class="n">w_B</span><span class="p">,</span> <span class="n">z_B</span><span class="p">,</span> <span class="n">rL_B</span><span class="p">),</span>
+    <span class="p">)</span></div>
+
+
+
+<span class="c1"># ---------------------------------------------------------------------------</span>
+<span class="c1"># Amplitude data loader</span>
+<span class="c1"># ---------------------------------------------------------------------------</span>
+
+<div class="viewcode-block" id="load_amplitude_data">
+<a class="viewcode-back" href="../../../api.html#fewtrax.data.loader.load_amplitude_data">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">load_amplitude_data</span><span class="p">(</span>
+    <span class="n">data_dir</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span> <span class="o">|</span> <span class="n">Path</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">filename</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;ZNAmps_l10_m10_n55_DS2Outer.h5&quot;</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">AmplitudeData</span><span class="p">:</span>
+<span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;Load Teukolsky mode amplitude data.</span>
+
+<span class="sd">    Reads the amplitude HDF5 file and returns an :class:`AmplitudeData`</span>
+<span class="sd">    container holding the raw B-spline coefficients.  The coefficients are</span>
+<span class="sd">    in ``scipy.interpolate.bisplev`` format and are evaluated at query</span>
+<span class="sd">    points in :class:`~fewtrax.amplitude.interp.AmplitudeInterpolator`.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    data_dir : str or Path, optional</span>
+<span class="sd">        FEW data directory.</span>
+<span class="sd">    filename : str</span>
+<span class="sd">        Amplitude HDF5 file.  Default: ``ZNAmps_l10_m10_n55_DS2Outer.h5``.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    AmplitudeData</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">data_path</span> <span class="o">=</span> <span class="n">find_few_data_dir</span><span class="p">(</span><span class="n">data_dir</span><span class="p">)</span>
+    <span class="n">fp</span> <span class="o">=</span> <span class="n">data_path</span> <span class="o">/</span> <span class="n">filename</span>
+
+    <span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Loading amplitude data from </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">fp</span><span class="p">)</span>
+
+    <span class="k">with</span> <span class="n">h5py</span><span class="o">.</span><span class="n">File</span><span class="p">(</span><span class="n">fp</span><span class="p">,</span> <span class="s2">&quot;r&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">fh</span><span class="p">:</span>
+        <span class="n">lmax</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">fh</span><span class="o">.</span><span class="n">attrs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;lmax&quot;</span><span class="p">,</span> <span class="mi">10</span><span class="p">))</span>
+        <span class="n">mmax</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">fh</span><span class="o">.</span><span class="n">attrs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;mmax&quot;</span><span class="p">,</span> <span class="mi">10</span><span class="p">))</span>
+        <span class="n">nmax</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">fh</span><span class="o">.</span><span class="n">attrs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;nmax&quot;</span><span class="p">,</span> <span class="mi">55</span><span class="p">))</span>
+
+        <span class="n">rA</span> <span class="o">=</span> <span class="n">fh</span><span class="p">[</span><span class="s2">&quot;regionA&quot;</span><span class="p">]</span>
+        <span class="n">coeffs_A</span> <span class="o">=</span> <span class="n">rA</span><span class="p">[</span><span class="s2">&quot;CoeffsRegionA&quot;</span><span class="p">][()]</span>   <span class="c1"># (n_z, n_modes, 2, n_coeffs)</span>
+        <span class="n">u_knots_A</span> <span class="o">=</span> <span class="n">rA</span><span class="p">[</span><span class="s2">&quot;u_knots&quot;</span><span class="p">][()]</span>
+        <span class="n">w_knots_A</span> <span class="o">=</span> <span class="n">rA</span><span class="p">[</span><span class="s2">&quot;w_knots&quot;</span><span class="p">][()]</span>
+        <span class="n">z_knots_A</span> <span class="o">=</span> <span class="n">rA</span><span class="p">[</span><span class="s2">&quot;z_knots&quot;</span><span class="p">][()]</span>
+
+        <span class="n">has_B</span> <span class="o">=</span> <span class="s2">&quot;regionB&quot;</span> <span class="ow">in</span> <span class="n">fh</span>
+        <span class="k">if</span> <span class="n">has_B</span><span class="p">:</span>
+            <span class="n">rB</span> <span class="o">=</span> <span class="n">fh</span><span class="p">[</span><span class="s2">&quot;regionB&quot;</span><span class="p">]</span>
+            <span class="n">coeffs_B</span> <span class="o">=</span> <span class="n">rB</span><span class="p">[</span><span class="s2">&quot;CoeffsRegionB&quot;</span><span class="p">][()]</span>
+            <span class="n">u_knots_B</span> <span class="o">=</span> <span class="n">rB</span><span class="p">[</span><span class="s2">&quot;u_knots&quot;</span><span class="p">][()]</span>
+            <span class="n">w_knots_B</span> <span class="o">=</span> <span class="n">rB</span><span class="p">[</span><span class="s2">&quot;w_knots&quot;</span><span class="p">][()]</span>
+            <span class="n">z_knots_B</span> <span class="o">=</span> <span class="n">rB</span><span class="p">[</span><span class="s2">&quot;z_knots&quot;</span><span class="p">][()]</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">coeffs_B</span> <span class="o">=</span> <span class="n">u_knots_B</span> <span class="o">=</span> <span class="n">w_knots_B</span> <span class="o">=</span> <span class="n">z_knots_B</span> <span class="o">=</span> <span class="kc">None</span>
+
+    <span class="c1"># Generate mode index arrays from lmax, mmax, nmax (equatorial: k=0)</span>
+    <span class="n">l_arr</span><span class="p">,</span> <span class="n">m_arr</span><span class="p">,</span> <span class="n">k_arr</span><span class="p">,</span> <span class="n">n_arr</span> <span class="o">=</span> <span class="n">_generate_mode_arrays</span><span class="p">(</span><span class="n">lmax</span><span class="p">,</span> <span class="n">mmax</span><span class="p">,</span> <span class="n">nmax</span><span class="p">)</span>
+    <span class="n">n_modes_file</span> <span class="o">=</span> <span class="n">coeffs_A</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+    <span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">l_arr</span><span class="p">)</span> <span class="o">==</span> <span class="n">n_modes_file</span><span class="p">,</span> <span class="p">(</span>
+        <span class="sa">f</span><span class="s2">&quot;Mode count mismatch: generated </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">l_arr</span><span class="p">)</span><span class="si">}</span><span class="s2">, file has </span><span class="si">{</span><span class="n">n_modes_file</span><span class="si">}</span><span class="s2">&quot;</span>
+    <span class="p">)</span>
+
+    <span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+        <span class="s2">&quot;Amplitude: </span><span class="si">%d</span><span class="s2"> modes, </span><span class="si">%d</span><span class="s2"> z-slices, Region B = </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
+        <span class="n">n_modes_file</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">z_knots_A</span><span class="p">),</span> <span class="n">has_B</span><span class="p">,</span>
+    <span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">AmplitudeData</span><span class="p">(</span>
+        <span class="n">coeffs_A</span><span class="o">=</span><span class="n">coeffs_A</span><span class="p">,</span>
+        <span class="n">coeffs_B</span><span class="o">=</span><span class="n">coeffs_B</span><span class="p">,</span>
+        <span class="n">u_knots_A</span><span class="o">=</span><span class="n">u_knots_A</span><span class="p">,</span>
+        <span class="n">w_knots_A</span><span class="o">=</span><span class="n">w_knots_A</span><span class="p">,</span>
+        <span class="n">u_knots_B</span><span class="o">=</span><span class="n">u_knots_B</span><span class="p">,</span>
+        <span class="n">w_knots_B</span><span class="o">=</span><span class="n">w_knots_B</span><span class="p">,</span>
+        <span class="n">z_knots_A</span><span class="o">=</span><span class="n">z_knots_A</span><span class="p">,</span>
+        <span class="n">z_knots_B</span><span class="o">=</span><span class="n">z_knots_B</span><span class="p">,</span>
+        <span class="n">l_arr</span><span class="o">=</span><span class="n">l_arr</span><span class="p">,</span>
+        <span class="n">m_arr</span><span class="o">=</span><span class="n">m_arr</span><span class="p">,</span>
+        <span class="n">k_arr</span><span class="o">=</span><span class="n">k_arr</span><span class="p">,</span>
+        <span class="n">n_arr</span><span class="o">=</span><span class="n">n_arr</span><span class="p">,</span>
+    <span class="p">)</span></div>
+
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_generate_mode_arrays</span><span class="p">(</span><span class="n">lmax</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">mmax</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">nmax</span><span class="p">:</span> <span class="nb">int</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Generate (l, m, k, n) index arrays for KerrEccentricEquatorial (k=0).</span>
+
+<span class="sd">    Replicates FEW&#39;s ``m0sort`` ordering: m=0 modes come first (in ascending</span>
+<span class="sd">    l, n order), followed by m≠0 modes in their original enumeration order.</span>
+<span class="sd">    This matches the row ordering of the ``CoeffsRegionA/B`` arrays in the</span>
+<span class="sd">    HDF5 amplitude file.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">modes</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">l</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="n">lmax</span> <span class="o">+</span> <span class="mi">1</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">m</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="nb">min</span><span class="p">(</span><span class="n">mmax</span><span class="p">,</span> <span class="n">l</span><span class="p">)</span> <span class="o">+</span> <span class="mi">1</span><span class="p">):</span>
+            <span class="k">for</span> <span class="n">n</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="o">-</span><span class="n">nmax</span><span class="p">,</span> <span class="n">nmax</span> <span class="o">+</span> <span class="mi">1</span><span class="p">):</span>
+                <span class="n">modes</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">l</span><span class="p">,</span> <span class="n">m</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="n">n</span><span class="p">))</span>
+
+    <span class="c1"># Apply FEW&#39;s m0sort: m=0 modes first, then m≠0 in original order</span>
+    <span class="n">m0_modes</span> <span class="o">=</span> <span class="p">[(</span><span class="n">l</span><span class="p">,</span> <span class="n">m</span><span class="p">,</span> <span class="n">k</span><span class="p">,</span> <span class="n">n</span><span class="p">)</span> <span class="k">for</span> <span class="n">l</span><span class="p">,</span> <span class="n">m</span><span class="p">,</span> <span class="n">k</span><span class="p">,</span> <span class="n">n</span> <span class="ow">in</span> <span class="n">modes</span> <span class="k">if</span> <span class="n">m</span> <span class="o">==</span> <span class="mi">0</span><span class="p">]</span>
+    <span class="n">mpos_modes</span> <span class="o">=</span> <span class="p">[(</span><span class="n">l</span><span class="p">,</span> <span class="n">m</span><span class="p">,</span> <span class="n">k</span><span class="p">,</span> <span class="n">n</span><span class="p">)</span> <span class="k">for</span> <span class="n">l</span><span class="p">,</span> <span class="n">m</span><span class="p">,</span> <span class="n">k</span><span class="p">,</span> <span class="n">n</span> <span class="ow">in</span> <span class="n">modes</span> <span class="k">if</span> <span class="n">m</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">]</span>
+    <span class="n">modes</span> <span class="o">=</span> <span class="n">m0_modes</span> <span class="o">+</span> <span class="n">mpos_modes</span>
+
+    <span class="n">l_arr</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="n">t</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">modes</span><span class="p">],</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">int32</span><span class="p">)</span>
+    <span class="n">m_arr</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="n">t</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">modes</span><span class="p">],</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">int32</span><span class="p">)</span>
+    <span class="n">k_arr</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="n">t</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">modes</span><span class="p">],</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">int32</span><span class="p">)</span>
+    <span class="n">n_arr</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="n">t</span><span class="p">[</span><span class="mi">3</span><span class="p">]</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">modes</span><span class="p">],</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">int32</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">l_arr</span><span class="p">,</span> <span class="n">m_arr</span><span class="p">,</span> <span class="n">k_arr</span><span class="p">,</span> <span class="n">n_arr</span>
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2026, Bert Depoorter.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

@@ -1,0 +1,580 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../../">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>fewtrax.utils.geodesic &mdash; fewtrax 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../../../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../../index.html" class="icon icon-home">
+            fewtrax
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Getting started</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../quickstart.html">Quickstart</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Background</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../math_background.html">Mathematical Background</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Tutorials</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../examples.html">Examples</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../api.html">API Reference</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../index.html">fewtrax</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">fewtrax.utils.geodesic</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for fewtrax.utils.geodesic</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;Kerr geodesic utilities implemented in JAX.</span>
+
+<span class="sd">This module provides JAX-compatible functions for computing key quantities</span>
+<span class="sd">of Kerr geodesics required by the EMRI waveform model:</span>
+
+<span class="sd">*  Orbital energy :math:`E` and angular momentum :math:`L_z`</span>
+<span class="sd">*  Separatrix :math:`p_{\\rm sep}(a, e, x_I)`</span>
+<span class="sd">*  Boyer-Lindquist fundamental frequencies</span>
+<span class="sd">   :math:`\\Omega_\\phi, \\Omega_\\theta, \\Omega_r`</span>
+
+<span class="sd">All functions are JIT-compilable and differentiable via JAX&#39;s automatic</span>
+<span class="sd">differentiation.  Elliptic integrals :math:`K(k)` and :math:`E(k)` are</span>
+<span class="sd">evaluated with ``jax.scipy.special``; the complete elliptic integral of</span>
+<span class="sd">the third kind :math:`\\Pi(n, k)` is evaluated by 64-point Gauss-Legendre</span>
+<span class="sd">quadrature on the standard integral representation.</span>
+
+<span class="sd">Mathematical background</span>
+<span class="sd">-----------------------</span>
+<span class="sd">Orbital mechanics follows Schmidt (2002), gr-qc/0202090.</span>
+<span class="sd">Separatrix polynomials follow Glampedakis &amp; Kennefick (2002),</span>
+<span class="sd">gr-qc/0203086.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">jax</span>
+<span class="n">jax</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="s2">&quot;jax_enable_x64&quot;</span><span class="p">,</span> <span class="kc">True</span><span class="p">)</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">jax.numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">jnp</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">jax</span><span class="w"> </span><span class="kn">import</span> <span class="n">jit</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">functools</span><span class="w"> </span><span class="kn">import</span> <span class="n">partial</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">fewtrax.utils.constants</span><span class="w"> </span><span class="kn">import</span> <span class="n">PI</span>
+
+<span class="c1"># ---------------------------------------------------------------------------</span>
+<span class="c1"># Gauss-Legendre nodes/weights for EllipPi (precomputed once at import time)</span>
+<span class="c1"># ---------------------------------------------------------------------------</span>
+
+<span class="n">_N_GL</span> <span class="o">=</span> <span class="mi">64</span>
+<span class="n">_gl_nodes_np</span><span class="p">,</span> <span class="n">_gl_weights_np</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">polynomial</span><span class="o">.</span><span class="n">legendre</span><span class="o">.</span><span class="n">leggauss</span><span class="p">(</span><span class="n">_N_GL</span><span class="p">)</span>
+<span class="c1"># Transform from [-1, 1] to [0, π/2]</span>
+<span class="n">_GL_THETA</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">asarray</span><span class="p">((</span><span class="n">_gl_nodes_np</span> <span class="o">+</span> <span class="mf">1.0</span><span class="p">)</span> <span class="o">/</span> <span class="mf">2.0</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">pi</span> <span class="o">/</span> <span class="mf">2.0</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">jnp</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
+<span class="n">_GL_W</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">_gl_weights_np</span> <span class="o">/</span> <span class="mf">2.0</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">pi</span> <span class="o">/</span> <span class="mf">2.0</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">jnp</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="ellipk">
+<a class="viewcode-back" href="../../../api.html#fewtrax.utils.geodesic.ellipk">[docs]</a>
+<span class="nd">@jit</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">ellipk</span><span class="p">(</span><span class="n">m</span><span class="p">:</span> <span class="nb">float</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
+<span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;Complete elliptic integral of the first kind :math:`K(m)`.</span>
+
+<span class="sd">    .. math::  K(m) = \int_0^{\pi/2} \frac{d\theta}{\sqrt{1 - m \sin^2\theta}}</span>
+
+<span class="sd">    Uses 64-point Gauss-Legendre quadrature.  ``m`` is the *parameter*</span>
+<span class="sd">    (square of the modulus), consistent with scipy&#39;s convention.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">sin2</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">sin</span><span class="p">(</span><span class="n">_GL_THETA</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span>
+    <span class="n">integrand</span> <span class="o">=</span> <span class="mf">1.0</span> <span class="o">/</span> <span class="n">jnp</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">jnp</span><span class="o">.</span><span class="n">maximum</span><span class="p">(</span><span class="mf">1.0</span> <span class="o">-</span> <span class="n">m</span> <span class="o">*</span> <span class="n">sin2</span><span class="p">,</span> <span class="mf">1e-30</span><span class="p">))</span>
+    <span class="k">return</span> <span class="n">jnp</span><span class="o">.</span><span class="n">dot</span><span class="p">(</span><span class="n">_GL_W</span><span class="p">,</span> <span class="n">integrand</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="ellipe">
+<a class="viewcode-back" href="../../../api.html#fewtrax.utils.geodesic.ellipe">[docs]</a>
+<span class="nd">@jit</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">ellipe</span><span class="p">(</span><span class="n">m</span><span class="p">:</span> <span class="nb">float</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
+<span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;Complete elliptic integral of the second kind :math:`E(m)`.</span>
+
+<span class="sd">    .. math::  E(m) = \int_0^{\pi/2} \sqrt{1 - m \sin^2\theta}\, d\theta</span>
+
+<span class="sd">    Uses 64-point Gauss-Legendre quadrature.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">sin2</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">sin</span><span class="p">(</span><span class="n">_GL_THETA</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span>
+    <span class="n">integrand</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">jnp</span><span class="o">.</span><span class="n">maximum</span><span class="p">(</span><span class="mf">1.0</span> <span class="o">-</span> <span class="n">m</span> <span class="o">*</span> <span class="n">sin2</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">))</span>
+    <span class="k">return</span> <span class="n">jnp</span><span class="o">.</span><span class="n">dot</span><span class="p">(</span><span class="n">_GL_W</span><span class="p">,</span> <span class="n">integrand</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="ellip_pi">
+<a class="viewcode-back" href="../../../api.html#fewtrax.utils.geodesic.ellip_pi">[docs]</a>
+<span class="nd">@jit</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">ellip_pi</span><span class="p">(</span><span class="n">n</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">k</span><span class="p">:</span> <span class="nb">float</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
+<span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;Complete elliptic integral of the third kind :math:`\Pi(n, k)`.</span>
+
+<span class="sd">    .. math::</span>
+
+<span class="sd">        \Pi(n, k) = \int_0^{\pi/2}</span>
+<span class="sd">            \frac{d\theta}{(1 - n\sin^2\theta)\sqrt{1 - k^2\sin^2\theta}}</span>
+
+<span class="sd">    Evaluated via 64-point Gauss-Legendre quadrature on :math:`[0, \pi/2]`.</span>
+<span class="sd">    Accurate to approximately :math:`10^{-12}` for the parameter ranges</span>
+<span class="sd">    encountered in EMRI trajectories.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    n : float</span>
+<span class="sd">        Characteristic parameter; must satisfy :math:`n &lt; 1`.</span>
+<span class="sd">    k : float</span>
+<span class="sd">        Modulus; must satisfy :math:`0 \le k &lt; 1`.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    float</span>
+<span class="sd">        :math:`\Pi(n, k)`.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">sin2</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">sin</span><span class="p">(</span><span class="n">_GL_THETA</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span>
+    <span class="n">integrand</span> <span class="o">=</span> <span class="mf">1.0</span> <span class="o">/</span> <span class="p">((</span><span class="mf">1.0</span> <span class="o">-</span> <span class="n">n</span> <span class="o">*</span> <span class="n">sin2</span><span class="p">)</span> <span class="o">*</span> <span class="n">jnp</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="mf">1.0</span> <span class="o">-</span> <span class="n">k</span><span class="o">**</span><span class="mi">2</span> <span class="o">*</span> <span class="n">sin2</span><span class="p">))</span>
+    <span class="k">return</span> <span class="n">jnp</span><span class="o">.</span><span class="n">dot</span><span class="p">(</span><span class="n">_GL_W</span><span class="p">,</span> <span class="n">integrand</span><span class="p">)</span></div>
+
+
+
+<span class="c1"># ---------------------------------------------------------------------------</span>
+<span class="c1"># Helper functions for Kerr geodesics (equatorial)</span>
+<span class="c1"># ---------------------------------------------------------------------------</span>
+
+<span class="nd">@jit</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">_capital_delta</span><span class="p">(</span><span class="n">r</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">a</span><span class="p">:</span> <span class="nb">float</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
+<span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;Kerr :math:`\Delta(r) = r^2 - 2r + a^2`.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">r</span> <span class="o">*</span> <span class="n">r</span> <span class="o">-</span> <span class="mf">2.0</span> <span class="o">*</span> <span class="n">r</span> <span class="o">+</span> <span class="n">a</span> <span class="o">*</span> <span class="n">a</span>
+
+
+<span class="nd">@jit</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">_f_eq</span><span class="p">(</span><span class="n">r</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">a</span><span class="p">:</span> <span class="nb">float</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Function f(r, a) for equatorial orbits (zm=0).&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">r</span><span class="o">**</span><span class="mi">4</span> <span class="o">+</span> <span class="n">a</span><span class="o">**</span><span class="mi">2</span> <span class="o">*</span> <span class="n">r</span> <span class="o">*</span> <span class="p">(</span><span class="n">r</span> <span class="o">+</span> <span class="mf">2.0</span><span class="p">)</span>
+
+
+<span class="nd">@jit</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">_g_eq</span><span class="p">(</span><span class="n">r</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">a</span><span class="p">:</span> <span class="nb">float</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Function g(r, a) = 2 a r.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="mf">2.0</span> <span class="o">*</span> <span class="n">a</span> <span class="o">*</span> <span class="n">r</span>
+
+
+<span class="nd">@jit</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">_h_eq</span><span class="p">(</span><span class="n">r</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">a</span><span class="p">:</span> <span class="nb">float</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Function h(r, a) for equatorial orbits (zm=0).&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">r</span> <span class="o">*</span> <span class="p">(</span><span class="n">r</span> <span class="o">-</span> <span class="mf">2.0</span><span class="p">)</span>
+
+
+<span class="nd">@jit</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">_d_eq</span><span class="p">(</span><span class="n">r</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">a</span><span class="p">:</span> <span class="nb">float</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Function d(r, a) = r^2 * Delta for equatorial orbits (zm=0).&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">r</span> <span class="o">*</span> <span class="n">r</span> <span class="o">*</span> <span class="n">_capital_delta</span><span class="p">(</span><span class="n">r</span><span class="p">,</span> <span class="n">a</span><span class="p">)</span>
+
+
+<span class="c1"># ---------------------------------------------------------------------------</span>
+<span class="c1"># Orbital energy and angular momentum</span>
+<span class="c1"># ---------------------------------------------------------------------------</span>
+
+<div class="viewcode-block" id="kerr_geo_energy_equatorial">
+<a class="viewcode-back" href="../../../api.html#fewtrax.utils.geodesic.kerr_geo_energy_equatorial">[docs]</a>
+<span class="nd">@jit</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">kerr_geo_energy_equatorial</span><span class="p">(</span><span class="n">a</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">p</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">e</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">x</span><span class="p">:</span> <span class="nb">float</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
+<span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;Orbital energy :math:`E` for an equatorial Kerr geodesic.</span>
+
+<span class="sd">    Uses the closed-form expression derived from the roots of the radial</span>
+<span class="sd">    potential (Schmidt 2002, Eqs. 28–32), specialized to the equatorial</span>
+<span class="sd">    case :math:`x_I = \pm 1`.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    a : float</span>
+<span class="sd">        Dimensionless spin parameter, :math:`|a| \le 1`.</span>
+<span class="sd">    p : float</span>
+<span class="sd">        Semi-latus rectum in units of :math:`M`.</span>
+<span class="sd">    e : float</span>
+<span class="sd">        Orbital eccentricity, :math:`0 \le e &lt; 1`.</span>
+<span class="sd">    x : float</span>
+<span class="sd">        Cosine of inclination; must be :math:`\pm 1` for equatorial orbits.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    float</span>
+<span class="sd">        Specific orbital energy :math:`E`.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">sgnax</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">sign</span><span class="p">(</span><span class="n">a</span> <span class="o">*</span> <span class="n">x</span><span class="p">)</span>
+    <span class="c1"># Closed-form for |x| == 1 (Schmidt 2002)</span>
+    <span class="n">denom</span> <span class="o">=</span> <span class="o">-</span><span class="mf">4.0</span> <span class="o">*</span> <span class="n">a</span><span class="o">**</span><span class="mi">2</span> <span class="o">*</span> <span class="p">(</span><span class="n">e</span><span class="o">**</span><span class="mi">2</span> <span class="o">-</span> <span class="mf">1.0</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span> <span class="o">+</span> <span class="p">(</span><span class="mf">3.0</span> <span class="o">+</span> <span class="n">e</span><span class="o">**</span><span class="mi">2</span> <span class="o">-</span> <span class="n">p</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">p</span>
+    <span class="n">inner</span> <span class="o">=</span> <span class="p">(</span>
+        <span class="n">a</span><span class="o">**</span><span class="mi">6</span> <span class="o">*</span> <span class="p">(</span><span class="n">e</span><span class="o">**</span><span class="mi">2</span> <span class="o">-</span> <span class="mf">1.0</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span>
+        <span class="o">+</span> <span class="n">a</span><span class="o">**</span><span class="mi">2</span> <span class="o">*</span> <span class="p">(</span><span class="o">-</span><span class="mf">4.0</span> <span class="o">*</span> <span class="n">e</span><span class="o">**</span><span class="mi">2</span> <span class="o">+</span> <span class="p">(</span><span class="n">p</span> <span class="o">-</span> <span class="mf">2.0</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span><span class="p">)</span> <span class="o">*</span> <span class="n">p</span><span class="o">**</span><span class="mi">2</span>
+        <span class="o">+</span> <span class="mf">2.0</span> <span class="o">*</span> <span class="n">a</span><span class="o">**</span><span class="mi">4</span> <span class="o">*</span> <span class="n">p</span> <span class="o">*</span> <span class="p">(</span><span class="o">-</span><span class="mf">2.0</span> <span class="o">+</span> <span class="n">p</span> <span class="o">+</span> <span class="n">e</span><span class="o">**</span><span class="mi">2</span> <span class="o">*</span> <span class="p">(</span><span class="mf">2.0</span> <span class="o">+</span> <span class="n">p</span><span class="p">))</span>
+    <span class="p">)</span> <span class="o">/</span> <span class="n">p</span><span class="o">**</span><span class="mi">3</span>
+    <span class="c1"># Use 1e-300 floor instead of 0 so that jax.jacfwd through sqrt is finite</span>
+    <span class="c1"># when a=0 (inner=0 exactly): the constant floor has zero tangent w.r.t. (p,e).</span>
+    <span class="n">numer</span> <span class="o">=</span> <span class="p">(</span><span class="n">e</span><span class="o">**</span><span class="mi">2</span> <span class="o">-</span> <span class="mf">1.0</span><span class="p">)</span> <span class="o">*</span> <span class="p">(</span>
+        <span class="n">a</span><span class="o">**</span><span class="mi">2</span> <span class="o">*</span> <span class="p">(</span><span class="mf">1.0</span> <span class="o">+</span> <span class="mf">3.0</span> <span class="o">*</span> <span class="n">e</span><span class="o">**</span><span class="mi">2</span> <span class="o">+</span> <span class="n">p</span><span class="p">)</span>
+        <span class="o">+</span> <span class="n">p</span> <span class="o">*</span> <span class="p">(</span><span class="o">-</span><span class="mf">3.0</span> <span class="o">-</span> <span class="n">e</span><span class="o">**</span><span class="mi">2</span> <span class="o">+</span> <span class="n">p</span> <span class="o">-</span> <span class="n">sgnax</span> <span class="o">*</span> <span class="mf">2.0</span> <span class="o">*</span> <span class="n">jnp</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">jnp</span><span class="o">.</span><span class="n">maximum</span><span class="p">(</span><span class="n">inner</span><span class="p">,</span> <span class="mf">1e-300</span><span class="p">)))</span>
+    <span class="p">)</span>
+    <span class="n">ratio</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">jnp</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">denom</span><span class="p">)</span> <span class="o">&lt;</span> <span class="mf">1.0e-14</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">,</span> <span class="n">numer</span> <span class="o">/</span> <span class="n">denom</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">jnp</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="mf">1.0</span> <span class="o">-</span> <span class="p">(</span><span class="mf">1.0</span> <span class="o">-</span> <span class="n">e</span><span class="o">**</span><span class="mi">2</span><span class="p">)</span> <span class="o">*</span> <span class="p">(</span><span class="mf">1.0</span> <span class="o">+</span> <span class="n">ratio</span><span class="p">)</span> <span class="o">/</span> <span class="n">p</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="kerr_geo_angular_momentum_equatorial">
+<a class="viewcode-back" href="../../../api.html#fewtrax.utils.geodesic.kerr_geo_angular_momentum_equatorial">[docs]</a>
+<span class="nd">@jit</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">kerr_geo_angular_momentum_equatorial</span><span class="p">(</span>
+    <span class="n">a</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">p</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">e</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">x</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">En</span><span class="p">:</span> <span class="nb">float</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
+<span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;Orbital angular momentum :math:`L_z` for an equatorial Kerr geodesic.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    a, p, e, x : float</span>
+<span class="sd">        Orbital parameters as for :func:`kerr_geo_energy_equatorial`.</span>
+<span class="sd">    En : float</span>
+<span class="sd">        Orbital energy (from :func:`kerr_geo_energy_equatorial`).</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    float</span>
+<span class="sd">        Specific orbital angular momentum :math:`L_z`.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">r1</span> <span class="o">=</span> <span class="n">p</span> <span class="o">/</span> <span class="p">(</span><span class="mf">1.0</span> <span class="o">-</span> <span class="n">e</span><span class="p">)</span>
+    <span class="n">d1</span> <span class="o">=</span> <span class="n">_d_eq</span><span class="p">(</span><span class="n">r1</span><span class="p">,</span> <span class="n">a</span><span class="p">)</span>
+    <span class="n">f1</span> <span class="o">=</span> <span class="n">_f_eq</span><span class="p">(</span><span class="n">r1</span><span class="p">,</span> <span class="n">a</span><span class="p">)</span>
+    <span class="n">g1</span> <span class="o">=</span> <span class="n">_g_eq</span><span class="p">(</span><span class="n">r1</span><span class="p">,</span> <span class="n">a</span><span class="p">)</span>
+    <span class="n">h1</span> <span class="o">=</span> <span class="n">_h_eq</span><span class="p">(</span><span class="n">r1</span><span class="p">,</span> <span class="n">a</span><span class="p">)</span>
+    <span class="n">sgnx</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">sign</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+    <span class="n">disc</span> <span class="o">=</span> <span class="o">-</span><span class="n">d1</span> <span class="o">*</span> <span class="n">h1</span> <span class="o">+</span> <span class="n">En</span><span class="o">**</span><span class="mi">2</span> <span class="o">*</span> <span class="p">(</span><span class="n">g1</span><span class="o">**</span><span class="mi">2</span> <span class="o">+</span> <span class="n">f1</span> <span class="o">*</span> <span class="n">h1</span><span class="p">)</span>
+    <span class="k">return</span> <span class="p">(</span><span class="o">-</span><span class="n">En</span> <span class="o">*</span> <span class="n">g1</span> <span class="o">+</span> <span class="n">sgnx</span> <span class="o">*</span> <span class="n">jnp</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">jnp</span><span class="o">.</span><span class="n">maximum</span><span class="p">(</span><span class="n">disc</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">)))</span> <span class="o">/</span> <span class="n">h1</span></div>
+
+
+
+<span class="c1"># ---------------------------------------------------------------------------</span>
+<span class="c1"># Separatrix via bisection</span>
+<span class="c1"># ---------------------------------------------------------------------------</span>
+
+<span class="nd">@partial</span><span class="p">(</span><span class="n">jit</span><span class="p">,</span> <span class="n">static_argnames</span><span class="o">=</span><span class="p">(</span><span class="s2">&quot;tol&quot;</span><span class="p">,</span> <span class="s2">&quot;max_steps&quot;</span><span class="p">))</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">_bisect</span><span class="p">(</span><span class="n">f_lo</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">f_hi</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">lo</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">hi</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">tol</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1.0e-13</span><span class="p">,</span>
+            <span class="n">max_steps</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">100</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Generic bisection on a pre-evaluated sign-change bracket.</span>
+
+<span class="sd">    Performs bisection starting from ``lo`` / ``hi`` where the signs of the</span>
+<span class="sd">    function at those endpoints are given by ``f_lo`` and ``f_hi``.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="c1"># We carry the function reference indirectly via a closure in the callers.</span>
+    <span class="c1"># Here we just do the iteration on a generic bracket.</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">cond</span><span class="p">(</span><span class="n">state</span><span class="p">):</span>
+        <span class="n">lo</span><span class="p">,</span> <span class="n">hi</span><span class="p">,</span> <span class="n">_fl</span><span class="p">,</span> <span class="n">_fh</span> <span class="o">=</span> <span class="n">state</span>
+        <span class="k">return</span> <span class="p">(</span><span class="n">hi</span> <span class="o">-</span> <span class="n">lo</span><span class="p">)</span> <span class="o">&gt;</span> <span class="n">tol</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">body</span><span class="p">(</span><span class="n">state</span><span class="p">):</span>
+        <span class="n">lo</span><span class="p">,</span> <span class="n">hi</span><span class="p">,</span> <span class="n">fl</span><span class="p">,</span> <span class="n">fh</span> <span class="o">=</span> <span class="n">state</span>
+        <span class="n">mid</span> <span class="o">=</span> <span class="p">(</span><span class="n">lo</span> <span class="o">+</span> <span class="n">hi</span><span class="p">)</span> <span class="o">/</span> <span class="mf">2.0</span>
+        <span class="k">return</span> <span class="n">lo</span><span class="p">,</span> <span class="n">hi</span><span class="p">,</span> <span class="n">fl</span><span class="p">,</span> <span class="n">fh</span>  <span class="c1"># placeholder – overridden below</span>
+
+    <span class="k">return</span> <span class="p">(</span><span class="n">lo</span> <span class="o">+</span> <span class="n">hi</span><span class="p">)</span> <span class="o">/</span> <span class="mf">2.0</span>  <span class="c1"># replaced by specialised callers</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_bisect_equat</span><span class="p">(</span><span class="n">a</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">e</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">lo</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">hi</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">n_iter</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">50</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Find equatorial separatrix root via fixed-count bisection.</span>
+
+<span class="sd">    Uses ``jax.lax.fori_loop`` with static bounds so the function is</span>
+<span class="sd">    differentiable via both forward and reverse-mode JAX AD.</span>
+<span class="sd">    50 iterations gives precision ≲ 2^{-50} × (hi - lo) ≈ 1e-15 × 6 ≈ 6e-15.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_poly</span><span class="p">(</span><span class="n">p</span><span class="p">):</span>
+        <span class="k">return</span> <span class="p">(</span>
+            <span class="n">a</span><span class="o">**</span><span class="mi">4</span> <span class="o">*</span> <span class="p">(</span><span class="o">-</span><span class="mf">3.0</span> <span class="o">-</span> <span class="mf">2.0</span> <span class="o">*</span> <span class="n">e</span> <span class="o">+</span> <span class="n">e</span><span class="o">**</span><span class="mi">2</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span>
+            <span class="o">+</span> <span class="n">p</span><span class="o">**</span><span class="mi">2</span> <span class="o">*</span> <span class="p">(</span><span class="o">-</span><span class="mf">6.0</span> <span class="o">-</span> <span class="mf">2.0</span> <span class="o">*</span> <span class="n">e</span> <span class="o">+</span> <span class="n">p</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span>
+            <span class="o">-</span> <span class="mf">2.0</span> <span class="o">*</span> <span class="n">a</span><span class="o">**</span><span class="mi">2</span> <span class="o">*</span> <span class="p">(</span><span class="mf">1.0</span> <span class="o">+</span> <span class="n">e</span><span class="p">)</span> <span class="o">*</span> <span class="n">p</span> <span class="o">*</span> <span class="p">(</span><span class="mf">14.0</span> <span class="o">+</span> <span class="mf">2.0</span> <span class="o">*</span> <span class="n">e</span><span class="o">**</span><span class="mi">2</span> <span class="o">+</span> <span class="mf">3.0</span> <span class="o">*</span> <span class="n">p</span> <span class="o">-</span> <span class="n">e</span> <span class="o">*</span> <span class="n">p</span><span class="p">)</span>
+        <span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">body</span><span class="p">(</span><span class="n">_</span><span class="p">,</span> <span class="n">state</span><span class="p">):</span>
+        <span class="n">lo</span><span class="p">,</span> <span class="n">hi</span> <span class="o">=</span> <span class="n">state</span>
+        <span class="n">mid</span> <span class="o">=</span> <span class="p">(</span><span class="n">lo</span> <span class="o">+</span> <span class="n">hi</span><span class="p">)</span> <span class="o">/</span> <span class="mf">2.0</span>
+        <span class="n">fl</span> <span class="o">=</span> <span class="n">_poly</span><span class="p">(</span><span class="n">lo</span><span class="p">)</span>
+        <span class="n">fm</span> <span class="o">=</span> <span class="n">_poly</span><span class="p">(</span><span class="n">mid</span><span class="p">)</span>
+        <span class="n">same_sign</span> <span class="o">=</span> <span class="n">fl</span> <span class="o">*</span> <span class="n">fm</span> <span class="o">&gt;</span> <span class="mf">0.0</span>
+        <span class="n">new_lo</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">same_sign</span><span class="p">,</span> <span class="n">mid</span><span class="p">,</span> <span class="n">lo</span><span class="p">)</span>
+        <span class="n">new_hi</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">same_sign</span><span class="p">,</span> <span class="n">hi</span><span class="p">,</span> <span class="n">mid</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">new_lo</span><span class="p">,</span> <span class="n">new_hi</span>
+
+    <span class="n">lo_f</span><span class="p">,</span> <span class="n">hi_f</span> <span class="o">=</span> <span class="n">jax</span><span class="o">.</span><span class="n">lax</span><span class="o">.</span><span class="n">fori_loop</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">n_iter</span><span class="p">,</span> <span class="n">body</span><span class="p">,</span> <span class="p">(</span><span class="n">jnp</span><span class="o">.</span><span class="n">float64</span><span class="p">(</span><span class="n">lo</span><span class="p">),</span> <span class="n">jnp</span><span class="o">.</span><span class="n">float64</span><span class="p">(</span><span class="n">hi</span><span class="p">)))</span>
+    <span class="k">return</span> <span class="p">(</span><span class="n">lo_f</span> <span class="o">+</span> <span class="n">hi_f</span><span class="p">)</span> <span class="o">/</span> <span class="mf">2.0</span>
+
+
+<div class="viewcode-block" id="get_separatrix">
+<a class="viewcode-back" href="../../../api.html#fewtrax.utils.geodesic.get_separatrix">[docs]</a>
+<span class="nd">@partial</span><span class="p">(</span><span class="n">jit</span><span class="p">,</span> <span class="n">static_argnames</span><span class="o">=</span><span class="p">())</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">get_separatrix</span><span class="p">(</span><span class="n">a</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">e</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">x</span><span class="p">:</span> <span class="nb">float</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
+<span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;Compute the separatrix semi-latus rectum :math:`p_{\\rm sep}(a, e, x_I)`.</span>
+
+<span class="sd">    The separatrix is the boundary between stable and unstable bound orbits.</span>
+<span class="sd">    For Schwarzschild it equals :math:`6 + 2e`; for Kerr equatorial it is</span>
+<span class="sd">    found as the root of a polynomial (Glampedakis &amp; Kennefick 2002).</span>
+
+<span class="sd">    Only equatorial orbits (:math:`x_I = \pm 1`) are currently supported.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    a : float</span>
+<span class="sd">        Dimensionless BH spin, :math:`-1 &lt; a &lt; 1`.</span>
+<span class="sd">    e : float</span>
+<span class="sd">        Eccentricity.</span>
+<span class="sd">    x : float</span>
+<span class="sd">        Cosine of inclination; must be :math:`\pm 1`.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    float</span>
+<span class="sd">        :math:`p_{\\rm sep}`.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="c1"># Schwarzschild case</span>
+    <span class="n">schw_sep</span> <span class="o">=</span> <span class="mf">6.0</span> <span class="o">+</span> <span class="mf">2.0</span> <span class="o">*</span> <span class="n">e</span>
+
+    <span class="c1"># For Kerr equatorial, find root of separatrix polynomial</span>
+    <span class="c1"># Prograde:  bracket [1+e, 6+2e];  Retrograde:  [6+2e, 5+e+4√(1+e)]</span>
+    <span class="n">is_prograde</span> <span class="o">=</span> <span class="p">(</span><span class="n">a</span> <span class="o">*</span> <span class="n">x</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mf">0.0</span>
+    <span class="n">lo_prog</span> <span class="o">=</span> <span class="mf">1.0</span> <span class="o">+</span> <span class="n">e</span>
+    <span class="n">hi_prog</span> <span class="o">=</span> <span class="mf">6.0</span> <span class="o">+</span> <span class="mf">2.0</span> <span class="o">*</span> <span class="n">e</span>
+    <span class="n">lo_retro</span> <span class="o">=</span> <span class="mf">6.0</span> <span class="o">+</span> <span class="mf">2.0</span> <span class="o">*</span> <span class="n">e</span>
+    <span class="n">hi_retro</span> <span class="o">=</span> <span class="mf">5.0</span> <span class="o">+</span> <span class="n">e</span> <span class="o">+</span> <span class="mf">4.0</span> <span class="o">*</span> <span class="n">jnp</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="mf">1.0</span> <span class="o">+</span> <span class="n">e</span><span class="p">)</span>
+
+    <span class="n">lo</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">is_prograde</span><span class="p">,</span> <span class="n">lo_prog</span><span class="p">,</span> <span class="n">lo_retro</span><span class="p">)</span>
+    <span class="n">hi</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">is_prograde</span><span class="p">,</span> <span class="n">hi_prog</span><span class="p">,</span> <span class="n">hi_retro</span><span class="p">)</span>
+
+    <span class="n">kerr_sep</span> <span class="o">=</span> <span class="n">_bisect_equat</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">e</span><span class="p">,</span> <span class="n">lo</span><span class="p">,</span> <span class="n">hi</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">jnp</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">a</span> <span class="o">==</span> <span class="mf">0.0</span><span class="p">,</span> <span class="n">schw_sep</span><span class="p">,</span> <span class="n">kerr_sep</span><span class="p">)</span></div>
+
+
+
+<span class="c1"># ---------------------------------------------------------------------------</span>
+<span class="c1"># Fundamental frequencies (Boyer-Lindquist coordinate time)</span>
+<span class="c1"># ---------------------------------------------------------------------------</span>
+
+<span class="nd">@jit</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">_radial_roots_equatorial</span><span class="p">(</span><span class="n">a</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">p</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">e</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">En</span><span class="p">:</span> <span class="nb">float</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Return radial turning points (r1, r2, r3, r4) for Q=0.&quot;&quot;&quot;</span>
+    <span class="n">r1</span> <span class="o">=</span> <span class="n">p</span> <span class="o">/</span> <span class="p">(</span><span class="mf">1.0</span> <span class="o">-</span> <span class="n">e</span><span class="p">)</span>
+    <span class="n">r2</span> <span class="o">=</span> <span class="n">p</span> <span class="o">/</span> <span class="p">(</span><span class="mf">1.0</span> <span class="o">+</span> <span class="n">e</span><span class="p">)</span>
+    <span class="n">AplusB</span> <span class="o">=</span> <span class="mf">2.0</span> <span class="o">/</span> <span class="p">(</span><span class="mf">1.0</span> <span class="o">-</span> <span class="n">En</span><span class="o">**</span><span class="mi">2</span><span class="p">)</span> <span class="o">-</span> <span class="p">(</span><span class="n">r1</span> <span class="o">+</span> <span class="n">r2</span><span class="p">)</span>
+    <span class="c1"># Q = 0  ⟹  AB = 0  ⟹  r4 = 0</span>
+    <span class="n">r3</span> <span class="o">=</span> <span class="n">AplusB</span>
+    <span class="n">r4</span> <span class="o">=</span> <span class="mf">0.0</span>
+    <span class="k">return</span> <span class="n">r1</span><span class="p">,</span> <span class="n">r2</span><span class="p">,</span> <span class="n">r3</span><span class="p">,</span> <span class="n">r4</span>
+
+
+<span class="nd">@jit</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">_mino_frequencies_equatorial</span><span class="p">(</span>
+    <span class="n">a</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">p</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">e</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">x</span><span class="p">:</span> <span class="nb">float</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">]:</span>
+<span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;Mino-time frequencies for equatorial eccentric Kerr geodesics.</span>
+
+<span class="sd">    Returns :math:`(\Gamma, \Upsilon_\phi, |\Upsilon_\theta|, \Upsilon_r)`.</span>
+
+<span class="sd">    Follows Schmidt (2002) §IV; the equatorial specialisation (Q = 0)</span>
+<span class="sd">    removes the :math:`\theta`-sector elliptic integrals.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">En</span> <span class="o">=</span> <span class="n">kerr_geo_energy_equatorial</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">p</span><span class="p">,</span> <span class="n">e</span><span class="p">,</span> <span class="n">x</span><span class="p">)</span>
+    <span class="n">L</span> <span class="o">=</span> <span class="n">kerr_geo_angular_momentum_equatorial</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">p</span><span class="p">,</span> <span class="n">e</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">En</span><span class="p">)</span>
+
+    <span class="n">r1</span><span class="p">,</span> <span class="n">r2</span><span class="p">,</span> <span class="n">r3</span><span class="p">,</span> <span class="n">r4</span> <span class="o">=</span> <span class="n">_radial_roots_equatorial</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">p</span><span class="p">,</span> <span class="n">e</span><span class="p">,</span> <span class="n">En</span><span class="p">)</span>
+
+    <span class="c1"># Radial modulus</span>
+    <span class="n">kr2</span> <span class="o">=</span> <span class="p">(</span><span class="n">r1</span> <span class="o">-</span> <span class="n">r2</span><span class="p">)</span> <span class="o">/</span> <span class="p">(</span><span class="n">r1</span> <span class="o">-</span> <span class="n">r3</span><span class="p">)</span> <span class="o">*</span> <span class="p">(</span><span class="n">r3</span> <span class="o">-</span> <span class="n">r4</span><span class="p">)</span> <span class="o">/</span> <span class="p">(</span><span class="n">r2</span> <span class="o">-</span> <span class="n">r4</span><span class="p">)</span>
+    <span class="n">kr</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">jnp</span><span class="o">.</span><span class="n">maximum</span><span class="p">(</span><span class="n">kr2</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">))</span>
+
+    <span class="c1"># Horizon radii (M = 1)</span>
+    <span class="n">rp</span> <span class="o">=</span> <span class="mf">1.0</span> <span class="o">+</span> <span class="n">jnp</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="mf">1.0</span> <span class="o">-</span> <span class="n">a</span><span class="o">**</span><span class="mi">2</span><span class="p">)</span>
+    <span class="n">rm</span> <span class="o">=</span> <span class="mf">1.0</span> <span class="o">-</span> <span class="n">jnp</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="mf">1.0</span> <span class="o">-</span> <span class="n">a</span><span class="o">**</span><span class="mi">2</span><span class="p">)</span>
+
+    <span class="n">EllK</span> <span class="o">=</span> <span class="n">ellipk</span><span class="p">(</span><span class="n">kr</span><span class="o">**</span><span class="mi">2</span><span class="p">)</span>  <span class="c1"># jax uses m = k^2 convention</span>
+    <span class="n">EllE_val</span> <span class="o">=</span> <span class="n">ellipe</span><span class="p">(</span><span class="n">kr</span><span class="o">**</span><span class="mi">2</span><span class="p">)</span>
+
+    <span class="c1"># Υ_r (Mino time)</span>
+    <span class="n">Upsilon_r</span> <span class="o">=</span> <span class="n">PI</span> <span class="o">*</span> <span class="n">jnp</span><span class="o">.</span><span class="n">sqrt</span><span class="p">((</span><span class="mf">1.0</span> <span class="o">-</span> <span class="n">En</span><span class="o">**</span><span class="mi">2</span><span class="p">)</span> <span class="o">*</span> <span class="p">(</span><span class="n">r1</span> <span class="o">-</span> <span class="n">r3</span><span class="p">)</span> <span class="o">*</span> <span class="n">r2</span><span class="p">)</span> <span class="o">/</span> <span class="p">(</span><span class="mf">2.0</span> <span class="o">*</span> <span class="n">EllK</span><span class="p">)</span>
+
+    <span class="c1"># Υ_θ (equatorial: = |x| * sqrt(L^2 + a^2*(1-E^2)))</span>
+    <span class="n">zp</span> <span class="o">=</span> <span class="n">a</span><span class="o">**</span><span class="mi">2</span> <span class="o">*</span> <span class="p">(</span><span class="mf">1.0</span> <span class="o">-</span> <span class="n">En</span><span class="o">**</span><span class="mi">2</span><span class="p">)</span> <span class="o">+</span> <span class="n">L</span><span class="o">**</span><span class="mi">2</span>
+    <span class="n">Upsilon_theta</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="o">*</span> <span class="n">jnp</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">jnp</span><span class="o">.</span><span class="n">maximum</span><span class="p">(</span><span class="n">zp</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">))</span>
+
+    <span class="c1"># Epsilon0zp = zp / L^2</span>
+    <span class="n">Epsilon0zp</span> <span class="o">=</span> <span class="n">zp</span> <span class="o">/</span> <span class="n">L</span><span class="o">**</span><span class="mi">2</span>
+
+    <span class="c1"># Υ_φ via Schmidt (2002) Eq. (21)</span>
+    <span class="n">hr</span> <span class="o">=</span> <span class="p">(</span><span class="n">r1</span> <span class="o">-</span> <span class="n">r2</span><span class="p">)</span> <span class="o">/</span> <span class="p">(</span><span class="n">r1</span> <span class="o">-</span> <span class="n">r3</span><span class="p">)</span>
+    <span class="n">hp</span> <span class="o">=</span> <span class="p">(</span><span class="n">r1</span> <span class="o">-</span> <span class="n">r2</span><span class="p">)</span> <span class="o">*</span> <span class="p">(</span><span class="n">r3</span> <span class="o">-</span> <span class="n">rp</span><span class="p">)</span> <span class="o">/</span> <span class="p">((</span><span class="n">r1</span> <span class="o">-</span> <span class="n">r3</span><span class="p">)</span> <span class="o">*</span> <span class="p">(</span><span class="n">r2</span> <span class="o">-</span> <span class="n">rp</span><span class="p">))</span>
+    <span class="n">hm</span> <span class="o">=</span> <span class="p">(</span><span class="n">r1</span> <span class="o">-</span> <span class="n">r2</span><span class="p">)</span> <span class="o">*</span> <span class="p">(</span><span class="n">r3</span> <span class="o">-</span> <span class="n">rm</span><span class="p">)</span> <span class="o">/</span> <span class="p">((</span><span class="n">r1</span> <span class="o">-</span> <span class="n">r3</span><span class="p">)</span> <span class="o">*</span> <span class="p">(</span><span class="n">r2</span> <span class="o">-</span> <span class="n">rm</span><span class="p">))</span>
+
+    <span class="n">EllPi_hr</span> <span class="o">=</span> <span class="n">ellip_pi</span><span class="p">(</span><span class="n">hr</span><span class="p">,</span> <span class="n">kr</span><span class="p">)</span>
+    <span class="n">EllPi_hp</span> <span class="o">=</span> <span class="n">ellip_pi</span><span class="p">(</span><span class="n">hp</span><span class="p">,</span> <span class="n">kr</span><span class="p">)</span>
+    <span class="n">EllPi_hm</span> <span class="o">=</span> <span class="n">ellip_pi</span><span class="p">(</span><span class="n">hm</span><span class="p">,</span> <span class="n">kr</span><span class="p">)</span>
+
+    <span class="n">fac_r</span> <span class="o">=</span> <span class="mf">2.0</span> <span class="o">*</span> <span class="n">Upsilon_r</span> <span class="o">/</span> <span class="p">(</span>
+        <span class="n">PI</span> <span class="o">*</span> <span class="p">(</span><span class="n">rp</span> <span class="o">-</span> <span class="n">rm</span><span class="p">)</span> <span class="o">*</span> <span class="n">jnp</span><span class="o">.</span><span class="n">sqrt</span><span class="p">((</span><span class="mf">1.0</span> <span class="o">-</span> <span class="n">En</span><span class="o">**</span><span class="mi">2</span><span class="p">)</span> <span class="o">*</span> <span class="p">(</span><span class="n">r1</span> <span class="o">-</span> <span class="n">r3</span><span class="p">)</span> <span class="o">*</span> <span class="n">r2</span><span class="p">)</span>
+    <span class="p">)</span>
+    <span class="n">prob1</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">where</span><span class="p">(</span>
+        <span class="n">jnp</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">r3</span> <span class="o">-</span> <span class="n">rp</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mf">1.0e-14</span><span class="p">,</span>
+        <span class="p">(</span><span class="mf">2.0</span> <span class="o">*</span> <span class="n">En</span> <span class="o">*</span> <span class="n">rp</span> <span class="o">-</span> <span class="n">a</span> <span class="o">*</span> <span class="n">L</span><span class="p">)</span>
+        <span class="o">*</span> <span class="p">(</span><span class="n">EllK</span> <span class="o">-</span> <span class="p">(</span><span class="n">r2</span> <span class="o">-</span> <span class="n">r3</span><span class="p">)</span> <span class="o">/</span> <span class="p">(</span><span class="n">r2</span> <span class="o">-</span> <span class="n">rp</span><span class="p">)</span> <span class="o">*</span> <span class="n">EllPi_hp</span><span class="p">)</span>
+        <span class="o">/</span> <span class="p">(</span><span class="n">r3</span> <span class="o">-</span> <span class="n">rp</span><span class="p">),</span>
+        <span class="mf">0.0</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">prob2_neg</span> <span class="o">=</span> <span class="p">(</span><span class="mf">2.0</span> <span class="o">*</span> <span class="n">En</span> <span class="o">*</span> <span class="n">rm</span> <span class="o">-</span> <span class="n">a</span> <span class="o">*</span> <span class="n">L</span><span class="p">)</span> <span class="o">*</span> <span class="p">(</span>
+        <span class="n">EllK</span> <span class="o">-</span> <span class="p">(</span><span class="n">r2</span> <span class="o">-</span> <span class="n">r3</span><span class="p">)</span> <span class="o">/</span> <span class="p">(</span><span class="n">r2</span> <span class="o">-</span> <span class="n">rm</span><span class="p">)</span> <span class="o">*</span> <span class="n">EllPi_hm</span>
+    <span class="p">)</span> <span class="o">/</span> <span class="p">(</span><span class="n">r3</span> <span class="o">-</span> <span class="n">rm</span><span class="p">)</span>
+
+    <span class="n">Upsilon_phi</span> <span class="o">=</span> <span class="p">(</span>
+        <span class="n">Upsilon_theta</span> <span class="o">/</span> <span class="n">jnp</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">Epsilon0zp</span><span class="p">)</span>
+        <span class="o">+</span> <span class="n">fac_r</span> <span class="o">*</span> <span class="p">(</span><span class="n">prob1</span> <span class="o">-</span> <span class="n">prob2_neg</span><span class="p">)</span>
+    <span class="p">)</span>
+
+    <span class="c1"># Γ (Boyer-Lindquist time per Mino time)</span>
+    <span class="n">prob3</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">where</span><span class="p">(</span>
+        <span class="n">jnp</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">r3</span> <span class="o">-</span> <span class="n">rp</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mf">1.0e-14</span><span class="p">,</span>
+        <span class="p">((</span><span class="mf">4.0</span> <span class="o">*</span> <span class="n">En</span> <span class="o">-</span> <span class="n">a</span> <span class="o">*</span> <span class="n">L</span><span class="p">)</span> <span class="o">*</span> <span class="n">rp</span> <span class="o">-</span> <span class="mf">2.0</span> <span class="o">*</span> <span class="n">a</span><span class="o">**</span><span class="mi">2</span> <span class="o">*</span> <span class="n">En</span><span class="p">)</span>
+        <span class="o">*</span> <span class="p">(</span><span class="n">EllK</span> <span class="o">-</span> <span class="p">(</span><span class="n">r2</span> <span class="o">-</span> <span class="n">r3</span><span class="p">)</span> <span class="o">/</span> <span class="p">(</span><span class="n">r2</span> <span class="o">-</span> <span class="n">rp</span><span class="p">)</span> <span class="o">*</span> <span class="n">EllPi_hp</span><span class="p">)</span>
+        <span class="o">/</span> <span class="p">(</span><span class="n">r3</span> <span class="o">-</span> <span class="n">rp</span><span class="p">),</span>
+        <span class="mf">0.0</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">prob3_neg</span> <span class="o">=</span> <span class="p">(</span>
+        <span class="p">((</span><span class="mf">4.0</span> <span class="o">*</span> <span class="n">En</span> <span class="o">-</span> <span class="n">a</span> <span class="o">*</span> <span class="n">L</span><span class="p">)</span> <span class="o">*</span> <span class="n">rm</span> <span class="o">-</span> <span class="mf">2.0</span> <span class="o">*</span> <span class="n">a</span><span class="o">**</span><span class="mi">2</span> <span class="o">*</span> <span class="n">En</span><span class="p">)</span>
+        <span class="o">*</span> <span class="p">(</span><span class="n">EllK</span> <span class="o">-</span> <span class="p">(</span><span class="n">r2</span> <span class="o">-</span> <span class="n">r3</span><span class="p">)</span> <span class="o">/</span> <span class="p">(</span><span class="n">r2</span> <span class="o">-</span> <span class="n">rm</span><span class="p">)</span> <span class="o">*</span> <span class="n">EllPi_hm</span><span class="p">)</span>
+        <span class="o">/</span> <span class="p">(</span><span class="n">r3</span> <span class="o">-</span> <span class="n">rm</span><span class="p">)</span>
+    <span class="p">)</span>
+    <span class="n">Gamma</span> <span class="o">=</span> <span class="mf">4.0</span> <span class="o">*</span> <span class="n">En</span> <span class="o">+</span> <span class="p">(</span><span class="mf">2.0</span> <span class="o">*</span> <span class="n">Upsilon_r</span> <span class="o">/</span> <span class="p">(</span>
+        <span class="n">PI</span> <span class="o">*</span> <span class="n">jnp</span><span class="o">.</span><span class="n">sqrt</span><span class="p">((</span><span class="mf">1.0</span> <span class="o">-</span> <span class="n">En</span><span class="o">**</span><span class="mi">2</span><span class="p">)</span> <span class="o">*</span> <span class="p">(</span><span class="n">r1</span> <span class="o">-</span> <span class="n">r3</span><span class="p">)</span> <span class="o">*</span> <span class="n">r2</span><span class="p">)</span>
+    <span class="p">))</span> <span class="o">*</span> <span class="p">(</span>
+        <span class="n">En</span> <span class="o">/</span> <span class="mf">2.0</span> <span class="o">*</span> <span class="p">(</span>
+            <span class="p">(</span><span class="n">r3</span> <span class="o">*</span> <span class="p">(</span><span class="n">r1</span> <span class="o">+</span> <span class="n">r2</span> <span class="o">+</span> <span class="n">r3</span><span class="p">)</span> <span class="o">-</span> <span class="n">r1</span> <span class="o">*</span> <span class="n">r2</span><span class="p">)</span> <span class="o">*</span> <span class="n">EllK</span>
+            <span class="o">+</span> <span class="p">(</span><span class="n">r2</span> <span class="o">-</span> <span class="n">r3</span><span class="p">)</span> <span class="o">*</span> <span class="p">(</span><span class="n">r1</span> <span class="o">+</span> <span class="n">r2</span> <span class="o">+</span> <span class="n">r3</span> <span class="o">+</span> <span class="n">r4</span><span class="p">)</span> <span class="o">*</span> <span class="n">EllPi_hr</span>
+            <span class="o">+</span> <span class="p">(</span><span class="n">r1</span> <span class="o">-</span> <span class="n">r3</span><span class="p">)</span> <span class="o">*</span> <span class="n">r2</span> <span class="o">*</span> <span class="n">EllE_val</span>
+        <span class="p">)</span>
+        <span class="o">+</span> <span class="mf">2.0</span> <span class="o">*</span> <span class="n">En</span> <span class="o">*</span> <span class="p">(</span><span class="n">r3</span> <span class="o">*</span> <span class="n">EllK</span> <span class="o">+</span> <span class="p">(</span><span class="n">r2</span> <span class="o">-</span> <span class="n">r3</span><span class="p">)</span> <span class="o">*</span> <span class="n">EllPi_hr</span><span class="p">)</span>
+        <span class="o">+</span> <span class="mf">2.0</span> <span class="o">/</span> <span class="p">(</span><span class="n">rp</span> <span class="o">-</span> <span class="n">rm</span><span class="p">)</span> <span class="o">*</span> <span class="p">(</span><span class="n">prob3</span> <span class="o">-</span> <span class="n">prob3_neg</span><span class="p">)</span>
+    <span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">Gamma</span><span class="p">,</span> <span class="n">Upsilon_phi</span><span class="p">,</span> <span class="n">jnp</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">Upsilon_theta</span><span class="p">),</span> <span class="n">Upsilon_r</span>
+
+
+<div class="viewcode-block" id="get_fundamental_frequencies">
+<a class="viewcode-back" href="../../../api.html#fewtrax.utils.geodesic.get_fundamental_frequencies">[docs]</a>
+<span class="nd">@jit</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">get_fundamental_frequencies</span><span class="p">(</span>
+    <span class="n">a</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">p</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">e</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">x</span><span class="p">:</span> <span class="nb">float</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">]:</span>
+<span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;Boyer-Lindquist fundamental frequencies for an equatorial Kerr geodesic.</span>
+
+<span class="sd">    .. math::</span>
+
+<span class="sd">        \Omega_\phi = \frac{\Upsilon_\phi}{\Gamma}, \quad</span>
+<span class="sd">        \Omega_\theta = \frac{\Upsilon_\theta}{\Gamma}, \quad</span>
+<span class="sd">        \Omega_r = \frac{\Upsilon_r}{\Gamma}</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    a : float</span>
+<span class="sd">        BH spin parameter.</span>
+<span class="sd">    p : float</span>
+<span class="sd">        Semi-latus rectum in units of :math:`M`.</span>
+<span class="sd">    e : float</span>
+<span class="sd">        Eccentricity.</span>
+<span class="sd">    x : float</span>
+<span class="sd">        Cosine of inclination (:math:`\pm 1` for equatorial).</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    tuple of float</span>
+<span class="sd">        :math:`(\Omega_\phi, \Omega_\theta, \Omega_r)`.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">Gamma</span><span class="p">,</span> <span class="n">Up_phi</span><span class="p">,</span> <span class="n">Up_theta</span><span class="p">,</span> <span class="n">Up_r</span> <span class="o">=</span> <span class="n">_mino_frequencies_equatorial</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">p</span><span class="p">,</span> <span class="n">e</span><span class="p">,</span> <span class="n">x</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">Up_phi</span> <span class="o">/</span> <span class="n">Gamma</span><span class="p">,</span> <span class="n">Up_theta</span> <span class="o">/</span> <span class="n">Gamma</span><span class="p">,</span> <span class="n">Up_r</span> <span class="o">/</span> <span class="n">Gamma</span></div>
+
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2026, Bert Depoorter.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>
