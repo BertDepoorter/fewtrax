@@ -11,7 +11,8 @@ fewtrax
    :maxdepth: 2
 
    api
-   tutorials
+   examples
+  
 
 .. automodule:: fewtrax
    :members:

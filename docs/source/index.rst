@@ -7,11 +7,35 @@
 fewtrax
 =======
 
+JAX implementation of the **KerrEccentricEquatorial** EMRI waveform model
+from `FastEMRIWaveforms <https://github.com/BlackHolePerturbationToolkit/FastEMRIWaveforms>`_,
+with full support for JIT compilation, automatic differentiation, and batched
+evaluation via ``vmap``.
+
 .. toctree::
    :maxdepth: 2
+   :caption: Getting started
+
+   installation
+   quickstart
+
+.. toctree::
+   :maxdepth: 2
+   :caption: Background
+
+   math_background
+
+.. toctree::
+   :maxdepth: 2
+   :caption: Tutorials
+
+   examples
+
+.. toctree::
+   :maxdepth: 2
+   :caption: Reference
 
    api
-   tutorials
 
 .. automodule:: fewtrax
    :members:
