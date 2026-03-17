@@ -187,17 +187,7 @@ def compare_one(params: dict, flux_data) -> dict:
 # ---------------------------------------------------------------------------
 
 def plot_comparison(result: dict, out_dir: str = ".") -> None:
-    """Save a 4-panel figure: p(t), e(t), Φ_φ(t) comparison, and phase difference.
-
-    Notes
-    -----
-    Both fewtrax and FEW accumulate orbital phases **without wrapping**.
-    Φ_φ grows monotonically from the initial value (Phi_phi0) to ∼ Ω_φ × T
-    radians.  For a 0.1-yr inspiral of a 10⁶ M_⊙ EMRI at p≈10M this is
-    typically 10,000–30,000 rad.  Any visible difference between the two
-    curves reflects a genuine discrepancy in the trajectory integration
-    (flux or frequency computation), not a phase-wrapping artefact.
-    """
+    """Save a 3-panel figure: p(t), e(t), Φ_φ(t) comparison."""
     try:
         import matplotlib.pyplot as plt
     except ImportError:
@@ -208,18 +198,7 @@ def plot_comparison(result: dict, out_dir: str = ".") -> None:
     t_few = result["t_few"] / 86400.0   # → days
     t_ft  = result["t_ft"]  / 86400.0
 
-    Phi_phi_few = result["Phi_phi_few"]
-    Phi_phi_ft  = result["Phi_phi_ft"]   # already adjusted by Phi_phi0
-
-    # Phase difference on a common time grid
-    t_lo = max(float(t_few[0]),  float(t_ft[0]))
-    t_hi = min(float(t_few[-1]), float(t_ft[-1]))
-    t_common = np.linspace(t_lo, t_hi, 500)
-    Phi_few_c = np.interp(t_common, t_few, Phi_phi_few)
-    Phi_ft_c  = np.interp(t_common, t_ft,  Phi_phi_ft)
-    delta_phi = Phi_ft_c - Phi_few_c
-
-    fig, axes = plt.subplots(4, 1, figsize=(10, 13), sharex=False)
+    fig, axes = plt.subplots(3, 1, figsize=(10, 10), sharex=False)
 
     # p(t)
     axes[0].plot(t_few, result["p_few"], label="FEW",     lw=1.5)
@@ -234,28 +213,12 @@ def plot_comparison(result: dict, out_dir: str = ".") -> None:
     axes[1].set_ylabel(r"$e$")
     axes[1].legend()
 
-    # Phi_phi(t) — accumulated (unwrapped) orbital phase
-    axes[2].plot(t_few, Phi_phi_few, label="FEW",     lw=1.5)
-    axes[2].plot(t_ft,  Phi_phi_ft,  label="fewtrax", lw=1.2, ls="--")
-    axes[2].set_ylabel(r"$\Phi_\phi\;[\mathrm{rad}]$  (accumulated, unwrapped)")
+    # Phi_phi(t) — phase accumulation
+    axes[2].plot(t_few, result["Phi_phi_few"], label="FEW",     lw=1.5)
+    axes[2].plot(t_ft,  result["Phi_phi_ft"],  label="fewtrax", lw=1.2, ls="--")
+    axes[2].set_ylabel(r"$\Phi_\phi\;[\mathrm{rad}]$")
+    axes[2].set_xlabel("Time [days]")
     axes[2].legend()
-    axes[2].annotate(
-        "Both curves show the cumulative BL-time phase.\n"
-        "A linear offset means a constant frequency error.",
-        xy=(0.02, 0.05), xycoords="axes fraction", fontsize=8,
-        color="grey",
-    )
-
-    # Phase difference Δφ = φ_fewtrax − φ_FEW
-    axes[3].plot(t_common, delta_phi, lw=1.2, color="C2")
-    axes[3].axhline(0, color="k", lw=0.5, ls="--")
-    axes[3].set_ylabel(r"$\Delta\Phi_\phi = \Phi_\phi^{\rm ft} - \Phi_\phi^{\rm FEW}\;[\mathrm{rad}]$")
-    axes[3].set_xlabel("Time [days]")
-    axes[3].set_title(
-        fr"Phase difference  "
-        fr"(mean |ΔΦ| = {result['Phi_phi_mean_rad']:.2e} rad, "
-        fr"max = {result['Phi_phi_max_rad']:.2e} rad)"
-    )
 
     plt.tight_layout()
     out_path = f"{out_dir}/trajectory_{label}.png"

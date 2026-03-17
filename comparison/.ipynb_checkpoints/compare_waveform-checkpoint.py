@@ -154,7 +154,6 @@ def compare_one(params: dict, wf_gen, threshold: float) -> dict:
 # ---------------------------------------------------------------------------
 
 def plot_comparison(result: dict, out_dir: str = ".") -> None:
-    """Save time-domain and frequency-domain comparison figures."""
     try:
         import matplotlib.pyplot as plt
     except ImportError:
@@ -171,9 +170,6 @@ def plot_comparison(result: dict, out_dir: str = ".") -> None:
     hx_few = result["hx_few"][:n]
     hx_ft  = result["hx_ft"][:n]
 
-    # ------------------------------------------------------------------
-    # Figure 1: time domain
-    # ------------------------------------------------------------------
     fig, axes = plt.subplots(3, 1, figsize=(11, 10))
 
     scale = 1.0 / max(float(np.max(np.abs(hp_few))), 1e-40)
@@ -184,8 +180,7 @@ def plot_comparison(result: dict, out_dir: str = ".") -> None:
     axes[0].set_ylabel(r"$h_+ / h_{+,\max}^{\rm FEW}$")
     axes[0].set_title(
         fr"Waveform comparison – {label}  "
-        fr"[overlap $h_+$ = {result['overlap_hp']:.4f},  "
-        fr"mismatch = {result['mismatch_hp']:.2e}]"
+        fr"[overlap $h_+$ = {result['overlap_hp']:.4f}]"
     )
     axes[0].legend(fontsize=9)
 
@@ -202,100 +197,12 @@ def plot_comparison(result: dict, out_dir: str = ".") -> None:
     axes[2].set_ylabel(r"$\Delta h_+ / h_{+,\max}^{\rm FEW}$")
     axes[2].set_xlabel("Time [days]")
     axes[2].set_title(
-        fr"Residual  (RMS = {result['rms_hp']:.2e})"
+        fr"Residual  (RMS = {result['rms_hp']:.2e},"
+        fr"  mismatch = {result['mismatch_hp']:.2e})"
     )
 
     plt.tight_layout()
-    out_path = f"{out_dir}/waveform_{label}_time.png"
-    plt.savefig(out_path, dpi=150)
-    plt.close(fig)
-    print(f"  Saved {out_path}")
-
-    # ------------------------------------------------------------------
-    # Figure 2: frequency domain
-    # ------------------------------------------------------------------
-    _plot_frequency_domain(
-        hp_few=hp_few, hx_few=hx_few,
-        hp_ft=hp_ft,   hx_ft=hx_ft,
-        dt=dt, label=label, result=result, out_dir=out_dir,
-    )
-
-
-def _plot_frequency_domain(
-    hp_few: np.ndarray,
-    hx_few: np.ndarray,
-    hp_ft: np.ndarray,
-    hx_ft: np.ndarray,
-    dt: float,
-    label: str,
-    result: dict,
-    out_dir: str,
-    window: str = "hann",
-    zero_pad: bool = True,
-) -> None:
-    """Save a 3-panel frequency-domain comparison figure."""
-    import matplotlib.pyplot as plt
-    from fewtrax.utils.transforms import to_frequency_domain
-
-    def _fd(arr):
-        """FFT with Hann window and zero-padding; returns (f, |h̃|)."""
-        f, h_tilde = to_frequency_domain(
-            jnp.asarray(arr, dtype=jnp.float64),
-            dt=dt,
-            window=window,
-            zero_pad=zero_pad,
-        )
-        return np.asarray(f), np.abs(np.asarray(h_tilde))
-
-    f_hp_few, amp_hp_few = _fd(hp_few)
-    f_hp_ft,  amp_hp_ft  = _fd(hp_ft)
-    f_hx_few, amp_hx_few = _fd(hx_few)
-    f_hx_ft,  amp_hx_ft  = _fd(hx_ft)
-
-    # Nyquist and a sensible frequency floor (skip DC and first bin)
-    f_nyq = 0.5 / dt
-    f_min_plot = max(f_hp_few[1], 1e-5)
-
-    fig, axes = plt.subplots(3, 1, figsize=(11, 10))
-
-    # |h̃+(f)|
-    axes[0].loglog(f_hp_few, amp_hp_few, label="FEW",     lw=1.2, alpha=0.9)
-    axes[0].loglog(f_hp_ft,  amp_hp_ft,  label="fewtrax", lw=1.0, ls="--", alpha=0.8)
-    axes[0].set_xlim(f_min_plot, f_nyq)
-    axes[0].set_ylabel(r"$|\tilde{h}_+(f)|$  [strain/Hz]")
-    axes[0].set_title(
-        fr"Frequency-domain comparison – {label}  "
-        fr"({window} window, zero-pad={zero_pad})"
-    )
-    axes[0].legend(fontsize=9)
-    axes[0].grid(True, which="both", ls=":", alpha=0.4)
-
-    # |h̃×(f)|
-    axes[1].loglog(f_hx_few, amp_hx_few, label="FEW",     lw=1.2, alpha=0.9)
-    axes[1].loglog(f_hx_ft,  amp_hx_ft,  label="fewtrax", lw=1.0, ls="--", alpha=0.8)
-    axes[1].set_xlim(f_min_plot, f_nyq)
-    axes[1].set_ylabel(r"$|\tilde{h}_\times(f)|$  [strain/Hz]")
-    axes[1].legend(fontsize=9)
-    axes[1].grid(True, which="both", ls=":", alpha=0.4)
-
-    # Amplitude ratio (fewtrax / FEW) for h+
-    # Interpolate to a common frequency grid for the ratio
-    f_common = f_hp_few  # FEW grid (both should be the same length after zero-pad)
-    amp_ft_interp = np.interp(f_common, f_hp_ft, amp_hp_ft)
-    with np.errstate(divide="ignore", invalid="ignore"):
-        ratio = np.where(amp_hp_few > 1e-50, amp_ft_interp / amp_hp_few, np.nan)
-
-    axes[2].semilogx(f_common, ratio, lw=0.9, color="C2")
-    axes[2].axhline(1.0, color="k", lw=0.8, ls="--")
-    axes[2].set_xlim(f_min_plot, f_nyq)
-    axes[2].set_ylim(0, 2)
-    axes[2].set_ylabel(r"$|\tilde{h}_+^{\rm ft}| \,/\, |\tilde{h}_+^{\rm FEW}|$")
-    axes[2].set_xlabel("Frequency [Hz]")
-    axes[2].set_title("Spectral amplitude ratio (fewtrax / FEW)")
-    axes[2].grid(True, which="both", ls=":", alpha=0.4)
-
-    plt.tight_layout()
-    out_path = f"{out_dir}/waveform_{label}_freq.png"
+    out_path = f"{out_dir}/waveform_{label}.png"
     plt.savefig(out_path, dpi=150)
     plt.close(fig)
     print(f"  Saved {out_path}")
