@@ -342,39 +342,10 @@
 
 
 <span class="c1"># ---------------------------------------------------------------------------</span>
-<span class="c1"># Frequency-domain transform</span>
+<span class="c1"># Frequency-domain transform (re-exported from fewtrax.utils.transforms)</span>
 <span class="c1"># ---------------------------------------------------------------------------</span>
 
-<div class="viewcode-block" id="to_frequency_domain">
-<a class="viewcode-back" href="../../../api.html#fewtrax.summation.modes.to_frequency_domain">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">to_frequency_domain</span><span class="p">(</span>
-    <span class="n">h</span><span class="p">:</span> <span class="n">jnp</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
-    <span class="n">dt</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
-<span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">jnp</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">jnp</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]:</span>
-<span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;Transform the time-domain waveform to the frequency domain.</span>
-
-<span class="sd">    Computes :math:`\tilde{h}(f) = \int h(t) e^{-2\pi i f t} dt` via the</span>
-<span class="sd">    FFT, normalised to physical units (strain/Hz).</span>
-
-<span class="sd">    Parameters</span>
-<span class="sd">    ----------</span>
-<span class="sd">    h : jnp.ndarray, shape (N,)</span>
-<span class="sd">        Complex or real time-domain strain.</span>
-<span class="sd">    dt : float</span>
-<span class="sd">        Sampling interval [s].</span>
-
-<span class="sd">    Returns</span>
-<span class="sd">    -------</span>
-<span class="sd">    freqs : jnp.ndarray, shape (N//2 + 1,)</span>
-<span class="sd">        Positive frequencies [Hz].</span>
-<span class="sd">    h_tilde : jnp.ndarray, shape (N//2 + 1,), complex</span>
-<span class="sd">        One-sided frequency-domain strain.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
-    <span class="n">N</span> <span class="o">=</span> <span class="n">h</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
-    <span class="n">h_tilde</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">fft</span><span class="o">.</span><span class="n">rfft</span><span class="p">(</span><span class="n">h</span><span class="p">)</span> <span class="o">*</span> <span class="n">dt</span>
-    <span class="n">freqs</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">fft</span><span class="o">.</span><span class="n">rfftfreq</span><span class="p">(</span><span class="n">N</span><span class="p">,</span> <span class="n">d</span><span class="o">=</span><span class="n">dt</span><span class="p">)</span>
-    <span class="k">return</span> <span class="n">freqs</span><span class="p">,</span> <span class="n">h_tilde</span></div>
-
+<span class="kn">from</span><span class="w"> </span><span class="nn">fewtrax.utils.transforms</span><span class="w"> </span><span class="kn">import</span> <span class="n">to_frequency_domain</span><span class="p">,</span> <span class="n">to_time_domain</span>  <span class="c1"># noqa: F401</span>
 
 
 <span class="c1"># ---------------------------------------------------------------------------</span>

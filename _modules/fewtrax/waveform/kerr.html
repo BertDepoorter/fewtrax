@@ -154,6 +154,81 @@
 <span class="n">log</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
 
 
+<span class="c1"># ---------------------------------------------------------------------------</span>
+<span class="c1"># Frame-transformation helpers  (mirror FEW conventions exactly)</span>
+<span class="c1"># ---------------------------------------------------------------------------</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_get_viewing_angles</span><span class="p">(</span>
+    <span class="n">qS</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">phiS</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">qK</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">phiK</span><span class="p">:</span> <span class="nb">float</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Compute source-frame observer angles from SSB sky/spin angles.</span>
+
+<span class="sd">    Mirrors ``GenerateEMRIWaveform._get_viewing_angles`` in FEW.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    qS, phiS : float</span>
+<span class="sd">        Sky location polar/azimuthal angles [rad] in the SSB ecliptic frame.</span>
+<span class="sd">    qK, phiK : float</span>
+<span class="sd">        BH spin polar/azimuthal angles [rad] in the SSB ecliptic frame.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    theta : float</span>
+<span class="sd">        Source-frame polar angle of the observer (angle between source</span>
+<span class="sd">        direction and spin axis) [rad].</span>
+<span class="sd">    phi : float</span>
+<span class="sd">        Source-frame azimuthal angle, fixed to ``-π/2`` by definition.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">R</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span>
+        <span class="n">np</span><span class="o">.</span><span class="n">sin</span><span class="p">(</span><span class="n">qS</span><span class="p">)</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">cos</span><span class="p">(</span><span class="n">phiS</span><span class="p">),</span>
+        <span class="n">np</span><span class="o">.</span><span class="n">sin</span><span class="p">(</span><span class="n">qS</span><span class="p">)</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">sin</span><span class="p">(</span><span class="n">phiS</span><span class="p">),</span>
+        <span class="n">np</span><span class="o">.</span><span class="n">cos</span><span class="p">(</span><span class="n">qS</span><span class="p">),</span>
+    <span class="p">])</span>
+    <span class="n">S</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span>
+        <span class="n">np</span><span class="o">.</span><span class="n">sin</span><span class="p">(</span><span class="n">qK</span><span class="p">)</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">cos</span><span class="p">(</span><span class="n">phiK</span><span class="p">),</span>
+        <span class="n">np</span><span class="o">.</span><span class="n">sin</span><span class="p">(</span><span class="n">qK</span><span class="p">)</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">sin</span><span class="p">(</span><span class="n">phiK</span><span class="p">),</span>
+        <span class="n">np</span><span class="o">.</span><span class="n">cos</span><span class="p">(</span><span class="n">qK</span><span class="p">),</span>
+    <span class="p">])</span>
+    <span class="n">theta</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">arccos</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">clip</span><span class="p">(</span><span class="o">-</span><span class="n">np</span><span class="o">.</span><span class="n">dot</span><span class="p">(</span><span class="n">R</span><span class="p">,</span> <span class="n">S</span><span class="p">),</span> <span class="o">-</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">)))</span>
+    <span class="n">phi</span> <span class="o">=</span> <span class="o">-</span><span class="n">np</span><span class="o">.</span><span class="n">pi</span> <span class="o">/</span> <span class="mf">2.0</span>
+    <span class="k">return</span> <span class="n">theta</span><span class="p">,</span> <span class="n">phi</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_to_ssb_frame</span><span class="p">(</span>
+    <span class="n">hp</span><span class="p">:</span> <span class="n">jnp</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+    <span class="n">hx</span><span class="p">:</span> <span class="n">jnp</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+    <span class="n">qS</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
+    <span class="n">phiS</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
+    <span class="n">qK</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
+    <span class="n">phiK</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">jnp</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">jnp</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Rotate (h+, h×) from the source frame to the SSB frame.</span>
+
+<span class="sd">    Applies a polarization-angle rotation by ``ψ_ldc``.</span>
+<span class="sd">    Mirrors ``GenerateEMRIWaveform._to_SSB_frame`` in FEW.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">cqS</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">cos</span><span class="p">(</span><span class="n">qS</span><span class="p">)</span>
+    <span class="n">sqS</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sin</span><span class="p">(</span><span class="n">qS</span><span class="p">)</span>
+    <span class="n">cqK</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">cos</span><span class="p">(</span><span class="n">qK</span><span class="p">)</span>
+    <span class="n">sqK</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sin</span><span class="p">(</span><span class="n">qK</span><span class="p">)</span>
+
+    <span class="n">up_ldc</span> <span class="o">=</span> <span class="n">cqS</span> <span class="o">*</span> <span class="n">sqK</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">cos</span><span class="p">(</span><span class="n">phiS</span> <span class="o">-</span> <span class="n">phiK</span><span class="p">)</span> <span class="o">-</span> <span class="n">cqK</span> <span class="o">*</span> <span class="n">sqS</span>
+    <span class="n">dw_ldc</span> <span class="o">=</span> <span class="n">sqK</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">sin</span><span class="p">(</span><span class="n">phiS</span> <span class="o">-</span> <span class="n">phiK</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">dw_ldc</span> <span class="o">!=</span> <span class="mf">0.0</span><span class="p">:</span>
+        <span class="n">psi_ldc</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="o">-</span><span class="n">np</span><span class="o">.</span><span class="n">arctan2</span><span class="p">(</span><span class="n">up_ldc</span><span class="p">,</span> <span class="n">dw_ldc</span><span class="p">))</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">psi_ldc</span> <span class="o">=</span> <span class="mf">0.5</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">pi</span>
+
+    <span class="n">c2psi</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">cos</span><span class="p">(</span><span class="mf">2.0</span> <span class="o">*</span> <span class="n">psi_ldc</span><span class="p">))</span>
+    <span class="n">s2psi</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">sin</span><span class="p">(</span><span class="mf">2.0</span> <span class="o">*</span> <span class="n">psi_ldc</span><span class="p">))</span>
+
+    <span class="n">hp_new</span> <span class="o">=</span> <span class="n">c2psi</span> <span class="o">*</span> <span class="n">hp</span> <span class="o">-</span> <span class="n">s2psi</span> <span class="o">*</span> <span class="n">hx</span>
+    <span class="n">hx_new</span> <span class="o">=</span> <span class="n">s2psi</span> <span class="o">*</span> <span class="n">hp</span> <span class="o">+</span> <span class="n">c2psi</span> <span class="o">*</span> <span class="n">hx</span>
+    <span class="k">return</span> <span class="n">hp_new</span><span class="p">,</span> <span class="n">hx_new</span>
+
+
 <div class="viewcode-block" id="KerrEccentricEquatorialWaveform">
 <a class="viewcode-back" href="../../../index.html#fewtrax.waveform.kerr.KerrEccentricEquatorialWaveform">[docs]</a>
 <span class="k">class</span><span class="w"> </span><span class="nc">KerrEccentricEquatorialWaveform</span><span class="p">:</span>
@@ -380,21 +455,35 @@
             <span class="n">_old</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">mode_selection_threshold</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">mode_selection_threshold</span> <span class="o">=</span> <span class="n">mode_selection_threshold</span>
 
+        <span class="c1"># --- Retrograde convention (mirrors FEW&#39;s waveform.py) ---</span>
+        <span class="c1"># For retrograde orbits (x0 &lt; 0) FEW flips the spin orientation and</span>
+        <span class="c1"># shifts the initial azimuthal phase by π so that the source-frame</span>
+        <span class="c1"># viewing angles and SSB rotation are computed consistently.</span>
+        <span class="n">qK_eff</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">qK</span><span class="p">)</span>
+        <span class="n">phiK_eff</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">phiK</span><span class="p">)</span>
+        <span class="n">Phi_phi0_eff</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">Phi_phi0</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">x0</span> <span class="o">&lt;</span> <span class="mf">0.0</span><span class="p">:</span>
+            <span class="n">qK_eff</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">pi</span> <span class="o">-</span> <span class="n">qK</span><span class="p">)</span>
+            <span class="n">phiK_eff</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">phiK</span> <span class="o">+</span> <span class="n">np</span><span class="o">.</span><span class="n">pi</span><span class="p">)</span>
+            <span class="n">Phi_phi0_eff</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">Phi_phi0</span> <span class="o">+</span> <span class="n">np</span><span class="o">.</span><span class="n">pi</span><span class="p">)</span>
+
         <span class="n">sparse</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">generate_sparse</span><span class="p">(</span>
             <span class="n">M</span><span class="o">=</span><span class="n">M</span><span class="p">,</span> <span class="n">mu</span><span class="o">=</span><span class="n">mu</span><span class="p">,</span> <span class="n">a</span><span class="o">=</span><span class="n">a</span><span class="p">,</span> <span class="n">p0</span><span class="o">=</span><span class="n">p0</span><span class="p">,</span> <span class="n">e0</span><span class="o">=</span><span class="n">e0</span><span class="p">,</span> <span class="n">x0</span><span class="o">=</span><span class="n">x0</span><span class="p">,</span> <span class="n">T</span><span class="o">=</span><span class="n">T</span><span class="p">,</span> <span class="n">dt</span><span class="o">=</span><span class="n">dt</span><span class="p">,</span>
-            <span class="n">Phi_phi0</span><span class="o">=</span><span class="n">Phi_phi0</span><span class="p">,</span> <span class="n">Phi_theta0</span><span class="o">=</span><span class="n">Phi_theta0</span><span class="p">,</span> <span class="n">Phi_r0</span><span class="o">=</span><span class="n">Phi_r0</span><span class="p">,</span>
+            <span class="n">Phi_phi0</span><span class="o">=</span><span class="n">Phi_phi0_eff</span><span class="p">,</span>
+            <span class="n">Phi_theta0</span><span class="o">=</span><span class="n">Phi_theta0</span><span class="p">,</span>
+            <span class="n">Phi_r0</span><span class="o">=</span><span class="n">Phi_r0</span><span class="p">,</span>
             <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
         <span class="p">)</span>
 
         <span class="k">if</span> <span class="n">mode_selection_threshold</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">mode_selection_threshold</span> <span class="o">=</span> <span class="n">_old</span>
 
-        <span class="c1"># --- Compute sky angles for the source frame ---</span>
-        <span class="c1"># The observer polar angle for the harmonic is the source inclination</span>
-        <span class="c1"># in the SSB frame; for equatorial orbits we use the spin axis.</span>
-        <span class="c1"># For simplicity we use theta = qS (sky colatitude) and phi = phiS.</span>
-        <span class="n">theta_obs</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">qS</span><span class="p">)</span>
-        <span class="n">phi_obs</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">phiS</span><span class="p">)</span>
+        <span class="c1"># --- Source-frame observer angles (FEW convention) ---</span>
+        <span class="c1"># phi = -π/2 by definition of the source frame;</span>
+        <span class="c1"># theta = angle between source direction and BH spin axis.</span>
+        <span class="n">theta_obs</span><span class="p">,</span> <span class="n">phi_obs</span> <span class="o">=</span> <span class="n">_get_viewing_angles</span><span class="p">(</span>
+            <span class="nb">float</span><span class="p">(</span><span class="n">qS</span><span class="p">),</span> <span class="nb">float</span><span class="p">(</span><span class="n">phiS</span><span class="p">),</span> <span class="n">qK_eff</span><span class="p">,</span> <span class="n">phiK_eff</span>
+        <span class="p">)</span>
 
         <span class="n">l_arr</span> <span class="o">=</span> <span class="n">sparse</span><span class="p">[</span><span class="s2">&quot;l_arr&quot;</span><span class="p">]</span>
         <span class="n">m_arr</span> <span class="o">=</span> <span class="n">sparse</span><span class="p">[</span><span class="s2">&quot;m_arr&quot;</span><span class="p">]</span>
@@ -403,12 +492,6 @@
 
         <span class="n">ylms_pos</span><span class="p">,</span> <span class="n">ylms_neg</span> <span class="o">=</span> <span class="n">get_ylms_for_modes</span><span class="p">(</span>
             <span class="n">l_arr</span><span class="p">,</span> <span class="n">m_arr</span><span class="p">,</span> <span class="n">theta_obs</span><span class="p">,</span> <span class="n">phi_obs</span>
-        <span class="p">)</span>
-
-        <span class="c1"># Amplitude prefactor</span>
-        <span class="n">amp_fac</span> <span class="o">=</span> <span class="p">(</span>
-            <span class="n">mu</span> <span class="o">*</span> <span class="n">MSUN_SI</span> <span class="o">*</span> <span class="n">G_SI</span> <span class="o">/</span> <span class="n">C_SI</span><span class="o">**</span><span class="mi">2</span>
-            <span class="o">/</span> <span class="p">(</span><span class="n">dist</span> <span class="o">*</span> <span class="n">GPC_SI</span><span class="p">)</span>
         <span class="p">)</span>
 
         <span class="n">summer</span> <span class="o">=</span> <span class="n">ModeSum</span><span class="p">(</span>
@@ -426,8 +509,14 @@
             <span class="n">dt</span><span class="o">=</span><span class="n">dt</span><span class="p">,</span>
         <span class="p">)</span>
 
+        <span class="c1"># Source-frame sign convention (FEW rotates by π after summation)</span>
+        <span class="n">h</span> <span class="o">=</span> <span class="n">h</span> <span class="o">*</span> <span class="p">(</span><span class="o">-</span><span class="mf">1.0</span><span class="p">)</span>
+
         <span class="n">hp</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">real</span><span class="p">(</span><span class="n">h</span><span class="p">)</span>
         <span class="n">hx</span> <span class="o">=</span> <span class="o">-</span><span class="n">jnp</span><span class="o">.</span><span class="n">imag</span><span class="p">(</span><span class="n">h</span><span class="p">)</span>
+
+        <span class="c1"># Rotate from source frame to SSB frame</span>
+        <span class="n">hp</span><span class="p">,</span> <span class="n">hx</span> <span class="o">=</span> <span class="n">_to_ssb_frame</span><span class="p">(</span><span class="n">hp</span><span class="p">,</span> <span class="n">hx</span><span class="p">,</span> <span class="nb">float</span><span class="p">(</span><span class="n">qS</span><span class="p">),</span> <span class="nb">float</span><span class="p">(</span><span class="n">phiS</span><span class="p">),</span> <span class="n">qK_eff</span><span class="p">,</span> <span class="n">phiK_eff</span><span class="p">)</span>
 
         <span class="k">if</span> <span class="n">return_sparse</span><span class="p">:</span>
             <span class="k">return</span> <span class="n">hp</span><span class="p">,</span> <span class="n">hx</span><span class="p">,</span> <span class="n">sparse</span>

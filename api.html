@@ -82,7 +82,6 @@
 <li class="toctree-l2"><a class="reference internal" href="#utilities">Utilities</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#fewtrax.summation.modes.direct_mode_sum"><code class="docutils literal notranslate"><span class="pre">direct_mode_sum()</span></code></a></li>
 <li class="toctree-l2"><a class="reference internal" href="#fewtrax.summation.modes.interpolated_mode_sum"><code class="docutils literal notranslate"><span class="pre">interpolated_mode_sum()</span></code></a></li>
-<li class="toctree-l2"><a class="reference internal" href="#fewtrax.summation.modes.to_frequency_domain"><code class="docutils literal notranslate"><span class="pre">to_frequency_domain()</span></code></a></li>
 <li class="toctree-l2"><a class="reference internal" href="#fewtrax.summation.modes.ModeSum"><code class="docutils literal notranslate"><span class="pre">ModeSum</span></code></a></li>
 <li class="toctree-l2"><a class="reference internal" href="#fewtrax.data.loader.FluxData"><code class="docutils literal notranslate"><span class="pre">FluxData</span></code></a></li>
 <li class="toctree-l2"><a class="reference internal" href="#fewtrax.data.loader.AmplitudeData"><code class="docutils literal notranslate"><span class="pre">AmplitudeData</span></code></a><ul>
@@ -637,32 +636,6 @@ cubic spline interpolation, then calls <a class="reference internal" href="#fewt
 <dd class="field-odd"><p><ul class="simple">
 <li><p><strong>t_dense</strong> (<em>jnp.ndarray, shape (N_dense,)</em>) – Dense time stamps [s].</p></li>
 <li><p><strong>h</strong> (<em>jnp.ndarray, shape (N_dense,), complex128</em>) – Waveform strain.</p></li>
-</ul>
-</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="fewtrax.summation.modes.to_frequency_domain">
-<span class="sig-prename descclassname"><span class="pre">fewtrax.summation.modes.</span></span><span class="sig-name descname"><span class="pre">to_frequency_domain</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">h</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dt</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/fewtrax/summation/modes.html#to_frequency_domain"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#fewtrax.summation.modes.to_frequency_domain" title="Link to this definition"></a></dt>
-<dd><p>Transform the time-domain waveform to the frequency domain.</p>
-<p>Computes <span class="math notranslate nohighlight">\(\tilde{h}(f) = \int h(t) e^{-2\pi i f t} dt\)</span> via the
-FFT, normalised to physical units (strain/Hz).</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>h</strong> (<em>jnp.ndarray</em><em>, </em><em>shape</em><em> (</em><em>N</em><em>,</em><em>)</em>) – Complex or real time-domain strain.</p></li>
-<li><p><strong>dt</strong> (<em>float</em>) – Sampling interval [s].</p></li>
-</ul>
-</dd>
-<dt class="field-even">Return type<span class="colon">:</span></dt>
-<dd class="field-even"><p><span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">tuple</span></code>[<code class="xref py py-class docutils literal notranslate"><span class="pre">Array</span></code>, <code class="xref py py-class docutils literal notranslate"><span class="pre">Array</span></code>]</span></p>
-</dd>
-<dt class="field-odd">Returns<span class="colon">:</span></dt>
-<dd class="field-odd"><p><ul class="simple">
-<li><p><strong>freqs</strong> (<em>jnp.ndarray, shape (N//2 + 1,)</em>) – Positive frequencies [Hz].</p></li>
-<li><p><strong>h_tilde</strong> (<em>jnp.ndarray, shape (N//2 + 1,), complex</em>) – One-sided frequency-domain strain.</p></li>
 </ul>
 </p>
 </dd>
