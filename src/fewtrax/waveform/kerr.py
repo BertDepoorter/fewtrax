@@ -70,6 +70,81 @@ from fewtrax.summation.modes import ModeSum
 log = logging.getLogger(__name__)
 
 
+# ---------------------------------------------------------------------------
+# Frame-transformation helpers  (mirror FEW conventions exactly)
+# ---------------------------------------------------------------------------
+
+def _get_viewing_angles(
+    qS: float, phiS: float, qK: float, phiK: float
+) -> tuple[float, float]:
+    """Compute source-frame observer angles from SSB sky/spin angles.
+
+    Mirrors ``GenerateEMRIWaveform._get_viewing_angles`` in FEW.
+
+    Parameters
+    ----------
+    qS, phiS : float
+        Sky location polar/azimuthal angles [rad] in the SSB ecliptic frame.
+    qK, phiK : float
+        BH spin polar/azimuthal angles [rad] in the SSB ecliptic frame.
+
+    Returns
+    -------
+    theta : float
+        Source-frame polar angle of the observer (angle between source
+        direction and spin axis) [rad].
+    phi : float
+        Source-frame azimuthal angle, fixed to ``-π/2`` by definition.
+    """
+    R = np.array([
+        np.sin(qS) * np.cos(phiS),
+        np.sin(qS) * np.sin(phiS),
+        np.cos(qS),
+    ])
+    S = np.array([
+        np.sin(qK) * np.cos(phiK),
+        np.sin(qK) * np.sin(phiK),
+        np.cos(qK),
+    ])
+    theta = float(np.arccos(np.clip(-np.dot(R, S), -1.0, 1.0)))
+    phi = -np.pi / 2.0
+    return theta, phi
+
+
+def _to_ssb_frame(
+    hp: jnp.ndarray,
+    hx: jnp.ndarray,
+    qS: float,
+    phiS: float,
+    qK: float,
+    phiK: float,
+) -> tuple[jnp.ndarray, jnp.ndarray]:
+    """Rotate (h+, h×) from the source frame to the SSB frame.
+
+    Applies a polarization-angle rotation by ``ψ_ldc``.
+    Mirrors ``GenerateEMRIWaveform._to_SSB_frame`` in FEW.
+    """
+    cqS = np.cos(qS)
+    sqS = np.sin(qS)
+    cqK = np.cos(qK)
+    sqK = np.sin(qK)
+
+    up_ldc = cqS * sqK * np.cos(phiS - phiK) - cqK * sqS
+    dw_ldc = sqK * np.sin(phiS - phiK)
+
+    if dw_ldc != 0.0:
+        psi_ldc = float(-np.arctan2(up_ldc, dw_ldc))
+    else:
+        psi_ldc = 0.5 * np.pi
+
+    c2psi = float(np.cos(2.0 * psi_ldc))
+    s2psi = float(np.sin(2.0 * psi_ldc))
+
+    hp_new = c2psi * hp - s2psi * hx
+    hx_new = s2psi * hp + c2psi * hx
+    return hp_new, hx_new
+
+
 class KerrEccentricEquatorialWaveform:
     r"""EMRI waveform generator for the KerrEccentricEquatorial model.
 
@@ -291,21 +366,35 @@ class KerrEccentricEquatorialWaveform:
             _old = self.mode_selection_threshold
             self.mode_selection_threshold = mode_selection_threshold
 
+        # --- Retrograde convention (mirrors FEW's waveform.py) ---
+        # For retrograde orbits (x0 < 0) FEW flips the spin orientation and
+        # shifts the initial azimuthal phase by π so that the source-frame
+        # viewing angles and SSB rotation are computed consistently.
+        qK_eff = float(qK)
+        phiK_eff = float(phiK)
+        Phi_phi0_eff = float(Phi_phi0)
+        if x0 < 0.0:
+            qK_eff = float(np.pi - qK)
+            phiK_eff = float(phiK + np.pi)
+            Phi_phi0_eff = float(Phi_phi0 + np.pi)
+
         sparse = self.generate_sparse(
             M=M, mu=mu, a=a, p0=p0, e0=e0, x0=x0, T=T, dt=dt,
-            Phi_phi0=Phi_phi0, Phi_theta0=Phi_theta0, Phi_r0=Phi_r0,
+            Phi_phi0=Phi_phi0_eff,
+            Phi_theta0=Phi_theta0,
+            Phi_r0=Phi_r0,
             **kwargs,
         )
 
         if mode_selection_threshold is not None:
             self.mode_selection_threshold = _old
 
-        # --- Compute sky angles for the source frame ---
-        # The observer polar angle for the harmonic is the source inclination
-        # in the SSB frame; for equatorial orbits we use the spin axis.
-        # For simplicity we use theta = qS (sky colatitude) and phi = phiS.
-        theta_obs = float(qS)
-        phi_obs = float(phiS)
+        # --- Source-frame observer angles (FEW convention) ---
+        # phi = -π/2 by definition of the source frame;
+        # theta = angle between source direction and BH spin axis.
+        theta_obs, phi_obs = _get_viewing_angles(
+            float(qS), float(phiS), qK_eff, phiK_eff
+        )
 
         l_arr = sparse["l_arr"]
         m_arr = sparse["m_arr"]
@@ -314,12 +403,6 @@ class KerrEccentricEquatorialWaveform:
 
         ylms_pos, ylms_neg = get_ylms_for_modes(
             l_arr, m_arr, theta_obs, phi_obs
-        )
-
-        # Amplitude prefactor
-        amp_fac = (
-            mu * MSUN_SI * G_SI / C_SI**2
-            / (dist * GPC_SI)
         )
 
         summer = ModeSum(
@@ -337,8 +420,14 @@ class KerrEccentricEquatorialWaveform:
             dt=dt,
         )
 
+        # Source-frame sign convention (FEW rotates by π after summation)
+        h = h * (-1.0)
+
         hp = jnp.real(h)
         hx = -jnp.imag(h)
+
+        # Rotate from source frame to SSB frame
+        hp, hx = _to_ssb_frame(hp, hx, float(qS), float(phiS), qK_eff, phiK_eff)
 
         if return_sparse:
             return hp, hx, sparse

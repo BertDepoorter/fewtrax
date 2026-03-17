@@ -366,7 +366,7 @@ def _mino_frequencies_equatorial(
     EllPi_hp = ellip_pi(hp, kr)
     EllPi_hm = ellip_pi(hm, kr)
 
-    fac_r = 2.0 * Upsilon_r / (
+    fac_r = 2.0 * a * Upsilon_r / (
         PI * (rp - rm) * jnp.sqrt((1.0 - En**2) * (r1 - r3) * r2)
     )
     prob1 = jnp.where(
