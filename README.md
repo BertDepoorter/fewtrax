@@ -210,87 +210,12 @@ The source code uses NumPy-style docstrings throughout. The steps below set up
 a Sphinx-based site and deploy it to **GitHub Pages**.
 
 ### 1. Install Sphinx and extensions
-
+If you install with the tag `[docs]`, these packages are included. 
 ```bash
 pip install sphinx sphinx-autodoc-typehints sphinx-rtd-theme myst-parser
 ```
 
-### 2. Initialise the docs directory
 
-```bash
-sphinx-quickstart docs \
-  --sep \
-  --project fewtrax \
-  --author "<your name>" \
-  --release 0.1.0 \
-  --language en
-```
-
-### 3. Configure `docs/source/conf.py`
-
-Add the following to the generated `conf.py`:
-
-```python
-import sys, os
-sys.path.insert(0, os.path.abspath("../../src"))
-
-extensions = [
-    "sphinx.ext.autodoc",
-    "sphinx.ext.napoleon",          # NumPy & Google docstrings
-    "sphinx.ext.mathjax",           # LaTeX math in docstrings
-    "sphinx.ext.viewcode",
-    "sphinx_autodoc_typehints",
-    "myst_parser",                  # Markdown source files
-]
-
-html_theme = "sphinx_rtd_theme"
-autodoc_member_order = "bysource"
-napoleon_numpy_docstring = True
-```
-
-### 4. Write `docs/source/index.rst`
-
-```rst
-fewtrax
-=======
-
-.. toctree::
-   :maxdepth: 2
-
-   api
-   tutorials
-
-.. automodule:: fewtrax
-   :members:
-```
-
-Create `docs/source/api.rst`:
-
-```rst
-API Reference
-=============
-
-.. automodule:: fewtrax.waveform.kerr
-   :members:
-
-.. automodule:: fewtrax.trajectory.inspiral
-   :members:
-
-.. automodule:: fewtrax.amplitude.interp
-   :members:
-
-.. automodule:: fewtrax.summation.modes
-   :members:
-
-.. automodule:: fewtrax.data.loader
-   :members:
-
-.. automodule:: fewtrax.utils.geodesic
-   :members:
-
-.. automodule:: fewtrax.utils.harmonics
-   :members:
-```
 
 ### 5. Build locally
 
@@ -300,49 +225,8 @@ make html
 open build/html/index.html
 ```
 
-### 6. Deploy to GitHub Pages via GitHub Actions
-
-Create `.github/workflows/docs.yml`:
-
-```yaml
-name: Build and deploy docs
-
-on:
-  push:
-    branches: [main]
-
-jobs:
-  docs:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-
-      - name: Install package and doc dependencies
-        run: |
-          pip install -e .
-          pip install sphinx sphinx-autodoc-typehints sphinx-rtd-theme myst-parser
-
-      - name: Build HTML docs
-        run: |
-          cd docs
-          make html
-
-      - name: Deploy to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v4
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: docs/build/html
-```
-
-In your repository settings → **Pages**, set the source branch to `gh-pages`.
-The docs will be available at `https://bertdepoorter.github.io/fewtrax/`.
+### Deployed via Github pages
+The docs are available at `https://bertdepoorter.github.io/fewtrax/`.
 
 ### Alternative: ReadTheDocs
 
@@ -394,6 +278,22 @@ If you use fewtrax in your research, please cite the original FEW paper:
   year    = {2021},
   doi     = {10.1103/PhysRevD.104.064047},
 }
+
+@article{Chapman-bird2025,
+  title = {Efficient waveforms for asymmetric-mass eccentric equatorial inspirals into rapidly spinning black holes},
+  author = {Chapman-Bird, Christian E. A. and Speri, Lorenzo and Nasipak, Zachary and Burke, Ollie and Katz, Michael L. and Santini, Alessandro and Kejriwal, Shubham and Lynch, Philip and Mathews, Josh and Khalvati, Hassan and Thompson, Jonathan E. and Isoyama, Soichiro and Hughes, Scott A. and Warburton, Niels and Chua, Alvin J. K. and Pigou, Maxime},
+  journal = {Phys. Rev. D},
+  volume = {112},
+  issue = {10},
+  pages = {104023},
+  numpages = {59},
+  year = {2025},
+  month = {Nov},
+  publisher = {American Physical Society},
+  doi = {10.1103/scbp-75pf},
+  url = {https://link.aps.org/doi/10.1103/scbp-75pf}
+}
+
 ```
 
 ## License
