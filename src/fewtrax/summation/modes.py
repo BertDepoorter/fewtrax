@@ -252,36 +252,10 @@ def interpolated_mode_sum(
 
 
 # ---------------------------------------------------------------------------
-# Frequency-domain transform
+# Frequency-domain transform (re-exported from fewtrax.utils.transforms)
 # ---------------------------------------------------------------------------
 
-def to_frequency_domain(
-    h: jnp.ndarray,
-    dt: float,
-) -> tuple[jnp.ndarray, jnp.ndarray]:
-    r"""Transform the time-domain waveform to the frequency domain.
-
-    Computes :math:`\tilde{h}(f) = \int h(t) e^{-2\pi i f t} dt` via the
-    FFT, normalised to physical units (strain/Hz).
-
-    Parameters
-    ----------
-    h : jnp.ndarray, shape (N,)
-        Complex or real time-domain strain.
-    dt : float
-        Sampling interval [s].
-
-    Returns
-    -------
-    freqs : jnp.ndarray, shape (N//2 + 1,)
-        Positive frequencies [Hz].
-    h_tilde : jnp.ndarray, shape (N//2 + 1,), complex
-        One-sided frequency-domain strain.
-    """
-    N = h.shape[0]
-    h_tilde = jnp.fft.rfft(h) * dt
-    freqs = jnp.fft.rfftfreq(N, d=dt)
-    return freqs, h_tilde
+from fewtrax.utils.transforms import to_frequency_domain, to_time_domain  # noqa: F401
 
 
 # ---------------------------------------------------------------------------

@@ -11,6 +11,7 @@ from fewtrax.utils.geodesic import (
     ellip_pi,
 )
 from fewtrax.utils.harmonics import spin_weighted_spherical_harmonic
+from fewtrax.utils.transforms import to_frequency_domain, to_time_domain
 from fewtrax.utils.coordinates import (
     kerrecceq_forward_map_A,
     kerrecceq_forward_map_B,
@@ -28,4 +29,6 @@ __all__ = [
     "kerrecceq_forward_map_A",
     "kerrecceq_forward_map_B",
     "kerrecceq_forward_map",
+    "to_frequency_domain",
+    "to_time_domain",
 ]
