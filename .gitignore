@@ -3,4 +3,5 @@
 .env
 examples/.ipynb_checkpoints/
 comparison/.ipynb_checkpoints/
+comparison/figures/
 research/
