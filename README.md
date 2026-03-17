@@ -17,7 +17,7 @@ JAX implementation of the **KerrEccentricEquatorial** EMRI waveform model from [
 - FEW HDF5 data files (`KerrEccEqFluxData.h5` and `ZNAmps_l10_m10_n55_DS2Outer.h5`), available from the [FEW data repository](https://github.com/BlackHolePerturbationToolkit/FastEMRIWaveforms)
 
 ## Installation
-
+[NOT YET PUBLISHED] Install from PyPI:
 ```bash
 # CPU
 pip install fewtrax
@@ -28,7 +28,7 @@ pip install "fewtrax[gpu]"
 # Development (tests + notebooks)
 pip install "fewtrax[dev]"
 ```
-
+The package has not yet been published to PyPI. To install and run locally, clone the repository and install in editable mode for now:
 Or from source:
 
 ```bash
@@ -45,15 +45,18 @@ fewtrax reads the FEW HDF5 data files. Point to them in one of three ways (check
 2. Set the environment variable `FEW_DATA_DIR`
 3. Place the files in `~/.fewtrax/data/`
 
-If `FastEMRIWaveforms` is installed, fewtrax will also try its internal file-manager cache.
+If `FastEMRIWaveforms` is installed (default when you install with the `comparison` extra), fewtrax will also try its internal file-manager cache.
 
 ## Quickstart
 
 ```python
 import jax
+import numpy as np
+import jax.numpy as jnp
 jax.config.update("jax_enable_x64", True)  # required for numerical accuracy
 
 from fewtrax import KerrEccentricEquatorialWaveform
+from fewtrax.summation.modes import to_frequency_domain
 
 wf = KerrEccentricEquatorialWaveform(
     data_dir="/path/to/few/data",
@@ -82,9 +85,18 @@ params = dict(
 
 hp, hx = wf(**params)
 print(hp.shape)   # (N_samples,)
+
+# Time axis
+N = hp.shape[0]
+t = np.arange(N) * params["dt"]          # seconds
+
+# Frequency domain
+freqs, h_tilde = to_frequency_domain(hp + 1j * hx, dt=params["dt"])
+f_peak = float(freqs[jnp.argmax(jnp.abs(h_tilde))])
+print(f"Peak frequency: {f_peak * 1e3:.3f} mHz")
 ```
 
-## Tutorials
+## Tutorial
 
 ### 1. Generating a waveform and its frequency-domain representation
 
@@ -206,27 +218,20 @@ pytest tests/test_compare_few.py
 
 ## Building documentation
 
-The source code uses NumPy-style docstrings throughout. The steps below set up
-a Sphinx-based site and deploy it to **GitHub Pages**.
+The source code uses NumPy-style docstrings throughout. You can build the documentation locally or consult [https://bertdepoorter.github.io/fewtrax/](https://bertdepoorter.github.io/fewtrax/)
 
-### 1. Install Sphinx and extensions
-If you install with the tag `[docs]`, these packages are included. 
+### Building local docs with Sphinx 
+If you install with the tag `[docs]`, these packages are included and the following command is obsolete. 
 ```bash
 pip install sphinx sphinx-autodoc-typehints sphinx-rtd-theme myst-parser
 ```
-
-
-
-### 5. Build locally
-
+Now build the docs:
 ```bash
 cd docs
 make html
 open build/html/index.html
 ```
 
-### Deployed via Github pages
-The docs are available at `https://bertdepoorter.github.io/fewtrax/`.
 
 ### Alternative: ReadTheDocs
 
@@ -264,21 +269,9 @@ the docs will build automatically on every push to `main`.
 
 ## Citation
 
-If you use fewtrax in your research, please cite the original FEW paper:
+If you use fewtrax in your research, please cite the original FEW papers:
 
 ```bibtex
-@article{Katz2021,
-  author  = {Katz, Michael L. and Chua, Alvin J. K. and Speri, Lorenzo and
-             Warburton, Niels and Hughes, Scott A.},
-  title   = {Fast extreme-mass-ratio-inspiral waveforms: New tools for
-             millihertz gravitational-wave data analysis},
-  journal = {Phys. Rev. D},
-  volume  = {104},
-  pages   = {064047},
-  year    = {2021},
-  doi     = {10.1103/PhysRevD.104.064047},
-}
-
 @article{Chapman-bird2025,
   title = {Efficient waveforms for asymmetric-mass eccentric equatorial inspirals into rapidly spinning black holes},
   author = {Chapman-Bird, Christian E. A. and Speri, Lorenzo and Nasipak, Zachary and Burke, Ollie and Katz, Michael L. and Santini, Alessandro and Kejriwal, Shubham and Lynch, Philip and Mathews, Josh and Khalvati, Hassan and Thompson, Jonathan E. and Isoyama, Soichiro and Hughes, Scott A. and Warburton, Niels and Chua, Alvin J. K. and Pigou, Maxime},
@@ -292,6 +285,18 @@ If you use fewtrax in your research, please cite the original FEW paper:
   publisher = {American Physical Society},
   doi = {10.1103/scbp-75pf},
   url = {https://link.aps.org/doi/10.1103/scbp-75pf}
+}
+
+@article{Katz2021,
+  author  = {Katz, Michael L. and Chua, Alvin J. K. and Speri, Lorenzo and
+             Warburton, Niels and Hughes, Scott A.},
+  title   = {Fast extreme-mass-ratio-inspiral waveforms: New tools for
+             millihertz gravitational-wave data analysis},
+  journal = {Phys. Rev. D},
+  volume  = {104},
+  pages   = {064047},
+  year    = {2021},
+  doi     = {10.1103/PhysRevD.104.064047},
 }
 
 ```
