@@ -23,7 +23,7 @@ smooth problems) with :class:`diffrax.PIDController` adaptive step-size
 control.  The system is stopped when the orbit approaches the separatrix.
 
 The ODE is fully JIT-compilable and differentiable with respect to the
-initial conditions :math:`(p_0, e_0)`.
+initial conditions :math:`(p_0, e_0)` and the BH spin :math:`a`.
 
 To vmap over a batch of initial conditions::
 
@@ -97,12 +97,12 @@ class EMRIInspiral(eqx.Module):
     """
 
     flux_data: FluxData
-    a: float
+    a: jnp.ndarray
     x0: float
 
     def __init__(self, flux_data: FluxData, a: float, x0: float = 1.0):
         self.flux_data = flux_data
-        self.a = float(a)
+        self.a = jnp.asarray(a, dtype=jnp.float64)
         self.x0 = float(x0)
 
     # ------------------------------------------------------------------
@@ -365,7 +365,7 @@ class EMRIInspiral(eqx.Module):
                     "last valid trajectory point."
                 )
             e_f_ = jnp.asarray(float(e_f), dtype=jnp.float64)
-            p_sep = get_separatrix(jnp.abs(float(self.a)), e_f_, self._x_sign())
+            p_sep = get_separatrix(jnp.abs(self.a), e_f_, self._x_sign())
             p_start = p_sep + SEPARATRIX_BUFFER
             y0 = jnp.array(
                 [p_start, e_f_, Phi_phi0, Phi_theta0, Phi_r0], dtype=jnp.float64
@@ -441,8 +441,8 @@ class EMRIInspiral(eqx.Module):
             p0=p0, e0=e0, T=T, M=M, mu=mu, dense_steps=dense_steps,
             backward=backward, e_f=e_f, **kwargs
         )
-        a_abs = jnp.abs(float(self.a))
-        x_in = float(self._x_sign())
+        a_abs = jnp.abs(self.a)
+        x_in = self._x_sign()
 
         def _freq_at_point(pe):
             p_, e_ = pe

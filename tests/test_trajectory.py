@@ -136,6 +136,22 @@ class TestTrajectoryDifferentiability:
         grad = jax.grad(final_phase)(jnp.float64(0.4))
         assert jnp.isfinite(grad), "Gradient w.r.t. e0 should be finite."
 
+    def test_grad_a(self, flux_data):
+        """Gradient of final phase w.r.t. spin a should be finite and non-zero."""
+        from fewtrax.trajectory import EMRIInspiral
+
+        def final_phase(a):
+            traj = EMRIInspiral(flux_data, a=a)
+            _, _, _, Phi_phi, _, _ = traj(
+                p0=10.0, e0=0.4, T=0.1, M=1e6, mu=10.0, dense_steps=20,
+            )
+            valid = jnp.isfinite(Phi_phi)
+            return jnp.sum(jnp.where(valid, Phi_phi, 0.0))
+
+        grad = jax.grad(final_phase)(jnp.float64(0.3))
+        assert jnp.isfinite(grad), "Gradient w.r.t. a should be finite."
+        assert grad != 0.0, "Gradient w.r.t. a should be non-zero."
+
 
 class TestTrajectoryParameterVariation:
     """Test trajectory variations with physical parameter changes."""
