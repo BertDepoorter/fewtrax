@@ -5,9 +5,11 @@ build-backend = "hatchling.build"
 [project]
 name = "fewtrax"
 version = "0.1.0"
+{name = "Bert Depoorter", email="bert.depoorter@kuleuven.be"}
 description = "JAX implementation of EMRI waveforms (KerrEccentricEquatorial) with JIT, vmap, and autodiff support"
-license = "MIT"
+license = {file = "LICENSE.md"}
 requires-python = ">=3.10"
+keywords = ["gravitational-waves", "EMRI", "LISA", "parameter-estimation", "mcmc"]
 dependencies = [
     "jax>=0.4.25",
     "jaxlib>=0.4.25",
@@ -35,7 +37,7 @@ test = [
     "matplotlib>=3.8.0",
 ]
 compare = [
-    "FastEMRIWaveforms",
+    "fastemriwaveforms",
     "python-dotenv>=1.0.0",
     "matplotlib>=3.8.0",
 ]
