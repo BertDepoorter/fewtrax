@@ -1,4 +1,6 @@
 *.h5
 *.pyc
 .env
+examples/.ipynb_checkpoints/
+comparison/.ipynb_checkpoints/
 research/
