@@ -107,7 +107,7 @@
 <span class="sd">control.  The system is stopped when the orbit approaches the separatrix.</span>
 
 <span class="sd">The ODE is fully JIT-compilable and differentiable with respect to the</span>
-<span class="sd">initial conditions :math:`(p_0, e_0)`.</span>
+<span class="sd">initial conditions :math:`(p_0, e_0)` and the BH spin :math:`a`.</span>
 
 <span class="sd">To vmap over a batch of initial conditions::</span>
 
@@ -183,12 +183,12 @@
 <span class="sd">    &quot;&quot;&quot;</span>
 
     <span class="n">flux_data</span><span class="p">:</span> <span class="n">FluxData</span>
-    <span class="n">a</span><span class="p">:</span> <span class="nb">float</span>
+    <span class="n">a</span><span class="p">:</span> <span class="n">jnp</span><span class="o">.</span><span class="n">ndarray</span>
     <span class="n">x0</span><span class="p">:</span> <span class="nb">float</span>
 
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">flux_data</span><span class="p">:</span> <span class="n">FluxData</span><span class="p">,</span> <span class="n">a</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">x0</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1.0</span><span class="p">):</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">flux_data</span> <span class="o">=</span> <span class="n">flux_data</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">a</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">a</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">a</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">jnp</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">x0</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">x0</span><span class="p">)</span>
 
     <span class="c1"># ------------------------------------------------------------------</span>
@@ -451,7 +451,7 @@
                     <span class="s2">&quot;last valid trajectory point.&quot;</span>
                 <span class="p">)</span>
             <span class="n">e_f_</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="nb">float</span><span class="p">(</span><span class="n">e_f</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">jnp</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
-            <span class="n">p_sep</span> <span class="o">=</span> <span class="n">get_separatrix</span><span class="p">(</span><span class="n">jnp</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="nb">float</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">a</span><span class="p">)),</span> <span class="n">e_f_</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_x_sign</span><span class="p">())</span>
+            <span class="n">p_sep</span> <span class="o">=</span> <span class="n">get_separatrix</span><span class="p">(</span><span class="n">jnp</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">a</span><span class="p">),</span> <span class="n">e_f_</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_x_sign</span><span class="p">())</span>
             <span class="n">p_start</span> <span class="o">=</span> <span class="n">p_sep</span> <span class="o">+</span> <span class="n">SEPARATRIX_BUFFER</span>
             <span class="n">y0</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">array</span><span class="p">(</span>
                 <span class="p">[</span><span class="n">p_start</span><span class="p">,</span> <span class="n">e_f_</span><span class="p">,</span> <span class="n">Phi_phi0</span><span class="p">,</span> <span class="n">Phi_theta0</span><span class="p">,</span> <span class="n">Phi_r0</span><span class="p">],</span> <span class="n">dtype</span><span class="o">=</span><span class="n">jnp</span><span class="o">.</span><span class="n">float64</span>
@@ -529,8 +529,8 @@
             <span class="n">p0</span><span class="o">=</span><span class="n">p0</span><span class="p">,</span> <span class="n">e0</span><span class="o">=</span><span class="n">e0</span><span class="p">,</span> <span class="n">T</span><span class="o">=</span><span class="n">T</span><span class="p">,</span> <span class="n">M</span><span class="o">=</span><span class="n">M</span><span class="p">,</span> <span class="n">mu</span><span class="o">=</span><span class="n">mu</span><span class="p">,</span> <span class="n">dense_steps</span><span class="o">=</span><span class="n">dense_steps</span><span class="p">,</span>
             <span class="n">backward</span><span class="o">=</span><span class="n">backward</span><span class="p">,</span> <span class="n">e_f</span><span class="o">=</span><span class="n">e_f</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span>
         <span class="p">)</span>
-        <span class="n">a_abs</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="nb">float</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">a</span><span class="p">))</span>
-        <span class="n">x_in</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_x_sign</span><span class="p">())</span>
+        <span class="n">a_abs</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">a</span><span class="p">)</span>
+        <span class="n">x_in</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_x_sign</span><span class="p">()</span>
 
         <span class="k">def</span><span class="w"> </span><span class="nf">_freq_at_point</span><span class="p">(</span><span class="n">pe</span><span class="p">):</span>
             <span class="n">p_</span><span class="p">,</span> <span class="n">e_</span> <span class="o">=</span> <span class="n">pe</span>

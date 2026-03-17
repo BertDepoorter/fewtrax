@@ -319,7 +319,7 @@ Jacobian <span class="math notranslate nohighlight">\(\partial(E,L)/\partial(p,e
 smooth problems) with <code class="xref py py-class docutils literal notranslate"><span class="pre">diffrax.PIDController</span></code> adaptive step-size
 control.  The system is stopped when the orbit approaches the separatrix.</p>
 <p>The ODE is fully JIT-compilable and differentiable with respect to the
-initial conditions <span class="math notranslate nohighlight">\((p_0, e_0)\)</span>.</p>
+initial conditions <span class="math notranslate nohighlight">\((p_0, e_0)\)</span> and the BH spin <span class="math notranslate nohighlight">\(a\)</span>.</p>
 <p>To vmap over a batch of initial conditions:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">jax</span><span class="w"> </span><span class="kn">import</span> <span class="n">vmap</span>
 <span class="n">batch_traj</span> <span class="o">=</span> <span class="n">vmap</span><span class="p">(</span><span class="n">traj</span><span class="p">)(</span><span class="n">p0_arr</span><span class="p">,</span> <span class="n">e0_arr</span><span class="p">)</span>
