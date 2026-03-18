@@ -59,14 +59,9 @@ import diffrax
 import equinox as eqx
 
 from fewtrax.utils.constants import MTSUN_SI, YEAR_SI
-from fewtrax.utils.geodesic import (
-    get_separatrix,
-    get_fundamental_frequencies,
-    kerr_geo_energy_equatorial,
-    kerr_geo_angular_momentum_equatorial,
-)
+from fewtrax.utils.geodesic import get_separatrix, get_fundamental_frequencies
 from fewtrax.utils.coordinates import kerrecceq_forward_map, DELTAPMIN
-from fewtrax.data.loader import FluxData, _PN_Edot_jax, _PN_Ldot_jax
+from fewtrax.data.loader import FluxData, _pdot_PN_jax, _edot_PN_jax
 
 SEPARATRIX_BUFFER: float = 2.0 * DELTAPMIN
 
@@ -77,19 +72,22 @@ class EMRIInspiral(eqx.Module):
     Integrates the adiabatic inspiral ODE using :class:`diffrax.Tsit5`
     with adaptive step-size control.  The radiation-reaction force
     (:math:`\dot{p}`, :math:`\dot{e}`) is computed from the FEW flux
-    tables by:
+    tables using the **pex convention** (matching FEW):
 
-    1. Interpolating the PN-normalised flux ratios
-       :math:`r_E = \dot{E}_{\rm GR}/\dot{E}_{\rm PN}` and
-       :math:`r_L = \dot{L}_{\rm GR}/\dot{L}_{\rm PN}`.
-    2. Multiplying by the Peters (1964) PN functions.
-    3. Applying the Jacobian :math:`\partial(E,L)/\partial(p,e)` via
-       :func:`jax.jacfwd` to obtain :math:`(\dot{p}, \dot{e})`.
+    1. Interpolate the pre-computed ratios
+       :math:`r_p = \dot{p}_{\rm GR}/\dot{p}_{\rm PN}` and
+       :math:`r_e = \dot{e}_{\rm GR}/\dot{e}_{\rm PN}`.
+    2. Multiply by the separatrix-dependent PN functions
+       :math:`\dot{p}_{\rm PN}(p, e, r_{\rm ISCO}, p_{\rm sep})` and
+       :math:`\dot{e}_{\rm PN}`.
+
+    This avoids the runtime Jacobian inversion that was previously
+    needed in the ELQ convention, improving both speed and accuracy.
 
     Parameters
     ----------
     flux_data : FluxData
-        Pre-loaded flux interpolators.
+        Pre-loaded flux interpolators (pex convention).
     a : float
         Dimensionless BH spin.
     x0 : float
@@ -114,77 +112,35 @@ class EMRIInspiral(eqx.Module):
         ax = jnp.sign(self.a * self.x0)
         return jnp.where(ax == 0.0, 1.0, ax)
 
-    def _flux_EL(self, p: float, e: float) -> tuple[float, float]:
-        r"""Return physical :math:`(\dot{E}, \dot{L})` from the spline tables.
+    def _flux_pex(self, p: float, e: float) -> tuple[float, float]:
+        r"""Return physical :math:`(\dot{p}, \dot{e})` from the pex spline tables.
 
-        Evaluates the stored PN-normalised ratios and multiplies by the
-        leading-order PN functions.  Returns **negative** values
-        (energy/angular-momentum is being radiated away).
+        Evaluates the pre-computed pex ratios :math:`\dot{p}/\dot{p}_{\rm PN}`
+        and :math:`\dot{e}/\dot{e}_{\rm PN}`, then multiplies by the
+        separatrix-dependent PN functions.  Returns **negative** values for
+        :math:`\dot{p}` (inspiraling orbit loses semi-latus rectum).
         """
         a_abs = jnp.abs(self.a)
         x_in = self._x_sign()
         u, w, z, in_A = kerrecceq_forward_map(a_abs, p, e, kind="flux")
 
-        rE_A = self.flux_data.Edot_A(u, w, z)
-        rL_A = self.flux_data.Ldot_A(u, w, z)
-        rE_B = self.flux_data.Edot_B(u, w, z)
-        rL_B = self.flux_data.Ldot_B(u, w, z)
+        rp_A = self.flux_data.pdot_A(u, w, z)
+        re_A = self.flux_data.edot_A(u, w, z)
+        rp_B = self.flux_data.pdot_B(u, w, z)
+        re_B = self.flux_data.edot_B(u, w, z)
 
-        rE = jnp.where(in_A, rE_A, rE_B)
-        rL = jnp.where(in_A, rL_A, rL_B)
+        rp = jnp.where(in_A, rp_A, rp_B)
+        re = jnp.where(in_A, re_A, re_B)
 
-        Epn = _PN_Edot_jax(p, e)
-        Lpn = _PN_Ldot_jax(p, e)
+        # Separatrix-dependent PN functions
+        r_isco = get_separatrix(a_abs, jnp.zeros_like(e), x_in)
+        p_sep = get_separatrix(a_abs, e, x_in)
+        pdot_pn = _pdot_PN_jax(p, e, r_isco, p_sep)
+        edot_pn = _edot_PN_jax(p, e, r_isco, p_sep)
 
-        # Negative: orbit is inspiraling (losing energy/angular momentum)
-        Edot = -rE * Epn
-        Ldot = -rL * Lpn
-        # For retrograde orbit, Ldot has opposite sign convention
-        Ldot = Ldot * x_in
-        return Edot, Ldot
-
-    def _ELdot_to_pedot(self, p: float, e: float, Edot: float, Ldot: float):
-        r"""Convert :math:`(\dot{E}, \dot{L})` to :math:`(\dot{p}, \dot{e})`.
-
-        Uses :func:`jax.jacfwd` to differentiate the geodesic energy and
-        angular momentum functions :math:`E(p,e)`, :math:`L(p,e)`, then
-        solves the :math:`2 \times 2` linear system.
-
-        Near-circular limit (``e < 1e-4``): the Jacobian second column
-        :math:`\\partial(E,L)/\\partial e \\propto e` vanishes, making the
-        system singular.  In that regime we fall back to
-        :math:`\\dot{p} = \\dot{E}/(\\partial E/\\partial p)`,
-        :math:`\\dot{e} = 0`, which is the physically correct adiabatic
-        answer for circular orbits.
-        """
-        E_CIRC = 1e-4  # threshold below which orbit is treated as circular
-        a_abs = jnp.abs(self.a)
-        x_in = self._x_sign()
-
-        # Evaluate Jacobian at e_safe to prevent singular matrix.
-        # For the circular branch the J columns ∂/∂e → 0, so we clamp e to
-        # E_CIRC; the constant floor has zero tangent w.r.t. e for AD purposes.
-        e_safe = jnp.maximum(jnp.abs(e), E_CIRC)
-
-        def EL_of_pe(pe):
-            p_, e_ = pe[0], pe[1]
-            E_ = kerr_geo_energy_equatorial(a_abs, p_, e_, x_in)
-            L_ = kerr_geo_angular_momentum_equatorial(a_abs, p_, e_, x_in, E_)
-            return jnp.array([E_, L_])
-
-        J = jax.jacfwd(EL_of_pe)(jnp.array([p, e_safe]))   # shape (2, 2)
-
-        # Full Jacobian inversion (valid for e >= E_CIRC)
-        rhs = jnp.array([Edot, Ldot])
-        pe_dot = jnp.linalg.solve(J, rhs)
-
-        # Circular-orbit fallback: pdot from ∂E/∂p alone, edot = 0
-        dEdp = J[0, 0]
-        pdot_circ = Edot / jnp.where(jnp.abs(dEdp) > 1e-30, dEdp, 1.0)
-
-        use_circ = e < E_CIRC
-        pdot = jnp.where(use_circ, pdot_circ, pe_dot[0])
-        edot = jnp.where(use_circ, jnp.zeros_like(e), pe_dot[1])
+        # Negative: orbit is inspiraling (p decreases, e typically decreases)
+        pdot = -rp * pdot_pn
+        edot = -re * edot_pn
         return pdot, edot
 
     def _ode_rhs(self, t: float, y: jnp.ndarray, args) -> jnp.ndarray:
@@ -200,8 +156,7 @@ class EMRIInspiral(eqx.Module):
         a_abs = jnp.abs(self.a)
         x_in = self._x_sign()
 
-        Edot, Ldot = self._flux_EL(p, e)
-        pdot, edot = self._ELdot_to_pedot(p, e, Edot, Ldot)
+        pdot, edot = self._flux_pex(p, e)
         Omega_phi, Omega_theta, Omega_r = get_fundamental_frequencies(a_abs, p, e, x_in)
         # pdot/edot come from flux tables normalised to μ=M=1; scale to physical ratio
         return jnp.array([pdot * mu_over_M, edot * mu_over_M,
@@ -350,10 +305,10 @@ class EMRIInspiral(eqx.Module):
             Trajectory arrays.  ``t`` is in seconds; phases in radians.
             In backward mode ``t`` is time before plunge (:math:`\tau`).
         """
-        M_s = M * MTSUN_SI                        # primary mass in seconds
+        M_s = (M + mu) * MTSUN_SI                 # total mass in seconds (matches FEW convention)
         T_s = T * YEAR_SI                         # observation time in seconds
         T_geo = jnp.asarray(T_s / M_s)           # geometric time  (units of M)
-        mu_over_M = jnp.asarray(mu / M)
+        mu_over_M = jnp.asarray(M * mu / (M + mu) ** 2)  # symmetric mass ratio eta (matches FEW)
 
         t_save = jnp.linspace(jnp.zeros((), jnp.float64), T_geo, dense_steps)
 
