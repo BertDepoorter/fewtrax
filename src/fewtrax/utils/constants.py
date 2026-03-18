@@ -7,7 +7,7 @@ integrator; the conversions are provided here.
 
 References
 ----------
-lisaconstants: https://github.com/ldc-dev-2/lisa-constants
+lisaconstants: https://pypi.org/project/lisaconstants/ 
 """
 
 import math

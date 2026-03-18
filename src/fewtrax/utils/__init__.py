@@ -11,6 +11,7 @@ from fewtrax.utils.geodesic import (
     ellip_pi,
 )
 from fewtrax.utils.harmonics import spin_weighted_spherical_harmonic
+from fewtrax.utils.jacobian import ELdot_to_pedot_jax, pedot_to_ELdot_jax
 from fewtrax.utils.transforms import to_frequency_domain, to_time_domain
 from fewtrax.utils.coordinates import (
     kerrecceq_forward_map_A,

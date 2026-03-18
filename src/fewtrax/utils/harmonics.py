@@ -126,9 +126,10 @@ def _general_swsh(l: int, m: int, theta: float, phi: float) -> complex:
 
     log_norm = (
         0.5 * jnp.log((2.0 * l + 1.0) / (4.0 * jnp.pi))
-        + 0.5 * (lfact(l - s) + lfact(l + s) - lfact(l - m) - lfact(l + m))
+        + 0.5 * (lfact(l + m) + lfact(l - m) - lfact(l + s) - lfact(l - s))
     )
     norm = jnp.exp(log_norm)
+    sign = (-1.0) ** (m + s)
 
     # Sum over k (Clebsch-Gordan type sum)
     # Use a fixed loop unrolled for l up to 10
@@ -153,7 +154,7 @@ def _general_swsh(l: int, m: int, theta: float, phi: float) -> complex:
     )
     total = jnp.sum(jnp.where(mask, term, 0.0))
 
-    return norm * total * jnp.exp(1j * m * phi)
+    return sign * norm * total * jnp.exp(1j * m * phi)
 
 
 # ---------------------------------------------------------------------------
@@ -210,12 +211,14 @@ def _general_swsh_numpy(l: int, m: int, theta: float, phi: float) -> complex:
     cos2 = cos(theta / 2.0)
     sin2 = sin(theta / 2.0)
 
+    sign = 1 if (m + s) % 2 == 0 else -1
+
     # Normalisation
     norm = sqrt(
         (2 * l + 1) / (4 * pi)
-        * factorial(l - s)
-        * factorial(l + s)
-        / (factorial(l - m) * factorial(l + m))
+        * factorial(l + m)
+        * factorial(l - m)
+        / (factorial(l + s) * factorial(l - s))
     )
 
     def binom(n, k):
@@ -241,4 +244,4 @@ def _general_swsh_numpy(l: int, m: int, theta: float, phi: float) -> complex:
         )
         total += term
 
-    return norm * total * cexp(1j * m * phi)
+    return sign * norm * total * cexp(1j * m * phi)
