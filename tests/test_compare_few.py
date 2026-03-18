@@ -8,9 +8,8 @@ Tolerance
 ---------
 Because fewtrax uses interpax cubic splines built from the raw grid values
 (rather than the pre-computed multispline B-spline coefficients in FEW), small
-numerical differences are expected.  Tests use a relative tolerance of 10%
-for individual samples and require an overlap (normalised inner product) of
-> 0.85 between the fewtrax and FEW waveforms.
+numerical differences are expected.  Tests require an overlap (normalised inner
+product) of > 0.99 between the fewtrax and FEW waveforms at T=0.05yr.
 
 Skipping
 --------
@@ -161,14 +160,14 @@ class TestWaveformVsFEW:
         hp_few, _ = few_waveform
         hp_ft, _ = fewtrax_waveform
         ov = _overlap(hp_few, hp_ft)
-        assert ov > 0.85, f"h+ overlap = {ov:.4f} < 0.85"
+        assert ov > 0.99, f"h+ overlap = {ov:.4f} < 0.99"
 
     def test_overlap_hx(self, few_waveform, fewtrax_waveform):
         """h× overlap should be > 0.85."""
         _, hx_few = few_waveform
         _, hx_ft = fewtrax_waveform
         ov = _overlap(hx_few, hx_ft)
-        assert ov > 0.85, f"h× overlap = {ov:.4f} < 0.85"
+        assert ov > 0.99, f"h× overlap = {ov:.4f} < 0.99"
 
     def test_peak_strain_order_of_magnitude(self, few_waveform, fewtrax_waveform):
         """Peak strain should be within an order of magnitude of FEW."""
