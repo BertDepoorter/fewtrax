@@ -378,8 +378,8 @@ def main():
 
     # Pass/fail summary
     print()
-    n_pass = sum(1 for r in ok if r["overlap_hp"] > 0.9)
-    print(f"Overlap > 0.90: {n_pass}/{len(ok)} parameter sets")
+    n_pass = sum(1 for r in ok if r["overlap_hp"] > 0.99)
+    print(f"Overlap > 0.99: {n_pass}/{len(ok)} parameter sets")
 
     if args.plot:
         print("\nSaving figures …")
