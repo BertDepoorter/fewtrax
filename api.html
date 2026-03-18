@@ -344,19 +344,21 @@ and the integration runs for duration <span class="math notranslate nohighlight"
 <p>Integrates the adiabatic inspiral ODE using <code class="xref py py-class docutils literal notranslate"><span class="pre">diffrax.Tsit5</span></code>
 with adaptive step-size control.  The radiation-reaction force
 (<span class="math notranslate nohighlight">\(\dot{p}\)</span>, <span class="math notranslate nohighlight">\(\dot{e}\)</span>) is computed from the FEW flux
-tables by:</p>
+tables using the <strong>pex convention</strong> (matching FEW):</p>
 <ol class="arabic simple">
-<li><p>Interpolating the PN-normalised flux ratios
-<span class="math notranslate nohighlight">\(r_E = \dot{E}_{\rm GR}/\dot{E}_{\rm PN}\)</span> and
-<span class="math notranslate nohighlight">\(r_L = \dot{L}_{\rm GR}/\dot{L}_{\rm PN}\)</span>.</p></li>
-<li><p>Multiplying by the Peters (1964) PN functions.</p></li>
-<li><p>Applying the Jacobian <span class="math notranslate nohighlight">\(\partial(E,L)/\partial(p,e)\)</span> via
-<code class="xref py py-func docutils literal notranslate"><span class="pre">jax.jacfwd()</span></code> to obtain <span class="math notranslate nohighlight">\((\dot{p}, \dot{e})\)</span>.</p></li>
+<li><p>Interpolate the pre-computed ratios
+<span class="math notranslate nohighlight">\(r_p = \dot{p}_{\rm GR}/\dot{p}_{\rm PN}\)</span> and
+<span class="math notranslate nohighlight">\(r_e = \dot{e}_{\rm GR}/\dot{e}_{\rm PN}\)</span>.</p></li>
+<li><p>Multiply by the separatrix-dependent PN functions
+<span class="math notranslate nohighlight">\(\dot{p}_{\rm PN}(p, e, r_{\rm ISCO}, p_{\rm sep})\)</span> and
+<span class="math notranslate nohighlight">\(\dot{e}_{\rm PN}\)</span>.</p></li>
 </ol>
+<p>This avoids the runtime Jacobian inversion that was previously
+needed in the ELQ convention, improving both speed and accuracy.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>flux_data</strong> (<a class="reference internal" href="#fewtrax.data.loader.FluxData" title="fewtrax.data.loader.FluxData"><em>FluxData</em></a>) – Pre-loaded flux interpolators.</p></li>
+<li><p><strong>flux_data</strong> (<a class="reference internal" href="#fewtrax.data.loader.FluxData" title="fewtrax.data.loader.FluxData"><em>FluxData</em></a>) – Pre-loaded flux interpolators (pex convention).</p></li>
 <li><p><strong>a</strong> (<em>float</em>) – Dimensionless BH spin.</p></li>
 <li><p><strong>x0</strong> (<em>float</em>) – Inclination cosine (+1 prograde, -1 retrograde).</p></li>
 </ul>
@@ -670,12 +672,16 @@ cubic spline interpolation, then calls <a class="reference internal" href="#fewt
 </dd></dl>
 
 <p id="module-fewtrax.data.loader">HDF5 data loading and JAX interpolator construction.</p>
-<p>Flux data (<code class="docutils literal notranslate"><span class="pre">KerrEccEqFluxData.h5</span></code>) is loaded using the <strong>ELQ convention</strong>:
-the stored <span class="math notranslate nohighlight">\(\dot{E}\)</span> and <span class="math notranslate nohighlight">\(\dot{L}\)</span> grids are normalised by the
-leading-order Peters (1964) PN expressions, which are smooth and free of
-separatrix singularities.  At ODE run-time the stored ratio is multiplied by
-the PN function to recover the physical flux, and then the (Ė, L̇) → (ṗ, ė)
-Jacobian is applied using JAX automatic differentiation.</p>
+<p>Flux data (<code class="docutils literal notranslate"><span class="pre">KerrEccEqFluxData.h5</span></code>) is loaded using the <strong>pex convention</strong>
+(matching FEW’s default): the stored <span class="math notranslate nohighlight">\(\dot{E}\)</span> and <span class="math notranslate nohighlight">\(\dot{L}\)</span>
+grids are converted to <span class="math notranslate nohighlight">\(\dot{p}\)</span> and <span class="math notranslate nohighlight">\(\dot{e}\)</span> at load time
+using the analytical Kerr Jacobian, then normalised by the separatrix-dependent
+PN functions.  At ODE run-time the stored ratio is multiplied by the PN
+function to recover the physical flux directly without any Jacobian inversion.</p>
+<p>The leading-order Peters (1964) PN functions (<code class="xref py py-func docutils literal notranslate"><span class="pre">_PN_Edot_jax()</span></code>,
+<code class="xref py py-func docutils literal notranslate"><span class="pre">_PN_Ldot_jax()</span></code>) are still exported for backward compatibility.
+The separatrix-dependent pex PN functions (<code class="xref py py-func docutils literal notranslate"><span class="pre">_pdot_PN_jax()</span></code>,
+<code class="xref py py-func docutils literal notranslate"><span class="pre">_edot_PN_jax()</span></code>) are used in the ODE right-hand side.</p>
 <p>Amplitude data (<code class="docutils literal notranslate"><span class="pre">ZNAmps_l10_m10_n55_DS2Outer.h5</span></code>) stores bicubic B-spline
 coefficients (<code class="docutils literal notranslate"><span class="pre">multispline</span></code> format).  These are evaluated at query points
 using <code class="docutils literal notranslate"><span class="pre">scipy.interpolate.bisplev</span></code>, which can be called from the amplitude
@@ -688,20 +694,21 @@ interpolation module.  The coefficients themselves are stored in the
 4. <code class="docutils literal notranslate"><span class="pre">~/.fewtrax/data/</span></code>.</p>
 <dl class="py class">
 <dt class="sig sig-object py" id="fewtrax.data.loader.FluxData">
-<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">fewtrax.data.loader.</span></span><span class="sig-name descname"><span class="pre">FluxData</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">Edot_A</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">Ldot_A</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">Edot_B</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">Ldot_B</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/fewtrax/data/loader.html#FluxData"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#fewtrax.data.loader.FluxData" title="Link to this definition"></a></dt>
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">fewtrax.data.loader.</span></span><span class="sig-name descname"><span class="pre">FluxData</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">pdot_A</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">edot_A</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">pdot_B</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">edot_B</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/fewtrax/data/loader.html#FluxData"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#fewtrax.data.loader.FluxData" title="Link to this definition"></a></dt>
 <dd><p>Container for the Kerr eccentric equatorial flux interpolators.</p>
-<p>Stores the ratio <code class="docutils literal notranslate"><span class="pre">Edot_GR</span> <span class="pre">/</span> <span class="pre">Edot_PN</span></code> and <code class="docutils literal notranslate"><span class="pre">Ldot_GR</span> <span class="pre">/</span> <span class="pre">Ldot_PN</span></code>
-(ELQ convention), where the PN normalisation is the leading-order
-Peters (1964) expression.  At ODE run-time the ratio is multiplied by
-the PN function to recover the physical flux; the Jacobian
-(Ė, L̇) → (ṗ, ė) is then applied via JAX automatic differentiation.</p>
+<p>Stores the dimensionless ratios <code class="docutils literal notranslate"><span class="pre">pdot_GR</span> <span class="pre">/</span> <span class="pre">pdot_PN</span></code> and
+<code class="docutils literal notranslate"><span class="pre">edot_GR</span> <span class="pre">/</span> <span class="pre">edot_PN</span></code> (pex convention, matching FEW’s default).  The PN
+normalisation uses separatrix-dependent functions that cancel the physical
+pole in the flux near the ISCO, giving smoother interpolants.</p>
+<p>At ODE run-time the physical derivatives are recovered by multiplying the
+stored ratio by the PN function; no Jacobian inversion is required.</p>
 <p>Inherits from <code class="xref py py-class docutils literal notranslate"><span class="pre">equinox.Module</span></code> so it is a valid JAX pytree and
 can be used inside JIT-compiled functions and vmapped code.</p>
 <dl class="py attribute">
 <dt class="sig sig-object py">
-<span class="sig-name descname"><span class="pre">Edot_A,</span> <span class="pre">Ldot_A</span></span></dt>
-<dd><p>Energy- and angular-momentum-flux ratio interpolators for Region A.
-Inputs are normalised coordinates (u, w, z) ∈ [0, 1]³.</p>
+<span class="sig-name descname"><span class="pre">pdot_A,</span> <span class="pre">edot_A</span></span></dt>
+<dd><p>Semi-latus rectum and eccentricity rate ratio interpolators for
+Region A.  Inputs are normalised coordinates (u, w, z) ∈ [0, 1]³.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Type<span class="colon">:</span></dt>
 <dd class="field-odd"><p>CubicSpline3D</p>
@@ -711,7 +718,7 @@ Inputs are normalised coordinates (u, w, z) ∈ [0, 1]³.</p>
 
 <dl class="py attribute">
 <dt class="sig sig-object py">
-<span class="sig-name descname"><span class="pre">Edot_B,</span> <span class="pre">Ldot_B</span></span></dt>
+<span class="sig-name descname"><span class="pre">pdot_B,</span> <span class="pre">edot_B</span></span></dt>
 <dd><p>Same for Region B.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Type<span class="colon">:</span></dt>
@@ -818,21 +825,28 @@ FEW package file-manager cache → <code class="docutils literal notranslate"><s
 
 <dl class="py function">
 <dt class="sig sig-object py" id="fewtrax.data.loader.load_flux_data">
-<span class="sig-prename descclassname"><span class="pre">fewtrax.data.loader.</span></span><span class="sig-name descname"><span class="pre">load_flux_data</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data_dir</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">downsample</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/fewtrax/data/loader.html#load_flux_data"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#fewtrax.data.loader.load_flux_data" title="Link to this definition"></a></dt>
-<dd><p>Load Kerr eccentric equatorial flux data (ELQ convention).</p>
-<p>Reads <code class="docutils literal notranslate"><span class="pre">KerrEccEqFluxData.h5</span></code> and builds JAX 3-D cubic-spline
-interpolators for the PN-normalised energy and angular-momentum flux
-ratios.  The normalisation uses the leading-order Peters (1964)
-expressions, which have no separatrix singularity.</p>
-<p>At ODE run-time, the physical fluxes are recovered by multiplying the
-stored ratio by the PN function.  The Jacobian
-(Ė, L̇) → (ṗ, ė) is then applied via JAX automatic differentiation
-inside <code class="xref py py-class docutils literal notranslate"><span class="pre">EMRIInspiral</span></code>.</p>
+<span class="sig-prename descclassname"><span class="pre">fewtrax.data.loader.</span></span><span class="sig-name descname"><span class="pre">load_flux_data</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data_dir</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">downsample</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">densify_factor</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/fewtrax/data/loader.html#load_flux_data"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#fewtrax.data.loader.load_flux_data" title="Link to this definition"></a></dt>
+<dd><p>Load Kerr eccentric equatorial flux data in pex convention.</p>
+<p>Reads <code class="docutils literal notranslate"><span class="pre">KerrEccEqFluxData.h5</span></code>, converts (Ė, L̇) → (ṗ, ė) via the
+analytical Kerr Jacobian, then normalises by the separatrix-dependent PN
+functions to obtain dimensionless ratios ṗ/ṗ_PN and ė/ė_PN.</p>
+<p>By default the pex-ratio grids are densified by <code class="docutils literal notranslate"><span class="pre">densify_factor</span></code> (default
+3) using E(3) cubic splines from <code class="docutils literal notranslate"><span class="pre">multispline</span></code> before being stored in
+JAX <code class="docutils literal notranslate"><span class="pre">interpax</span></code> C² splines.  This eliminates the ~1.6e-6 relative
+interpolation error that would otherwise accumulate as a phase drift of
+~2.6 rad yr⁻¹, causing the waveform overlap to collapse for T ≳ 0.1 yr.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>data_dir</strong> (<em>str</em><em> or </em><em>Path</em><em>, </em><em>optional</em>) – Directory containing <code class="docutils literal notranslate"><span class="pre">KerrEccEqFluxData.h5</span></code>.</p></li>
-<li><p><strong>downsample</strong> (<em>list</em><em> of </em><em>two 3-tuples</em><em>, </em><em>optional</em>) – <code class="docutils literal notranslate"><span class="pre">[(dU_A,</span> <span class="pre">dW_A,</span> <span class="pre">dZ_A),</span> <span class="pre">(dU_B,</span> <span class="pre">dW_B,</span> <span class="pre">dZ_B)]</span></code> downsampling factors.</p></li>
+<li><p><strong>downsample</strong> (<em>list</em><em> of </em><em>two 3-tuples</em><em>, </em><em>optional</em>) – <code class="docutils literal notranslate"><span class="pre">[(dU_A,</span> <span class="pre">dW_A,</span> <span class="pre">dZ_A),</span> <span class="pre">(dU_B,</span> <span class="pre">dW_B,</span> <span class="pre">dZ_B)]</span></code> downsampling factors
+applied before densification.  Default <code class="docutils literal notranslate"><span class="pre">[(1,1,1),(1,1,1)]</span></code> keeps
+the full grid.</p></li>
+<li><p><strong>densify_factor</strong> (<em>int</em><em>, </em><em>optional</em>) – Grid densification factor applied after ELQ→pex conversion.
+<code class="docutils literal notranslate"><span class="pre">densify_factor=3</span></code> (default) inserts 2 extra points between every
+original grid point in each dimension, reducing the C²-vs-E(3)
+boundary-condition interpolation error by ~(1/3)⁴ ≈ 80×.
+Set to 1 to skip densification.</p></li>
 </ul>
 </dd>
 <dt class="field-even">Return type<span class="colon">:</span></dt>

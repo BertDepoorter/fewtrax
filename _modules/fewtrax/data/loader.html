@@ -84,12 +84,17 @@
   <h1>Source code for fewtrax.data.loader</h1><div class="highlight"><pre>
 <span></span><span class="sd">&quot;&quot;&quot;HDF5 data loading and JAX interpolator construction.</span>
 
-<span class="sd">Flux data (``KerrEccEqFluxData.h5``) is loaded using the **ELQ convention**:</span>
-<span class="sd">the stored :math:`\\dot{E}` and :math:`\\dot{L}` grids are normalised by the</span>
-<span class="sd">leading-order Peters (1964) PN expressions, which are smooth and free of</span>
-<span class="sd">separatrix singularities.  At ODE run-time the stored ratio is multiplied by</span>
-<span class="sd">the PN function to recover the physical flux, and then the (Ė, L̇) → (ṗ, ė)</span>
-<span class="sd">Jacobian is applied using JAX automatic differentiation.</span>
+<span class="sd">Flux data (``KerrEccEqFluxData.h5``) is loaded using the **pex convention**</span>
+<span class="sd">(matching FEW&#39;s default): the stored :math:`\\dot{E}` and :math:`\\dot{L}`</span>
+<span class="sd">grids are converted to :math:`\\dot{p}` and :math:`\\dot{e}` at load time</span>
+<span class="sd">using the analytical Kerr Jacobian, then normalised by the separatrix-dependent</span>
+<span class="sd">PN functions.  At ODE run-time the stored ratio is multiplied by the PN</span>
+<span class="sd">function to recover the physical flux directly without any Jacobian inversion.</span>
+
+<span class="sd">The leading-order Peters (1964) PN functions (:func:`_PN_Edot_jax`,</span>
+<span class="sd">:func:`_PN_Ldot_jax`) are still exported for backward compatibility.</span>
+<span class="sd">The separatrix-dependent pex PN functions (:func:`_pdot_PN_jax`,</span>
+<span class="sd">:func:`_edot_PN_jax`) are used in the ODE right-hand side.</span>
 
 <span class="sd">Amplitude data (``ZNAmps_l10_m10_n55_DS2Outer.h5``) stores bicubic B-spline</span>
 <span class="sd">coefficients (``multispline`` format).  These are evaluated at query points</span>
@@ -224,6 +229,36 @@
     <span class="k">return</span> <span class="p">(</span><span class="mf">32.0</span><span class="o">/</span><span class="mf">5.0</span><span class="p">)</span> <span class="o">*</span> <span class="n">p</span><span class="o">**</span><span class="p">(</span><span class="o">-</span><span class="mf">3.5</span><span class="p">)</span> <span class="o">*</span> <span class="n">one_me2</span> <span class="o">*</span> <span class="p">(</span><span class="mf">1.0</span> <span class="o">+</span> <span class="mf">7.0</span><span class="o">/</span><span class="mf">8.0</span><span class="o">*</span><span class="n">e</span><span class="o">**</span><span class="mi">2</span><span class="p">)</span>
 
 
+<span class="c1"># Separatrix-dependent pex PN normalisation (matches FEW&#39;s convention)</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_pdot_PN</span><span class="p">(</span><span class="n">p</span><span class="p">,</span> <span class="n">e</span><span class="p">,</span> <span class="n">r_isco</span><span class="p">,</span> <span class="n">p_sep</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Leading-order ṗ PN factor with separatrix-dependent denominator (numpy).&quot;&quot;&quot;</span>
+    <span class="n">denom</span> <span class="o">=</span> <span class="p">(</span><span class="n">p</span> <span class="o">-</span> <span class="n">r_isco</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span> <span class="o">-</span> <span class="p">(</span><span class="n">p_sep</span> <span class="o">-</span> <span class="n">r_isco</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span>
+    <span class="n">one_me2</span> <span class="o">=</span> <span class="p">(</span><span class="mf">1.0</span> <span class="o">-</span> <span class="n">e</span> <span class="o">*</span> <span class="n">e</span><span class="p">)</span> <span class="o">**</span> <span class="mf">1.5</span>
+    <span class="k">return</span> <span class="mf">8.0</span> <span class="o">*</span> <span class="n">one_me2</span> <span class="o">*</span> <span class="p">(</span><span class="mf">8.0</span> <span class="o">+</span> <span class="mf">7.0</span> <span class="o">*</span> <span class="n">e</span> <span class="o">*</span> <span class="n">e</span><span class="p">)</span> <span class="o">/</span> <span class="p">(</span><span class="mf">5.0</span> <span class="o">*</span> <span class="n">p</span> <span class="o">*</span> <span class="n">denom</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_edot_PN</span><span class="p">(</span><span class="n">p</span><span class="p">,</span> <span class="n">e</span><span class="p">,</span> <span class="n">r_isco</span><span class="p">,</span> <span class="n">p_sep</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Leading-order ė PN factor with separatrix-dependent denominator (numpy).&quot;&quot;&quot;</span>
+    <span class="n">denom</span> <span class="o">=</span> <span class="p">(</span><span class="n">p</span> <span class="o">-</span> <span class="n">r_isco</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span> <span class="o">-</span> <span class="p">(</span><span class="n">p_sep</span> <span class="o">-</span> <span class="n">r_isco</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span>
+    <span class="n">one_me2</span> <span class="o">=</span> <span class="p">(</span><span class="mf">1.0</span> <span class="o">-</span> <span class="n">e</span> <span class="o">*</span> <span class="n">e</span><span class="p">)</span> <span class="o">**</span> <span class="mf">1.5</span>
+    <span class="k">return</span> <span class="n">one_me2</span> <span class="o">*</span> <span class="p">(</span><span class="mf">304.0</span> <span class="o">+</span> <span class="mf">121.0</span> <span class="o">*</span> <span class="n">e</span> <span class="o">*</span> <span class="n">e</span><span class="p">)</span> <span class="o">/</span> <span class="p">(</span><span class="mf">15.0</span> <span class="o">*</span> <span class="n">p</span> <span class="o">*</span> <span class="n">p</span> <span class="o">*</span> <span class="n">denom</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_pdot_PN_jax</span><span class="p">(</span><span class="n">p</span><span class="p">,</span> <span class="n">e</span><span class="p">,</span> <span class="n">r_isco</span><span class="p">,</span> <span class="n">p_sep</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Leading-order ṗ PN factor (JAX, ODE runtime).&quot;&quot;&quot;</span>
+    <span class="n">denom</span> <span class="o">=</span> <span class="p">(</span><span class="n">p</span> <span class="o">-</span> <span class="n">r_isco</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span> <span class="o">-</span> <span class="p">(</span><span class="n">p_sep</span> <span class="o">-</span> <span class="n">r_isco</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span>
+    <span class="n">one_me2</span> <span class="o">=</span> <span class="p">(</span><span class="mf">1.0</span> <span class="o">-</span> <span class="n">e</span> <span class="o">**</span> <span class="mi">2</span><span class="p">)</span> <span class="o">**</span> <span class="mf">1.5</span>
+    <span class="k">return</span> <span class="mf">8.0</span> <span class="o">*</span> <span class="n">one_me2</span> <span class="o">*</span> <span class="p">(</span><span class="mf">8.0</span> <span class="o">+</span> <span class="mf">7.0</span> <span class="o">*</span> <span class="n">e</span> <span class="o">**</span> <span class="mi">2</span><span class="p">)</span> <span class="o">/</span> <span class="p">(</span><span class="mf">5.0</span> <span class="o">*</span> <span class="n">p</span> <span class="o">*</span> <span class="n">denom</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_edot_PN_jax</span><span class="p">(</span><span class="n">p</span><span class="p">,</span> <span class="n">e</span><span class="p">,</span> <span class="n">r_isco</span><span class="p">,</span> <span class="n">p_sep</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Leading-order ė PN factor (JAX, ODE runtime).&quot;&quot;&quot;</span>
+    <span class="n">denom</span> <span class="o">=</span> <span class="p">(</span><span class="n">p</span> <span class="o">-</span> <span class="n">r_isco</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span> <span class="o">-</span> <span class="p">(</span><span class="n">p_sep</span> <span class="o">-</span> <span class="n">r_isco</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span>
+    <span class="n">one_me2</span> <span class="o">=</span> <span class="p">(</span><span class="mf">1.0</span> <span class="o">-</span> <span class="n">e</span> <span class="o">**</span> <span class="mi">2</span><span class="p">)</span> <span class="o">**</span> <span class="mf">1.5</span>
+    <span class="k">return</span> <span class="n">one_me2</span> <span class="o">*</span> <span class="p">(</span><span class="mf">304.0</span> <span class="o">+</span> <span class="mf">121.0</span> <span class="o">*</span> <span class="n">e</span> <span class="o">**</span> <span class="mi">2</span><span class="p">)</span> <span class="o">/</span> <span class="p">(</span><span class="mf">15.0</span> <span class="o">*</span> <span class="n">p</span> <span class="o">*</span> <span class="n">p</span> <span class="o">*</span> <span class="n">denom</span><span class="p">)</span>
+
+
 <span class="c1"># ---------------------------------------------------------------------------</span>
 <span class="c1"># Data containers</span>
 <span class="c1"># ---------------------------------------------------------------------------</span>
@@ -233,28 +268,30 @@
 <span class="k">class</span><span class="w"> </span><span class="nc">FluxData</span><span class="p">(</span><span class="n">eqx</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
 <span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;Container for the Kerr eccentric equatorial flux interpolators.</span>
 
-<span class="sd">    Stores the ratio ``Edot_GR / Edot_PN`` and ``Ldot_GR / Ldot_PN``</span>
-<span class="sd">    (ELQ convention), where the PN normalisation is the leading-order</span>
-<span class="sd">    Peters (1964) expression.  At ODE run-time the ratio is multiplied by</span>
-<span class="sd">    the PN function to recover the physical flux; the Jacobian</span>
-<span class="sd">    (Ė, L̇) → (ṗ, ė) is then applied via JAX automatic differentiation.</span>
+<span class="sd">    Stores the dimensionless ratios ``pdot_GR / pdot_PN`` and</span>
+<span class="sd">    ``edot_GR / edot_PN`` (pex convention, matching FEW&#39;s default).  The PN</span>
+<span class="sd">    normalisation uses separatrix-dependent functions that cancel the physical</span>
+<span class="sd">    pole in the flux near the ISCO, giving smoother interpolants.</span>
+
+<span class="sd">    At ODE run-time the physical derivatives are recovered by multiplying the</span>
+<span class="sd">    stored ratio by the PN function; no Jacobian inversion is required.</span>
 
 <span class="sd">    Inherits from :class:`equinox.Module` so it is a valid JAX pytree and</span>
 <span class="sd">    can be used inside JIT-compiled functions and vmapped code.</span>
 
 <span class="sd">    Attributes</span>
 <span class="sd">    ----------</span>
-<span class="sd">    Edot_A, Ldot_A : CubicSpline3D</span>
-<span class="sd">        Energy- and angular-momentum-flux ratio interpolators for Region A.</span>
-<span class="sd">        Inputs are normalised coordinates (u, w, z) ∈ [0, 1]³.</span>
-<span class="sd">    Edot_B, Ldot_B : CubicSpline3D</span>
+<span class="sd">    pdot_A, edot_A : CubicSpline3D</span>
+<span class="sd">        Semi-latus rectum and eccentricity rate ratio interpolators for</span>
+<span class="sd">        Region A.  Inputs are normalised coordinates (u, w, z) ∈ [0, 1]³.</span>
+<span class="sd">    pdot_B, edot_B : CubicSpline3D</span>
 <span class="sd">        Same for Region B.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
-    <span class="n">Edot_A</span><span class="p">:</span> <span class="n">CubicSpline3D</span>
-    <span class="n">Ldot_A</span><span class="p">:</span> <span class="n">CubicSpline3D</span>
-    <span class="n">Edot_B</span><span class="p">:</span> <span class="n">CubicSpline3D</span>
-    <span class="n">Ldot_B</span><span class="p">:</span> <span class="n">CubicSpline3D</span></div>
+    <span class="n">pdot_A</span><span class="p">:</span> <span class="n">CubicSpline3D</span>
+    <span class="n">edot_A</span><span class="p">:</span> <span class="n">CubicSpline3D</span>
+    <span class="n">pdot_B</span><span class="p">:</span> <span class="n">CubicSpline3D</span>
+    <span class="n">edot_B</span><span class="p">:</span> <span class="n">CubicSpline3D</span></div>
 
 
 
@@ -357,6 +394,59 @@
 
 
 <span class="c1"># ---------------------------------------------------------------------------</span>
+<span class="c1"># Grid densification helper</span>
+<span class="c1"># ---------------------------------------------------------------------------</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_densify_grid</span><span class="p">(</span>
+    <span class="n">u</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+    <span class="n">w</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+    <span class="n">z</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+    <span class="n">rp</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+    <span class="n">re</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+    <span class="n">factor</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Densify a flux-ratio grid using E(3) cubic splines (multispline).</span>
+
+<span class="sd">    Builds ``multispline.TricubicSpline`` instances with E(3) boundary</span>
+<span class="sd">    conditions on the original grid, then evaluates them on a ``factor``-times</span>
+<span class="sd">    denser uniform grid.  The denser grid is then passed to</span>
+<span class="sd">    ``interpax`` C²-splines, whose boundary-condition error is</span>
+<span class="sd">    O((h/factor)⁴) ≈ (1/factor)⁴ × smaller than on the original grid.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    u, w, z : np.ndarray, 1-D</span>
+<span class="sd">        Original coordinate axes (uniform, [0, 1]).</span>
+<span class="sd">    rp, re : np.ndarray, shape (Nu, Nw, Nz)</span>
+<span class="sd">        Flux ratio arrays on the original grid.</span>
+<span class="sd">    factor : int</span>
+<span class="sd">        Densification factor (must be ≥ 2).</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    u_d, w_d, z_d, rp_d, re_d : np.ndarray</span>
+<span class="sd">        Denser grid axes and flux-ratio arrays.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">multispline.spline</span><span class="w"> </span><span class="kn">import</span> <span class="n">TricubicSpline</span>
+
+    <span class="n">spl_rp</span> <span class="o">=</span> <span class="n">TricubicSpline</span><span class="p">(</span><span class="n">u</span><span class="p">,</span> <span class="n">w</span><span class="p">,</span> <span class="n">z</span><span class="p">,</span> <span class="n">rp</span><span class="p">)</span>
+    <span class="n">spl_re</span> <span class="o">=</span> <span class="n">TricubicSpline</span><span class="p">(</span><span class="n">u</span><span class="p">,</span> <span class="n">w</span><span class="p">,</span> <span class="n">z</span><span class="p">,</span> <span class="n">re</span><span class="p">)</span>
+
+    <span class="n">Nu_d</span> <span class="o">=</span> <span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">u</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span> <span class="o">*</span> <span class="n">factor</span> <span class="o">+</span> <span class="mi">1</span>
+    <span class="n">Nw_d</span> <span class="o">=</span> <span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">w</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span> <span class="o">*</span> <span class="n">factor</span> <span class="o">+</span> <span class="mi">1</span>
+    <span class="n">Nz_d</span> <span class="o">=</span> <span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">z</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span> <span class="o">*</span> <span class="n">factor</span> <span class="o">+</span> <span class="mi">1</span>
+    <span class="n">u_d</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linspace</span><span class="p">(</span><span class="nb">float</span><span class="p">(</span><span class="n">u</span><span class="p">[</span><span class="mi">0</span><span class="p">]),</span> <span class="nb">float</span><span class="p">(</span><span class="n">u</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]),</span> <span class="n">Nu_d</span><span class="p">)</span>
+    <span class="n">w_d</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linspace</span><span class="p">(</span><span class="nb">float</span><span class="p">(</span><span class="n">w</span><span class="p">[</span><span class="mi">0</span><span class="p">]),</span> <span class="nb">float</span><span class="p">(</span><span class="n">w</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]),</span> <span class="n">Nw_d</span><span class="p">)</span>
+    <span class="n">z_d</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linspace</span><span class="p">(</span><span class="nb">float</span><span class="p">(</span><span class="n">z</span><span class="p">[</span><span class="mi">0</span><span class="p">]),</span> <span class="nb">float</span><span class="p">(</span><span class="n">z</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]),</span> <span class="n">Nz_d</span><span class="p">)</span>
+
+    <span class="n">uu</span><span class="p">,</span> <span class="n">ww</span><span class="p">,</span> <span class="n">zz</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">meshgrid</span><span class="p">(</span><span class="n">u_d</span><span class="p">,</span> <span class="n">w_d</span><span class="p">,</span> <span class="n">z_d</span><span class="p">,</span> <span class="n">indexing</span><span class="o">=</span><span class="s2">&quot;ij&quot;</span><span class="p">)</span>
+    <span class="n">shape</span> <span class="o">=</span> <span class="p">(</span><span class="n">Nu_d</span><span class="p">,</span> <span class="n">Nw_d</span><span class="p">,</span> <span class="n">Nz_d</span><span class="p">)</span>
+    <span class="n">rp_d</span> <span class="o">=</span> <span class="n">spl_rp</span><span class="p">(</span><span class="n">uu</span><span class="o">.</span><span class="n">ravel</span><span class="p">(),</span> <span class="n">ww</span><span class="o">.</span><span class="n">ravel</span><span class="p">(),</span> <span class="n">zz</span><span class="o">.</span><span class="n">ravel</span><span class="p">())</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">shape</span><span class="p">)</span>
+    <span class="n">re_d</span> <span class="o">=</span> <span class="n">spl_re</span><span class="p">(</span><span class="n">uu</span><span class="o">.</span><span class="n">ravel</span><span class="p">(),</span> <span class="n">ww</span><span class="o">.</span><span class="n">ravel</span><span class="p">(),</span> <span class="n">zz</span><span class="o">.</span><span class="n">ravel</span><span class="p">())</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">shape</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">u_d</span><span class="p">,</span> <span class="n">w_d</span><span class="p">,</span> <span class="n">z_d</span><span class="p">,</span> <span class="n">rp_d</span><span class="p">,</span> <span class="n">re_d</span>
+
+
+<span class="c1"># ---------------------------------------------------------------------------</span>
 <span class="c1"># Flux data loader</span>
 <span class="c1"># ---------------------------------------------------------------------------</span>
 
@@ -365,25 +455,34 @@
 <span class="k">def</span><span class="w"> </span><span class="nf">load_flux_data</span><span class="p">(</span>
     <span class="n">data_dir</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span> <span class="o">|</span> <span class="n">Path</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="n">downsample</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">list</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">densify_factor</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">FluxData</span><span class="p">:</span>
-<span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;Load Kerr eccentric equatorial flux data (ELQ convention).</span>
+<span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;Load Kerr eccentric equatorial flux data in pex convention.</span>
 
-<span class="sd">    Reads ``KerrEccEqFluxData.h5`` and builds JAX 3-D cubic-spline</span>
-<span class="sd">    interpolators for the PN-normalised energy and angular-momentum flux</span>
-<span class="sd">    ratios.  The normalisation uses the leading-order Peters (1964)</span>
-<span class="sd">    expressions, which have no separatrix singularity.</span>
+<span class="sd">    Reads ``KerrEccEqFluxData.h5``, converts (Ė, L̇) → (ṗ, ė) via the</span>
+<span class="sd">    analytical Kerr Jacobian, then normalises by the separatrix-dependent PN</span>
+<span class="sd">    functions to obtain dimensionless ratios ṗ/ṗ_PN and ė/ė_PN.</span>
 
-<span class="sd">    At ODE run-time, the physical fluxes are recovered by multiplying the</span>
-<span class="sd">    stored ratio by the PN function.  The Jacobian</span>
-<span class="sd">    (Ė, L̇) → (ṗ, ė) is then applied via JAX automatic differentiation</span>
-<span class="sd">    inside :class:`~fewtrax.trajectory.EMRIInspiral`.</span>
+<span class="sd">    By default the pex-ratio grids are densified by ``densify_factor`` (default</span>
+<span class="sd">    3) using E(3) cubic splines from ``multispline`` before being stored in</span>
+<span class="sd">    JAX ``interpax`` C² splines.  This eliminates the ~1.6e-6 relative</span>
+<span class="sd">    interpolation error that would otherwise accumulate as a phase drift of</span>
+<span class="sd">    ~2.6 rad yr⁻¹, causing the waveform overlap to collapse for T ≳ 0.1 yr.</span>
 
 <span class="sd">    Parameters</span>
 <span class="sd">    ----------</span>
 <span class="sd">    data_dir : str or Path, optional</span>
 <span class="sd">        Directory containing ``KerrEccEqFluxData.h5``.</span>
 <span class="sd">    downsample : list of two 3-tuples, optional</span>
-<span class="sd">        ``[(dU_A, dW_A, dZ_A), (dU_B, dW_B, dZ_B)]`` downsampling factors.</span>
+<span class="sd">        ``[(dU_A, dW_A, dZ_A), (dU_B, dW_B, dZ_B)]`` downsampling factors</span>
+<span class="sd">        applied before densification.  Default ``[(1,1,1),(1,1,1)]`` keeps</span>
+<span class="sd">        the full grid.</span>
+<span class="sd">    densify_factor : int, optional</span>
+<span class="sd">        Grid densification factor applied after ELQ→pex conversion.</span>
+<span class="sd">        ``densify_factor=3`` (default) inserts 2 extra points between every</span>
+<span class="sd">        original grid point in each dimension, reducing the C²-vs-E(3)</span>
+<span class="sd">        boundary-condition interpolation error by ~(1/3)⁴ ≈ 80×.</span>
+<span class="sd">        Set to 1 to skip densification.</span>
 
 <span class="sd">    Returns</span>
 <span class="sd">    -------</span>
@@ -417,35 +516,75 @@
         <span class="n">u_A</span><span class="o">.</span><span class="n">size</span><span class="p">,</span> <span class="n">w_A</span><span class="o">.</span><span class="n">size</span><span class="p">,</span> <span class="n">z_A</span><span class="o">.</span><span class="n">size</span><span class="p">,</span> <span class="n">u_B</span><span class="o">.</span><span class="n">size</span><span class="p">,</span> <span class="n">w_B</span><span class="o">.</span><span class="n">size</span><span class="p">,</span> <span class="n">z_B</span><span class="o">.</span><span class="n">size</span><span class="p">,</span>
     <span class="p">)</span>
 
-    <span class="c1"># Compute PN normalisation on the grid points for each region</span>
-    <span class="k">def</span><span class="w"> </span><span class="nf">_pn_normalise</span><span class="p">(</span><span class="n">u_g</span><span class="p">,</span> <span class="n">w_g</span><span class="p">,</span> <span class="n">z_g</span><span class="p">,</span> <span class="n">Edot_raw</span><span class="p">,</span> <span class="n">Ldot_raw</span><span class="p">,</span> <span class="n">is_A</span><span class="p">:</span> <span class="nb">bool</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_pex_normalise</span><span class="p">(</span><span class="n">u_g</span><span class="p">,</span> <span class="n">w_g</span><span class="p">,</span> <span class="n">z_g</span><span class="p">,</span> <span class="n">Edot_raw</span><span class="p">,</span> <span class="n">Ldot_raw</span><span class="p">,</span> <span class="n">is_A</span><span class="p">:</span> <span class="nb">bool</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Convert (Edot, Ldot) grid to pex convention (pdot/pdot_PN, edot/edot_PN).</span>
+
+<span class="sd">        Matches FEW&#39;s convention exactly:</span>
+<span class="sd">        - x_g = sign(a_g): prograde for a&gt;0, retrograde for a&lt;0</span>
+<span class="sd">        - Ldot is multiplied by x_g before the Jacobian (FEW sign convention)</span>
+<span class="sd">        - PN functions use (|a|, e, x_g) so retrograde ISCO is computed correctly</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">fewtrax.utils.jacobian</span><span class="w"> </span><span class="kn">import</span> <span class="n">ELdot_to_pedot_grid</span>
+
         <span class="n">uu</span><span class="p">,</span> <span class="n">ww</span><span class="p">,</span> <span class="n">zz</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">meshgrid</span><span class="p">(</span><span class="n">u_g</span><span class="p">,</span> <span class="n">w_g</span><span class="p">,</span> <span class="n">z_g</span><span class="p">,</span> <span class="n">indexing</span><span class="o">=</span><span class="s2">&quot;ij&quot;</span><span class="p">)</span>
         <span class="n">uu</span> <span class="o">=</span> <span class="n">uu</span><span class="o">.</span><span class="n">ravel</span><span class="p">();</span> <span class="n">ww</span> <span class="o">=</span> <span class="n">ww</span><span class="o">.</span><span class="n">ravel</span><span class="p">();</span> <span class="n">zz</span> <span class="o">=</span> <span class="n">zz</span><span class="o">.</span><span class="n">ravel</span><span class="p">()</span>
         <span class="k">if</span> <span class="n">is_A</span><span class="p">:</span>
-            <span class="n">_</span><span class="p">,</span> <span class="n">p_g</span><span class="p">,</span> <span class="n">e_g</span> <span class="o">=</span> <span class="n">_apex_A_numpy</span><span class="p">(</span><span class="n">uu</span><span class="p">,</span> <span class="n">ww</span><span class="p">,</span> <span class="n">zz</span><span class="p">,</span> <span class="n">_ALPHA_FLUX</span><span class="p">,</span> <span class="n">_BETA_FLUX</span><span class="p">)</span>
+            <span class="n">a_g</span><span class="p">,</span> <span class="n">p_g</span><span class="p">,</span> <span class="n">e_g</span> <span class="o">=</span> <span class="n">_apex_A_numpy</span><span class="p">(</span><span class="n">uu</span><span class="p">,</span> <span class="n">ww</span><span class="p">,</span> <span class="n">zz</span><span class="p">,</span> <span class="n">_ALPHA_FLUX</span><span class="p">,</span> <span class="n">_BETA_FLUX</span><span class="p">)</span>
         <span class="k">else</span><span class="p">:</span>
-            <span class="n">_</span><span class="p">,</span> <span class="n">p_g</span><span class="p">,</span> <span class="n">e_g</span> <span class="o">=</span> <span class="n">_apex_B_numpy</span><span class="p">(</span><span class="n">uu</span><span class="p">,</span> <span class="n">ww</span><span class="p">,</span> <span class="n">zz</span><span class="p">)</span>
-        <span class="n">Epn</span> <span class="o">=</span> <span class="n">_PN_Edot</span><span class="p">(</span><span class="n">p_g</span><span class="p">,</span> <span class="n">e_g</span><span class="p">)</span>
-        <span class="n">Lpn</span> <span class="o">=</span> <span class="n">_PN_Ldot</span><span class="p">(</span><span class="n">p_g</span><span class="p">,</span> <span class="n">e_g</span><span class="p">)</span>
+            <span class="n">a_g</span><span class="p">,</span> <span class="n">p_g</span><span class="p">,</span> <span class="n">e_g</span> <span class="o">=</span> <span class="n">_apex_B_numpy</span><span class="p">(</span><span class="n">uu</span><span class="p">,</span> <span class="n">ww</span><span class="p">,</span> <span class="n">zz</span><span class="p">)</span>
+
+        <span class="c1"># Match FEW: x_g = sign(a_g); prograde for a&gt;0, retrograde for a&lt;0</span>
+        <span class="n">x_g</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sign</span><span class="p">(</span><span class="n">a_g</span><span class="p">)</span>
+        <span class="n">x_g</span><span class="p">[</span><span class="n">x_g</span> <span class="o">==</span> <span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="mf">1.0</span>
+
+        <span class="c1"># FEW flips Ldot by x_g before passing to the Jacobian</span>
+        <span class="n">Ldot_signed</span> <span class="o">=</span> <span class="n">Ldot_raw</span><span class="o">.</span><span class="n">ravel</span><span class="p">()</span> <span class="o">*</span> <span class="n">x_g</span>
+
+        <span class="c1"># Step 1: Convert (Edot, Ldot) → (pdot, edot) via analytical Jacobian</span>
+        <span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;  Converting ELdot → pedot via JAX Jacobian …&quot;</span><span class="p">)</span>
+        <span class="n">pdot_g</span><span class="p">,</span> <span class="n">edot_g</span> <span class="o">=</span> <span class="n">ELdot_to_pedot_grid</span><span class="p">(</span>
+            <span class="n">np</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">a_g</span><span class="p">),</span> <span class="n">p_g</span><span class="p">,</span> <span class="n">e_g</span><span class="p">,</span> <span class="n">x_g</span><span class="p">,</span>
+            <span class="n">Edot_raw</span><span class="o">.</span><span class="n">ravel</span><span class="p">(),</span> <span class="n">Ldot_signed</span><span class="p">,</span>
+        <span class="p">)</span>
+
+        <span class="c1"># Step 2: Compute separatrix-dependent PN normalisation</span>
+        <span class="c1"># Uses (|a|, e, x_g) so retrograde ISCO is computed correctly</span>
+        <span class="n">r_isco_g</span> <span class="o">=</span> <span class="n">_separatrix_numpy</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">a_g</span><span class="p">),</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros_like</span><span class="p">(</span><span class="n">e_g</span><span class="p">),</span> <span class="n">x_g</span><span class="p">)</span>
+        <span class="n">p_sep_g</span> <span class="o">=</span> <span class="n">_separatrix_numpy</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">a_g</span><span class="p">),</span> <span class="n">e_g</span><span class="p">,</span> <span class="n">x_g</span><span class="p">)</span>
+
+        <span class="n">pdot_pn</span> <span class="o">=</span> <span class="n">_pdot_PN</span><span class="p">(</span><span class="n">p_g</span><span class="p">,</span> <span class="n">e_g</span><span class="p">,</span> <span class="n">r_isco_g</span><span class="p">,</span> <span class="n">p_sep_g</span><span class="p">)</span>
+        <span class="n">edot_pn</span> <span class="o">=</span> <span class="n">_edot_PN</span><span class="p">(</span><span class="n">p_g</span><span class="p">,</span> <span class="n">e_g</span><span class="p">,</span> <span class="n">r_isco_g</span><span class="p">,</span> <span class="n">p_sep_g</span><span class="p">)</span>
+
         <span class="n">shape</span> <span class="o">=</span> <span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">u_g</span><span class="p">),</span> <span class="nb">len</span><span class="p">(</span><span class="n">w_g</span><span class="p">),</span> <span class="nb">len</span><span class="p">(</span><span class="n">z_g</span><span class="p">))</span>
         <span class="k">with</span> <span class="n">np</span><span class="o">.</span><span class="n">errstate</span><span class="p">(</span><span class="n">divide</span><span class="o">=</span><span class="s2">&quot;ignore&quot;</span><span class="p">,</span> <span class="n">invalid</span><span class="o">=</span><span class="s2">&quot;ignore&quot;</span><span class="p">):</span>
-            <span class="n">r_E</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">Epn</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">,</span> <span class="n">Edot_raw</span><span class="o">.</span><span class="n">ravel</span><span class="p">()</span> <span class="o">/</span> <span class="n">Epn</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">)</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">shape</span><span class="p">)</span>
-            <span class="n">r_L</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">Lpn</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">,</span> <span class="n">Ldot_raw</span><span class="o">.</span><span class="n">ravel</span><span class="p">()</span> <span class="o">/</span> <span class="n">Lpn</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">)</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">shape</span><span class="p">)</span>
-        <span class="c1"># Replace any residual NaN/Inf (should not occur with Peters PN)</span>
-        <span class="n">r_E</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">isfinite</span><span class="p">(</span><span class="n">r_E</span><span class="p">),</span> <span class="n">r_E</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">)</span>
-        <span class="n">r_L</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">isfinite</span><span class="p">(</span><span class="n">r_L</span><span class="p">),</span> <span class="n">r_L</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">)</span>
-        <span class="k">return</span> <span class="n">r_E</span><span class="p">,</span> <span class="n">r_L</span>
+            <span class="n">rp</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">pdot_pn</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">,</span> <span class="n">pdot_g</span> <span class="o">/</span> <span class="n">pdot_pn</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">)</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">shape</span><span class="p">)</span>
+            <span class="n">re</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">edot_pn</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">,</span> <span class="n">edot_g</span> <span class="o">/</span> <span class="n">edot_pn</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">)</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">shape</span><span class="p">)</span>
+        <span class="n">rp</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">isfinite</span><span class="p">(</span><span class="n">rp</span><span class="p">),</span> <span class="n">rp</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">)</span>
+        <span class="n">re</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">isfinite</span><span class="p">(</span><span class="n">re</span><span class="p">),</span> <span class="n">re</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">rp</span><span class="p">,</span> <span class="n">re</span>
 
-    <span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Normalising Region A flux …&quot;</span><span class="p">)</span>
-    <span class="n">rE_A</span><span class="p">,</span> <span class="n">rL_A</span> <span class="o">=</span> <span class="n">_pn_normalise</span><span class="p">(</span><span class="n">u_A</span><span class="p">,</span> <span class="n">w_A</span><span class="p">,</span> <span class="n">z_A</span><span class="p">,</span> <span class="n">Edot_A</span><span class="p">,</span> <span class="n">Ldot_A</span><span class="p">,</span> <span class="kc">True</span><span class="p">)</span>
-    <span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Normalising Region B flux …&quot;</span><span class="p">)</span>
-    <span class="n">rE_B</span><span class="p">,</span> <span class="n">rL_B</span> <span class="o">=</span> <span class="n">_pn_normalise</span><span class="p">(</span><span class="n">u_B</span><span class="p">,</span> <span class="n">w_B</span><span class="p">,</span> <span class="n">z_B</span><span class="p">,</span> <span class="n">Edot_B</span><span class="p">,</span> <span class="n">Ldot_B</span><span class="p">,</span> <span class="kc">False</span><span class="p">)</span>
+    <span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Computing pex convention for Region A …&quot;</span><span class="p">)</span>
+    <span class="n">rp_A</span><span class="p">,</span> <span class="n">re_A</span> <span class="o">=</span> <span class="n">_pex_normalise</span><span class="p">(</span><span class="n">u_A</span><span class="p">,</span> <span class="n">w_A</span><span class="p">,</span> <span class="n">z_A</span><span class="p">,</span> <span class="n">Edot_A</span><span class="p">,</span> <span class="n">Ldot_A</span><span class="p">,</span> <span class="kc">True</span><span class="p">)</span>
+    <span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Computing pex convention for Region B …&quot;</span><span class="p">)</span>
+    <span class="n">rp_B</span><span class="p">,</span> <span class="n">re_B</span> <span class="o">=</span> <span class="n">_pex_normalise</span><span class="p">(</span><span class="n">u_B</span><span class="p">,</span> <span class="n">w_B</span><span class="p">,</span> <span class="n">z_B</span><span class="p">,</span> <span class="n">Edot_B</span><span class="p">,</span> <span class="n">Ldot_B</span><span class="p">,</span> <span class="kc">False</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">densify_factor</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+        <span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+            <span class="s2">&quot;Densifying flux grids by factor </span><span class="si">%d</span><span class="s2"> using E(3) cubic splines …&quot;</span><span class="p">,</span>
+            <span class="n">densify_factor</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="n">u_A</span><span class="p">,</span> <span class="n">w_A</span><span class="p">,</span> <span class="n">z_A</span><span class="p">,</span> <span class="n">rp_A</span><span class="p">,</span> <span class="n">re_A</span> <span class="o">=</span> <span class="n">_densify_grid</span><span class="p">(</span><span class="n">u_A</span><span class="p">,</span> <span class="n">w_A</span><span class="p">,</span> <span class="n">z_A</span><span class="p">,</span> <span class="n">rp_A</span><span class="p">,</span> <span class="n">re_A</span><span class="p">,</span> <span class="n">densify_factor</span><span class="p">)</span>
+        <span class="n">u_B</span><span class="p">,</span> <span class="n">w_B</span><span class="p">,</span> <span class="n">z_B</span><span class="p">,</span> <span class="n">rp_B</span><span class="p">,</span> <span class="n">re_B</span> <span class="o">=</span> <span class="n">_densify_grid</span><span class="p">(</span><span class="n">u_B</span><span class="p">,</span> <span class="n">w_B</span><span class="p">,</span> <span class="n">z_B</span><span class="p">,</span> <span class="n">rp_B</span><span class="p">,</span> <span class="n">re_B</span><span class="p">,</span> <span class="n">densify_factor</span><span class="p">)</span>
+        <span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+            <span class="s2">&quot;Dense grids — Region A: (</span><span class="si">%d</span><span class="s2">, </span><span class="si">%d</span><span class="s2">, </span><span class="si">%d</span><span class="s2">),  Region B: (</span><span class="si">%d</span><span class="s2">, </span><span class="si">%d</span><span class="s2">, </span><span class="si">%d</span><span class="s2">)&quot;</span><span class="p">,</span>
+            <span class="n">u_A</span><span class="o">.</span><span class="n">size</span><span class="p">,</span> <span class="n">w_A</span><span class="o">.</span><span class="n">size</span><span class="p">,</span> <span class="n">z_A</span><span class="o">.</span><span class="n">size</span><span class="p">,</span> <span class="n">u_B</span><span class="o">.</span><span class="n">size</span><span class="p">,</span> <span class="n">w_B</span><span class="o">.</span><span class="n">size</span><span class="p">,</span> <span class="n">z_B</span><span class="o">.</span><span class="n">size</span><span class="p">,</span>
+        <span class="p">)</span>
 
     <span class="k">return</span> <span class="n">FluxData</span><span class="p">(</span>
-        <span class="n">Edot_A</span><span class="o">=</span><span class="n">CubicSpline3D</span><span class="p">(</span><span class="n">u_A</span><span class="p">,</span> <span class="n">w_A</span><span class="p">,</span> <span class="n">z_A</span><span class="p">,</span> <span class="n">rE_A</span><span class="p">),</span>
-        <span class="n">Ldot_A</span><span class="o">=</span><span class="n">CubicSpline3D</span><span class="p">(</span><span class="n">u_A</span><span class="p">,</span> <span class="n">w_A</span><span class="p">,</span> <span class="n">z_A</span><span class="p">,</span> <span class="n">rL_A</span><span class="p">),</span>
-        <span class="n">Edot_B</span><span class="o">=</span><span class="n">CubicSpline3D</span><span class="p">(</span><span class="n">u_B</span><span class="p">,</span> <span class="n">w_B</span><span class="p">,</span> <span class="n">z_B</span><span class="p">,</span> <span class="n">rE_B</span><span class="p">),</span>
-        <span class="n">Ldot_B</span><span class="o">=</span><span class="n">CubicSpline3D</span><span class="p">(</span><span class="n">u_B</span><span class="p">,</span> <span class="n">w_B</span><span class="p">,</span> <span class="n">z_B</span><span class="p">,</span> <span class="n">rL_B</span><span class="p">),</span>
+        <span class="n">pdot_A</span><span class="o">=</span><span class="n">CubicSpline3D</span><span class="p">(</span><span class="n">u_A</span><span class="p">,</span> <span class="n">w_A</span><span class="p">,</span> <span class="n">z_A</span><span class="p">,</span> <span class="n">rp_A</span><span class="p">),</span>
+        <span class="n">edot_A</span><span class="o">=</span><span class="n">CubicSpline3D</span><span class="p">(</span><span class="n">u_A</span><span class="p">,</span> <span class="n">w_A</span><span class="p">,</span> <span class="n">z_A</span><span class="p">,</span> <span class="n">re_A</span><span class="p">),</span>
+        <span class="n">pdot_B</span><span class="o">=</span><span class="n">CubicSpline3D</span><span class="p">(</span><span class="n">u_B</span><span class="p">,</span> <span class="n">w_B</span><span class="p">,</span> <span class="n">z_B</span><span class="p">,</span> <span class="n">rp_B</span><span class="p">),</span>
+        <span class="n">edot_B</span><span class="o">=</span><span class="n">CubicSpline3D</span><span class="p">(</span><span class="n">u_B</span><span class="p">,</span> <span class="n">w_B</span><span class="p">,</span> <span class="n">z_B</span><span class="p">,</span> <span class="n">re_B</span><span class="p">),</span>
     <span class="p">)</span></div>
 
 
