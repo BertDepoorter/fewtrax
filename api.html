@@ -69,6 +69,7 @@
 <li class="toctree-l2"><a class="reference internal" href="#backward-integration">Backward integration</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#fewtrax.trajectory.inspiral.EMRIInspiral"><code class="docutils literal notranslate"><span class="pre">EMRIInspiral</span></code></a><ul>
 <li class="toctree-l3"><a class="reference internal" href="#fewtrax.trajectory.inspiral.EMRIInspiral.get_frequency_track"><code class="docutils literal notranslate"><span class="pre">EMRIInspiral.get_frequency_track()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#fewtrax.trajectory.inspiral.EMRIInspiral.get_multi_track"><code class="docutils literal notranslate"><span class="pre">EMRIInspiral.get_multi_track()</span></code></a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="#fewtrax.trajectory.inspiral.run_inspiral"><code class="docutils literal notranslate"><span class="pre">run_inspiral()</span></code></a></li>
@@ -318,10 +319,15 @@ Jacobian <span class="math notranslate nohighlight">\(\partial(E,L)/\partial(p,e
 smooth problems) with <code class="xref py py-class docutils literal notranslate"><span class="pre">diffrax.PIDController</span></code> adaptive step-size
 control.  The system is stopped when the orbit approaches the separatrix.</p>
 <p>The ODE is fully JIT-compilable and differentiable with respect to the
-initial conditions <span class="math notranslate nohighlight">\((p_0, e_0)\)</span> and the BH spin <span class="math notranslate nohighlight">\(a\)</span>.</p>
-<p>To vmap over a batch of initial conditions:</p>
+initial conditions <span class="math notranslate nohighlight">\((p_0, e_0)\)</span>, the BH spin <span class="math notranslate nohighlight">\(a\)</span>, and the
+mass parameters <span class="math notranslate nohighlight">\((M, \mu)\)</span>.</p>
+<p><a class="reference internal" href="#fewtrax.trajectory.inspiral.EMRIInspiral" title="fewtrax.trajectory.inspiral.EMRIInspiral"><code class="xref py py-attr docutils literal notranslate"><span class="pre">EMRIInspiral</span></code></a> stores only the (static) flux data.  All physical
+parameters — including <code class="docutils literal notranslate"><span class="pre">a</span></code> — are passed at call time, so a single
+instance can be vmapped over the full parameter space:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">jax</span><span class="w"> </span><span class="kn">import</span> <span class="n">vmap</span>
-<span class="n">batch_traj</span> <span class="o">=</span> <span class="n">vmap</span><span class="p">(</span><span class="n">traj</span><span class="p">)(</span><span class="n">p0_arr</span><span class="p">,</span> <span class="n">e0_arr</span><span class="p">)</span>
+<span class="n">traj</span> <span class="o">=</span> <span class="n">EMRIInspiral</span><span class="p">(</span><span class="n">flux_data</span><span class="p">)</span>
+<span class="n">batch</span> <span class="o">=</span> <span class="n">vmap</span><span class="p">(</span><span class="k">lambda</span> <span class="n">p0</span><span class="p">,</span> <span class="n">e0</span><span class="p">,</span> <span class="n">a</span><span class="p">:</span> <span class="n">traj</span><span class="p">(</span><span class="n">p0</span><span class="o">=</span><span class="n">p0</span><span class="p">,</span> <span class="n">e0</span><span class="o">=</span><span class="n">e0</span><span class="p">,</span> <span class="n">a</span><span class="o">=</span><span class="n">a</span><span class="p">,</span> <span class="n">T</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span> <span class="n">M</span><span class="o">=</span><span class="mf">1e6</span><span class="p">,</span> <span class="n">mu</span><span class="o">=</span><span class="mf">10.0</span><span class="p">))</span>
+<span class="n">results</span> <span class="o">=</span> <span class="n">batch</span><span class="p">(</span><span class="n">p0_arr</span><span class="p">,</span> <span class="n">e0_arr</span><span class="p">,</span> <span class="n">a_arr</span><span class="p">)</span>
 </pre></div>
 </div>
 <section id="backward-integration">
@@ -339,7 +345,7 @@ and the integration runs for duration <span class="math notranslate nohighlight"
 </section>
 <dl class="py class">
 <dt class="sig sig-object py" id="fewtrax.trajectory.inspiral.EMRIInspiral">
-<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">fewtrax.trajectory.inspiral.</span></span><span class="sig-name descname"><span class="pre">EMRIInspiral</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">flux_data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">a</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x0</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/fewtrax/trajectory/inspiral.html#EMRIInspiral"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#fewtrax.trajectory.inspiral.EMRIInspiral" title="Link to this definition"></a></dt>
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">fewtrax.trajectory.inspiral.</span></span><span class="sig-name descname"><span class="pre">EMRIInspiral</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">flux_data</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/fewtrax/trajectory/inspiral.html#EMRIInspiral"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#fewtrax.trajectory.inspiral.EMRIInspiral" title="Link to this definition"></a></dt>
 <dd><p>Adiabatic EMRI trajectory integrator (JIT/vmap-compatible).</p>
 <p>Integrates the adiabatic inspiral ODE using <code class="xref py py-class docutils literal notranslate"><span class="pre">diffrax.Tsit5</span></code>
 with adaptive step-size control.  The radiation-reaction force
@@ -355,18 +361,17 @@ tables using the <strong>pex convention</strong> (matching FEW):</p>
 </ol>
 <p>This avoids the runtime Jacobian inversion that was previously
 needed in the ELQ convention, improving both speed and accuracy.</p>
+<p><code class="docutils literal notranslate"><span class="pre">a</span></code> and <code class="docutils literal notranslate"><span class="pre">x0</span></code> are <strong>call-time</strong> arguments rather than constructor
+fields, so a single instance can be vmapped over the full five-parameter
+space <span class="math notranslate nohighlight">\((M, \mu, a, p_0, e_0)\)</span> without rebuilding the Module.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>flux_data</strong> (<a class="reference internal" href="#fewtrax.data.loader.FluxData" title="fewtrax.data.loader.FluxData"><em>FluxData</em></a>) – Pre-loaded flux interpolators (pex convention).</p></li>
-<li><p><strong>a</strong> (<em>float</em>) – Dimensionless BH spin.</p></li>
-<li><p><strong>x0</strong> (<em>float</em>) – Inclination cosine (+1 prograde, -1 retrograde).</p></li>
-</ul>
+<dd class="field-odd"><p><strong>flux_data</strong> (<a class="reference internal" href="#fewtrax.data.loader.FluxData" title="fewtrax.data.loader.FluxData"><em>FluxData</em></a>) – Pre-loaded flux interpolators (pex convention).</p>
 </dd>
 </dl>
 <dl class="py method">
 <dt class="sig sig-object py" id="fewtrax.trajectory.inspiral.EMRIInspiral.get_frequency_track">
-<span class="sig-name descname"><span class="pre">get_frequency_track</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">p0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">e0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">T</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">M</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mu</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">l</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">m</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">k</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dense_steps</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">100</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">backward</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">e_f</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/fewtrax/trajectory/inspiral.html#EMRIInspiral.get_frequency_track"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#fewtrax.trajectory.inspiral.EMRIInspiral.get_frequency_track" title="Link to this definition"></a></dt>
+<span class="sig-name descname"><span class="pre">get_frequency_track</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">p0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">e0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">T</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">M</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mu</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">a</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">l</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">m</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">k</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x0</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dense_steps</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">100</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">backward</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">e_f</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/fewtrax/trajectory/inspiral.html#EMRIInspiral.get_frequency_track"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#fewtrax.trajectory.inspiral.EMRIInspiral.get_frequency_track" title="Link to this definition"></a></dt>
 <dd><p>Compute the instantaneous frequency track of harmonic <span class="math notranslate nohighlight">\((l,m,k,n)\)</span>.</p>
 <p>The harmonic frequency is</p>
 <div class="math notranslate nohighlight">
@@ -382,10 +387,12 @@ needed in the ELQ convention, improving both speed and accuracy.</p>
 <li><p><strong>T</strong> (<em>float</em>) – Observation time [years], primary and secondary masses.</p></li>
 <li><p><strong>M</strong> (<em>float</em>) – Observation time [years], primary and secondary masses.</p></li>
 <li><p><strong>mu</strong> (<em>float</em>) – Observation time [years], primary and secondary masses.</p></li>
+<li><p><strong>a</strong> (<em>float</em>) – Dimensionless BH spin.</p></li>
 <li><p><strong>l</strong> (<em>int</em>) – Harmonic mode indices.</p></li>
 <li><p><strong>m</strong> (<em>int</em>) – Harmonic mode indices.</p></li>
 <li><p><strong>k</strong> (<em>int</em>) – Harmonic mode indices.</p></li>
 <li><p><strong>n</strong> (<em>int</em>) – Harmonic mode indices.</p></li>
+<li><p><strong>x0</strong> (<em>float</em>) – Inclination cosine (+1 prograde, −1 retrograde).</p></li>
 <li><p><strong>dense_steps</strong> (<em>int</em>) – Number of trajectory output points.</p></li>
 <li><p><strong>backward</strong> (<em>bool</em>) – If <code class="docutils literal notranslate"><span class="pre">True</span></code>, integrate backward from the separatrix.  The
 returned time axis is time before plunge (<span class="math notranslate nohighlight">\(\tau\)</span>), so
@@ -401,6 +408,61 @@ increases (moving earlier in the inspiral).</p></li>
 <dd class="field-odd"><p><ul class="simple">
 <li><p><strong>t</strong> (<em>jnp.ndarray, shape (dense_steps,)</em>) – Time [s] (forward: from start; backward: time before plunge).</p></li>
 <li><p><strong>f</strong> (<em>jnp.ndarray, shape (dense_steps,)</em>) – Instantaneous frequency [Hz], always non-negative.</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="fewtrax.trajectory.inspiral.EMRIInspiral.get_multi_track">
+<span class="sig-name descname"><span class="pre">get_multi_track</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">modes</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">p0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">e0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">T</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">a</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">M</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1000000.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mu</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">10.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x0</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dense_steps</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">200</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">backward</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">e_f</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">with_amplitudes</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">amp_interp</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">return_dict</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/fewtrax/trajectory/inspiral.html#EMRIInspiral.get_multi_track"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#fewtrax.trajectory.inspiral.EMRIInspiral.get_multi_track" title="Link to this definition"></a></dt>
+<dd><p>Frequency tracks for multiple harmonic modes along one shared trajectory.</p>
+<p>Runs the ODE integrator once and evaluates all mode frequencies
+simultaneously via a single matrix–vector product at each trajectory
+point, which is significantly faster than calling
+<a class="reference internal" href="#fewtrax.trajectory.inspiral.EMRIInspiral.get_frequency_track" title="fewtrax.trajectory.inspiral.EMRIInspiral.get_frequency_track"><code class="xref py py-meth docutils literal notranslate"><span class="pre">get_frequency_track()</span></code></a> once per mode.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>modes</strong> (<em>list</em><em> of </em><em>tuples</em>) – Each entry is <code class="docutils literal notranslate"><span class="pre">(m,</span> <span class="pre">k,</span> <span class="pre">n)</span></code> or <code class="docutils literal notranslate"><span class="pre">(l,</span> <span class="pre">m,</span> <span class="pre">k,</span> <span class="pre">n)</span></code>.  The <code class="docutils literal notranslate"><span class="pre">l</span></code>
+index is only used for amplitude look-up (when
+<code class="docutils literal notranslate"><span class="pre">with_amplitudes=True</span></code>); it has no effect on frequencies.</p></li>
+<li><p><strong>p0</strong> (<em>float</em>) – Initial orbital parameters.</p></li>
+<li><p><strong>e0</strong> (<em>float</em>) – Initial orbital parameters.</p></li>
+<li><p><strong>T</strong> (<em>float</em>) – Observation time [years].</p></li>
+<li><p><strong>a</strong> (<em>float</em>) – Dimensionless BH spin.</p></li>
+<li><p><strong>M</strong> (<em>float</em>) – Primary and secondary masses [<span class="math notranslate nohighlight">\(M_\odot\)</span>].</p></li>
+<li><p><strong>mu</strong> (<em>float</em>) – Primary and secondary masses [<span class="math notranslate nohighlight">\(M_\odot\)</span>].</p></li>
+<li><p><strong>x0</strong> (<em>float</em>) – Inclination cosine (<code class="docutils literal notranslate"><span class="pre">+1</span></code> prograde, <code class="docutils literal notranslate"><span class="pre">-1</span></code> retrograde).</p></li>
+<li><p><strong>dense_steps</strong> (<em>int</em>) – Number of output trajectory/frequency points.</p></li>
+<li><p><strong>backward</strong> (<em>bool</em>) – If <code class="docutils literal notranslate"><span class="pre">True</span></code>, integrate backward from the separatrix.</p></li>
+<li><p><strong>e_f</strong> (<em>float</em><em>, </em><em>optional</em>) – Eccentricity at plunge; required when <code class="docutils literal notranslate"><span class="pre">backward=True</span></code>.</p></li>
+<li><p><strong>with_amplitudes</strong> (<em>bool</em>) – If <code class="docutils literal notranslate"><span class="pre">True</span></code>, also return the mode amplitudes <code class="docutils literal notranslate"><span class="pre">|A_{lmkn}(t)|</span></code>
+along the track.  Requires <code class="docutils literal notranslate"><span class="pre">amp_interp</span></code>.</p></li>
+<li><p><strong>amp_interp</strong> (<a class="reference internal" href="#fewtrax.amplitude.interp.AmplitudeInterpolator" title="fewtrax.amplitude.interp.AmplitudeInterpolator"><em>AmplitudeInterpolator</em></a><em>, </em><em>optional</em>) – Pre-constructed amplitude interpolator.  Required when
+<code class="docutils literal notranslate"><span class="pre">with_amplitudes=True</span></code>.</p></li>
+<li><p><strong>return_dict</strong> (<em>bool</em>) – If <code class="docutils literal notranslate"><span class="pre">True</span></code>, return a dictionary keyed by the mode tuples
+instead of plain arrays.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><ul>
+<li><p>If <code class="docutils literal notranslate"><span class="pre">return_dict=False</span></code> (default) –</p>
+<dl class="simple">
+<dt>t<span class="classifier">jnp.ndarray, shape (dense_steps,)</span></dt><dd><p>Time [s].</p>
+</dd>
+<dt>freqs<span class="classifier">jnp.ndarray, shape (N_modes, dense_steps)</span></dt><dd><p>Instantaneous frequency [Hz] for each mode, always
+non-negative.</p>
+</dd>
+<dt>amps<span class="classifier">jnp.ndarray, shape (N_modes, dense_steps), optional</span></dt><dd><p><code class="docutils literal notranslate"><span class="pre">|A_{lmkn}(t)|</span></code> — only present when
+<code class="docutils literal notranslate"><span class="pre">with_amplitudes=True</span></code>.</p>
+</dd>
+</dl>
+</li>
+<li><p>If <code class="docutils literal notranslate"><span class="pre">return_dict=True</span></code> – dict mapping each mode tuple to <code class="docutils literal notranslate"><span class="pre">(t,</span> <span class="pre">f)</span></code> or
+<code class="docutils literal notranslate"><span class="pre">(t,</span> <span class="pre">f,</span> <span class="pre">A)</span></code> arrays (<code class="docutils literal notranslate"><span class="pre">A</span></code> only when
+<code class="docutils literal notranslate"><span class="pre">with_amplitudes=True</span></code>).</p></li>
 </ul>
 </p>
 </dd>

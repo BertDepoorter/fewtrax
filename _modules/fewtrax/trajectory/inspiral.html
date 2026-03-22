@@ -107,12 +107,17 @@
 <span class="sd">control.  The system is stopped when the orbit approaches the separatrix.</span>
 
 <span class="sd">The ODE is fully JIT-compilable and differentiable with respect to the</span>
-<span class="sd">initial conditions :math:`(p_0, e_0)` and the BH spin :math:`a`.</span>
+<span class="sd">initial conditions :math:`(p_0, e_0)`, the BH spin :math:`a`, and the</span>
+<span class="sd">mass parameters :math:`(M, \\mu)`.</span>
 
-<span class="sd">To vmap over a batch of initial conditions::</span>
+<span class="sd">:attr:`EMRIInspiral` stores only the (static) flux data.  All physical</span>
+<span class="sd">parameters — including ``a`` — are passed at call time, so a single</span>
+<span class="sd">instance can be vmapped over the full parameter space::</span>
 
 <span class="sd">    from jax import vmap</span>
-<span class="sd">    batch_traj = vmap(traj)(p0_arr, e0_arr)</span>
+<span class="sd">    traj = EMRIInspiral(flux_data)</span>
+<span class="sd">    batch = vmap(lambda p0, e0, a: traj(p0=p0, e0=e0, a=a, T=1.0, M=1e6, mu=10.0))</span>
+<span class="sd">    results = batch(p0_arr, e0_arr, a_arr)</span>
 
 <span class="sd">Backward integration</span>
 <span class="sd">--------------------</span>
@@ -150,6 +155,12 @@
 <span class="n">SEPARATRIX_BUFFER</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">2.0</span> <span class="o">*</span> <span class="n">DELTAPMIN</span>
 
 
+<span class="k">def</span><span class="w"> </span><span class="nf">_x_sign</span><span class="p">(</span><span class="n">a</span><span class="p">:</span> <span class="n">jnp</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">x0</span><span class="p">:</span> <span class="nb">float</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">jnp</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Inclination sign (±1), safe at a=0.&quot;&quot;&quot;</span>
+    <span class="n">ax</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">sign</span><span class="p">(</span><span class="n">a</span> <span class="o">*</span> <span class="n">x0</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">jnp</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">ax</span> <span class="o">==</span> <span class="mf">0.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">,</span> <span class="n">ax</span><span class="p">)</span>
+
+
 <div class="viewcode-block" id="EMRIInspiral">
 <a class="viewcode-back" href="../../../api.html#fewtrax.trajectory.inspiral.EMRIInspiral">[docs]</a>
 <span class="k">class</span><span class="w"> </span><span class="nc">EMRIInspiral</span><span class="p">(</span><span class="n">eqx</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
@@ -170,35 +181,28 @@
 <span class="sd">    This avoids the runtime Jacobian inversion that was previously</span>
 <span class="sd">    needed in the ELQ convention, improving both speed and accuracy.</span>
 
+<span class="sd">    ``a`` and ``x0`` are **call-time** arguments rather than constructor</span>
+<span class="sd">    fields, so a single instance can be vmapped over the full five-parameter</span>
+<span class="sd">    space :math:`(M, \mu, a, p_0, e_0)` without rebuilding the Module.</span>
+
 <span class="sd">    Parameters</span>
 <span class="sd">    ----------</span>
 <span class="sd">    flux_data : FluxData</span>
 <span class="sd">        Pre-loaded flux interpolators (pex convention).</span>
-<span class="sd">    a : float</span>
-<span class="sd">        Dimensionless BH spin.</span>
-<span class="sd">    x0 : float</span>
-<span class="sd">        Inclination cosine (+1 prograde, -1 retrograde).</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
     <span class="n">flux_data</span><span class="p">:</span> <span class="n">FluxData</span>
-    <span class="n">a</span><span class="p">:</span> <span class="n">jnp</span><span class="o">.</span><span class="n">ndarray</span>
-    <span class="n">x0</span><span class="p">:</span> <span class="nb">float</span>
 
-    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">flux_data</span><span class="p">:</span> <span class="n">FluxData</span><span class="p">,</span> <span class="n">a</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">x0</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1.0</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">flux_data</span><span class="p">:</span> <span class="n">FluxData</span><span class="p">):</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">flux_data</span> <span class="o">=</span> <span class="n">flux_data</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">a</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">jnp</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">x0</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">x0</span><span class="p">)</span>
 
     <span class="c1"># ------------------------------------------------------------------</span>
     <span class="c1"># Internal helpers</span>
     <span class="c1"># ------------------------------------------------------------------</span>
 
-    <span class="k">def</span><span class="w"> </span><span class="nf">_x_sign</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Sign of inclination (±1).&quot;&quot;&quot;</span>
-        <span class="n">ax</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">sign</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">a</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">x0</span><span class="p">)</span>
-        <span class="k">return</span> <span class="n">jnp</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">ax</span> <span class="o">==</span> <span class="mf">0.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">,</span> <span class="n">ax</span><span class="p">)</span>
-
-    <span class="k">def</span><span class="w"> </span><span class="nf">_flux_pex</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">p</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">e</span><span class="p">:</span> <span class="nb">float</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">]:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_flux_pex</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">a</span><span class="p">:</span> <span class="n">jnp</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">x0</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">p</span><span class="p">:</span> <span class="n">jnp</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">e</span><span class="p">:</span> <span class="n">jnp</span><span class="o">.</span><span class="n">ndarray</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">jnp</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">jnp</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]:</span>
 <span class="w">        </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;Return physical :math:`(\dot{p}, \dot{e})` from the pex spline tables.</span>
 
 <span class="sd">        Evaluates the pre-computed pex ratios :math:`\dot{p}/\dot{p}_{\rm PN}`</span>
@@ -206,8 +210,8 @@
 <span class="sd">        separatrix-dependent PN functions.  Returns **negative** values for</span>
 <span class="sd">        :math:`\dot{p}` (inspiraling orbit loses semi-latus rectum).</span>
 <span class="sd">        &quot;&quot;&quot;</span>
-        <span class="n">a_abs</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">a</span><span class="p">)</span>
-        <span class="n">x_in</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_x_sign</span><span class="p">()</span>
+        <span class="n">a_abs</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">a</span><span class="p">)</span>
+        <span class="n">x_in</span> <span class="o">=</span> <span class="n">_x_sign</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">x0</span><span class="p">)</span>
         <span class="n">u</span><span class="p">,</span> <span class="n">w</span><span class="p">,</span> <span class="n">z</span><span class="p">,</span> <span class="n">in_A</span> <span class="o">=</span> <span class="n">kerrecceq_forward_map</span><span class="p">(</span><span class="n">a_abs</span><span class="p">,</span> <span class="n">p</span><span class="p">,</span> <span class="n">e</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="s2">&quot;flux&quot;</span><span class="p">)</span>
 
         <span class="n">rp_A</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">flux_data</span><span class="o">.</span><span class="n">pdot_A</span><span class="p">(</span><span class="n">u</span><span class="p">,</span> <span class="n">w</span><span class="p">,</span> <span class="n">z</span><span class="p">)</span>
@@ -232,17 +236,17 @@
     <span class="k">def</span><span class="w"> </span><span class="nf">_ode_rhs</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">t</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">y</span><span class="p">:</span> <span class="n">jnp</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">args</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">jnp</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
 <span class="w">        </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;ODE right-hand side: :math:`dy/dt` for :math:`y=(p,e,\Phi_\phi,\Phi_\theta,\Phi_r)`.</span>
 
-<span class="sd">        ``args`` carries ``mu_over_M = mu / M`` so the flux-table derivatives</span>
-<span class="sd">        (normalised to μ=M=1) are properly scaled to the physical mass ratio.</span>
+<span class="sd">        ``args`` is a 3-tuple ``(mu_over_M, a, x0)`` so that all physical</span>
+<span class="sd">        parameters flow through diffrax and remain differentiable.</span>
 <span class="sd">        The orbital phases evolve at the Boyer-Lindquist frequencies and are</span>
 <span class="sd">        *not* affected by the mass ratio.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
-        <span class="n">mu_over_M</span> <span class="o">=</span> <span class="n">args</span>
+        <span class="n">mu_over_M</span><span class="p">,</span> <span class="n">a</span><span class="p">,</span> <span class="n">x0</span> <span class="o">=</span> <span class="n">args</span>
         <span class="n">p</span><span class="p">,</span> <span class="n">e</span> <span class="o">=</span> <span class="n">y</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">y</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
-        <span class="n">a_abs</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">a</span><span class="p">)</span>
-        <span class="n">x_in</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_x_sign</span><span class="p">()</span>
+        <span class="n">a_abs</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">a</span><span class="p">)</span>
+        <span class="n">x_in</span> <span class="o">=</span> <span class="n">_x_sign</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">x0</span><span class="p">)</span>
 
-        <span class="n">pdot</span><span class="p">,</span> <span class="n">edot</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_flux_pex</span><span class="p">(</span><span class="n">p</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
+        <span class="n">pdot</span><span class="p">,</span> <span class="n">edot</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_flux_pex</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">x0</span><span class="p">,</span> <span class="n">p</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
         <span class="n">Omega_phi</span><span class="p">,</span> <span class="n">Omega_theta</span><span class="p">,</span> <span class="n">Omega_r</span> <span class="o">=</span> <span class="n">get_fundamental_frequencies</span><span class="p">(</span><span class="n">a_abs</span><span class="p">,</span> <span class="n">p</span><span class="p">,</span> <span class="n">e</span><span class="p">,</span> <span class="n">x_in</span><span class="p">)</span>
         <span class="c1"># pdot/edot come from flux tables normalised to μ=M=1; scale to physical ratio</span>
         <span class="k">return</span> <span class="n">jnp</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="n">pdot</span> <span class="o">*</span> <span class="n">mu_over_M</span><span class="p">,</span> <span class="n">edot</span> <span class="o">*</span> <span class="n">mu_over_M</span><span class="p">,</span>
@@ -258,15 +262,16 @@
         <span class="n">y0</span><span class="p">:</span> <span class="n">jnp</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
         <span class="n">t_save</span><span class="p">:</span> <span class="n">jnp</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
         <span class="n">T_geo</span><span class="p">:</span> <span class="n">jnp</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
-        <span class="n">mu_over_M</span><span class="p">:</span> <span class="n">jnp</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+        <span class="n">ode_args</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">,</span>
         <span class="n">atol</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
         <span class="n">rtol</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
         <span class="n">max_steps</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
     <span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;JIT-compiled diffrax solve.  All shape-determining args are static.&quot;&quot;&quot;</span>
         <span class="k">def</span><span class="w"> </span><span class="nf">_event_cond</span><span class="p">(</span><span class="n">t</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+            <span class="n">_</span><span class="p">,</span> <span class="n">a</span><span class="p">,</span> <span class="n">x0</span> <span class="o">=</span> <span class="n">args</span>
             <span class="n">p</span><span class="p">,</span> <span class="n">e</span> <span class="o">=</span> <span class="n">y</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">y</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
-            <span class="n">p_sep</span> <span class="o">=</span> <span class="n">get_separatrix</span><span class="p">(</span><span class="n">jnp</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">a</span><span class="p">),</span> <span class="n">e</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_x_sign</span><span class="p">())</span>
+            <span class="n">p_sep</span> <span class="o">=</span> <span class="n">get_separatrix</span><span class="p">(</span><span class="n">jnp</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">a</span><span class="p">),</span> <span class="n">e</span><span class="p">,</span> <span class="n">_x_sign</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">x0</span><span class="p">))</span>
             <span class="k">return</span> <span class="n">p</span> <span class="o">&lt;</span> <span class="n">p_sep</span> <span class="o">+</span> <span class="n">SEPARATRIX_BUFFER</span>
 
         <span class="k">return</span> <span class="n">diffrax</span><span class="o">.</span><span class="n">diffeqsolve</span><span class="p">(</span>
@@ -280,7 +285,7 @@
             <span class="n">stepsize_controller</span><span class="o">=</span><span class="n">diffrax</span><span class="o">.</span><span class="n">PIDController</span><span class="p">(</span><span class="n">rtol</span><span class="o">=</span><span class="n">rtol</span><span class="p">,</span> <span class="n">atol</span><span class="o">=</span><span class="n">atol</span><span class="p">),</span>
             <span class="n">max_steps</span><span class="o">=</span><span class="n">max_steps</span><span class="p">,</span>
             <span class="n">event</span><span class="o">=</span><span class="n">diffrax</span><span class="o">.</span><span class="n">Event</span><span class="p">(</span><span class="n">_event_cond</span><span class="p">),</span>
-            <span class="n">args</span><span class="o">=</span><span class="n">mu_over_M</span><span class="p">,</span>
+            <span class="n">args</span><span class="o">=</span><span class="n">ode_args</span><span class="p">,</span>
         <span class="p">)</span>
 
     <span class="nd">@eqx</span><span class="o">.</span><span class="n">filter_jit</span>
@@ -289,7 +294,7 @@
         <span class="n">y0</span><span class="p">:</span> <span class="n">jnp</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
         <span class="n">t_save</span><span class="p">:</span> <span class="n">jnp</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
         <span class="n">T_geo</span><span class="p">:</span> <span class="n">jnp</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
-        <span class="n">mu_over_M</span><span class="p">:</span> <span class="n">jnp</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+        <span class="n">ode_args</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">,</span>
         <span class="n">atol</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
         <span class="n">rtol</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
         <span class="n">max_steps</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
@@ -318,7 +323,7 @@
             <span class="n">saveat</span><span class="o">=</span><span class="n">diffrax</span><span class="o">.</span><span class="n">SaveAt</span><span class="p">(</span><span class="n">ts</span><span class="o">=</span><span class="n">t_save</span><span class="p">),</span>
             <span class="n">stepsize_controller</span><span class="o">=</span><span class="n">diffrax</span><span class="o">.</span><span class="n">PIDController</span><span class="p">(</span><span class="n">rtol</span><span class="o">=</span><span class="n">rtol</span><span class="p">,</span> <span class="n">atol</span><span class="o">=</span><span class="n">atol</span><span class="p">),</span>
             <span class="n">max_steps</span><span class="o">=</span><span class="n">max_steps</span><span class="p">,</span>
-            <span class="n">args</span><span class="o">=</span><span class="n">mu_over_M</span><span class="p">,</span>
+            <span class="n">args</span><span class="o">=</span><span class="n">ode_args</span><span class="p">,</span>
         <span class="p">)</span>
 
     <span class="c1"># ------------------------------------------------------------------</span>
@@ -330,6 +335,8 @@
         <span class="n">p0</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
         <span class="n">e0</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
         <span class="n">T</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
+        <span class="n">a</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
+        <span class="n">x0</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1.0</span><span class="p">,</span>
         <span class="n">dt</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">10.0</span><span class="p">,</span>
         <span class="n">M</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1e6</span><span class="p">,</span>
         <span class="n">mu</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">10.0</span><span class="p">,</span>
@@ -352,6 +359,12 @@
 <span class="sd">            mode; the starting point is determined from ``e_f`` instead.</span>
 <span class="sd">        T : float</span>
 <span class="sd">            Observation time [years].</span>
+<span class="sd">        a : float</span>
+<span class="sd">            Dimensionless BH spin parameter.  Passed as a differentiable</span>
+<span class="sd">            JAX array so that :func:`jax.grad` / :func:`jax.vmap` work</span>
+<span class="sd">            across ``a`` without rebuilding the Module.</span>
+<span class="sd">        x0 : float</span>
+<span class="sd">            Inclination cosine (+1 prograde, −1 retrograde).</span>
 <span class="sd">        dt : float</span>
 <span class="sd">            Waveform sampling interval [s] (not the ODE step size).</span>
 <span class="sd">        M, mu : float</span>
@@ -391,10 +404,12 @@
 <span class="sd">            Trajectory arrays.  ``t`` is in seconds; phases in radians.</span>
 <span class="sd">            In backward mode ``t`` is time before plunge (:math:`\tau`).</span>
 <span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">a_</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">jnp</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
         <span class="n">M_s</span> <span class="o">=</span> <span class="p">(</span><span class="n">M</span> <span class="o">+</span> <span class="n">mu</span><span class="p">)</span> <span class="o">*</span> <span class="n">MTSUN_SI</span>                 <span class="c1"># total mass in seconds (matches FEW convention)</span>
         <span class="n">T_s</span> <span class="o">=</span> <span class="n">T</span> <span class="o">*</span> <span class="n">YEAR_SI</span>                         <span class="c1"># observation time in seconds</span>
         <span class="n">T_geo</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">T_s</span> <span class="o">/</span> <span class="n">M_s</span><span class="p">)</span>           <span class="c1"># geometric time  (units of M)</span>
         <span class="n">mu_over_M</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">M</span> <span class="o">*</span> <span class="n">mu</span> <span class="o">/</span> <span class="p">(</span><span class="n">M</span> <span class="o">+</span> <span class="n">mu</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span><span class="p">)</span>  <span class="c1"># symmetric mass ratio eta (matches FEW)</span>
+        <span class="n">ode_args</span> <span class="o">=</span> <span class="p">(</span><span class="n">mu_over_M</span><span class="p">,</span> <span class="n">a_</span><span class="p">,</span> <span class="n">x0</span><span class="p">)</span>
 
         <span class="n">t_save</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">linspace</span><span class="p">(</span><span class="n">jnp</span><span class="o">.</span><span class="n">zeros</span><span class="p">((),</span> <span class="n">jnp</span><span class="o">.</span><span class="n">float64</span><span class="p">),</span> <span class="n">T_geo</span><span class="p">,</span> <span class="n">dense_steps</span><span class="p">)</span>
 
@@ -406,15 +421,15 @@
                     <span class="s2">&quot;last valid trajectory point.&quot;</span>
                 <span class="p">)</span>
             <span class="n">e_f_</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="nb">float</span><span class="p">(</span><span class="n">e_f</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">jnp</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
-            <span class="n">p_sep</span> <span class="o">=</span> <span class="n">get_separatrix</span><span class="p">(</span><span class="n">jnp</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">a</span><span class="p">),</span> <span class="n">e_f_</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_x_sign</span><span class="p">())</span>
+            <span class="n">p_sep</span> <span class="o">=</span> <span class="n">get_separatrix</span><span class="p">(</span><span class="n">jnp</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">a_</span><span class="p">),</span> <span class="n">e_f_</span><span class="p">,</span> <span class="n">_x_sign</span><span class="p">(</span><span class="n">a_</span><span class="p">,</span> <span class="n">x0</span><span class="p">))</span>
             <span class="n">p_start</span> <span class="o">=</span> <span class="n">p_sep</span> <span class="o">+</span> <span class="n">SEPARATRIX_BUFFER</span>
             <span class="n">y0</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">array</span><span class="p">(</span>
                 <span class="p">[</span><span class="n">p_start</span><span class="p">,</span> <span class="n">e_f_</span><span class="p">,</span> <span class="n">Phi_phi0</span><span class="p">,</span> <span class="n">Phi_theta0</span><span class="p">,</span> <span class="n">Phi_r0</span><span class="p">],</span> <span class="n">dtype</span><span class="o">=</span><span class="n">jnp</span><span class="o">.</span><span class="n">float64</span>
             <span class="p">)</span>
-            <span class="n">sol</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_solve_backward</span><span class="p">(</span><span class="n">y0</span><span class="p">,</span> <span class="n">t_save</span><span class="p">,</span> <span class="n">T_geo</span><span class="p">,</span> <span class="n">mu_over_M</span><span class="p">,</span> <span class="n">atol</span><span class="p">,</span> <span class="n">rtol</span><span class="p">,</span> <span class="n">max_steps</span><span class="p">)</span>
+            <span class="n">sol</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_solve_backward</span><span class="p">(</span><span class="n">y0</span><span class="p">,</span> <span class="n">t_save</span><span class="p">,</span> <span class="n">T_geo</span><span class="p">,</span> <span class="n">ode_args</span><span class="p">,</span> <span class="n">atol</span><span class="p">,</span> <span class="n">rtol</span><span class="p">,</span> <span class="n">max_steps</span><span class="p">)</span>
         <span class="k">else</span><span class="p">:</span>
             <span class="n">y0</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="n">p0</span><span class="p">,</span> <span class="n">e0</span><span class="p">,</span> <span class="n">Phi_phi0</span><span class="p">,</span> <span class="n">Phi_theta0</span><span class="p">,</span> <span class="n">Phi_r0</span><span class="p">],</span> <span class="n">dtype</span><span class="o">=</span><span class="n">jnp</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
-            <span class="n">sol</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_solve</span><span class="p">(</span><span class="n">y0</span><span class="p">,</span> <span class="n">t_save</span><span class="p">,</span> <span class="n">T_geo</span><span class="p">,</span> <span class="n">mu_over_M</span><span class="p">,</span> <span class="n">atol</span><span class="p">,</span> <span class="n">rtol</span><span class="p">,</span> <span class="n">max_steps</span><span class="p">)</span>
+            <span class="n">sol</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_solve</span><span class="p">(</span><span class="n">y0</span><span class="p">,</span> <span class="n">t_save</span><span class="p">,</span> <span class="n">T_geo</span><span class="p">,</span> <span class="n">ode_args</span><span class="p">,</span> <span class="n">atol</span><span class="p">,</span> <span class="n">rtol</span><span class="p">,</span> <span class="n">max_steps</span><span class="p">)</span>
 
         <span class="n">ys</span> <span class="o">=</span> <span class="n">sol</span><span class="o">.</span><span class="n">ys</span>          <span class="c1"># (dense_steps, 5)</span>
         <span class="n">t_arr</span> <span class="o">=</span> <span class="n">sol</span><span class="o">.</span><span class="n">ts</span>       <span class="c1"># (dense_steps,)</span>
@@ -438,7 +453,9 @@
         <span class="n">T</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
         <span class="n">M</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
         <span class="n">mu</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
+        <span class="n">a</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
         <span class="n">l</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">m</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">k</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">n</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+        <span class="n">x0</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1.0</span><span class="p">,</span>
         <span class="n">dense_steps</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">100</span><span class="p">,</span>
         <span class="n">backward</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
         <span class="n">e_f</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
@@ -461,8 +478,12 @@
 <span class="sd">            ``backward=True``).</span>
 <span class="sd">        T, M, mu : float</span>
 <span class="sd">            Observation time [years], primary and secondary masses.</span>
+<span class="sd">        a : float</span>
+<span class="sd">            Dimensionless BH spin.</span>
 <span class="sd">        l, m, k, n : int</span>
 <span class="sd">            Harmonic mode indices.</span>
+<span class="sd">        x0 : float</span>
+<span class="sd">            Inclination cosine (+1 prograde, −1 retrograde).</span>
 <span class="sd">        dense_steps : int</span>
 <span class="sd">            Number of trajectory output points.</span>
 <span class="sd">        backward : bool</span>
@@ -480,23 +501,212 @@
 <span class="sd">        f : jnp.ndarray, shape (dense_steps,)</span>
 <span class="sd">            Instantaneous frequency [Hz], always non-negative.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">a_</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">jnp</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
         <span class="n">t_s</span><span class="p">,</span> <span class="n">p_arr</span><span class="p">,</span> <span class="n">e_arr</span><span class="p">,</span> <span class="o">*</span><span class="n">_</span> <span class="o">=</span> <span class="bp">self</span><span class="p">(</span>
-            <span class="n">p0</span><span class="o">=</span><span class="n">p0</span><span class="p">,</span> <span class="n">e0</span><span class="o">=</span><span class="n">e0</span><span class="p">,</span> <span class="n">T</span><span class="o">=</span><span class="n">T</span><span class="p">,</span> <span class="n">M</span><span class="o">=</span><span class="n">M</span><span class="p">,</span> <span class="n">mu</span><span class="o">=</span><span class="n">mu</span><span class="p">,</span> <span class="n">dense_steps</span><span class="o">=</span><span class="n">dense_steps</span><span class="p">,</span>
-            <span class="n">backward</span><span class="o">=</span><span class="n">backward</span><span class="p">,</span> <span class="n">e_f</span><span class="o">=</span><span class="n">e_f</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span>
+            <span class="n">p0</span><span class="o">=</span><span class="n">p0</span><span class="p">,</span> <span class="n">e0</span><span class="o">=</span><span class="n">e0</span><span class="p">,</span> <span class="n">T</span><span class="o">=</span><span class="n">T</span><span class="p">,</span> <span class="n">M</span><span class="o">=</span><span class="n">M</span><span class="p">,</span> <span class="n">mu</span><span class="o">=</span><span class="n">mu</span><span class="p">,</span> <span class="n">a</span><span class="o">=</span><span class="n">a_</span><span class="p">,</span> <span class="n">x0</span><span class="o">=</span><span class="n">x0</span><span class="p">,</span>
+            <span class="n">dense_steps</span><span class="o">=</span><span class="n">dense_steps</span><span class="p">,</span> <span class="n">backward</span><span class="o">=</span><span class="n">backward</span><span class="p">,</span> <span class="n">e_f</span><span class="o">=</span><span class="n">e_f</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span>
         <span class="p">)</span>
-        <span class="n">a_abs</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">a</span><span class="p">)</span>
-        <span class="n">x_in</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_x_sign</span><span class="p">()</span>
+        <span class="n">a_abs</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">a_</span><span class="p">)</span>
+        <span class="n">x_in</span> <span class="o">=</span> <span class="n">_x_sign</span><span class="p">(</span><span class="n">a_</span><span class="p">,</span> <span class="n">x0</span><span class="p">)</span>
 
         <span class="k">def</span><span class="w"> </span><span class="nf">_freq_at_point</span><span class="p">(</span><span class="n">pe</span><span class="p">):</span>
             <span class="n">p_</span><span class="p">,</span> <span class="n">e_</span> <span class="o">=</span> <span class="n">pe</span>
             <span class="n">Om_phi</span><span class="p">,</span> <span class="n">Om_theta</span><span class="p">,</span> <span class="n">Om_r</span> <span class="o">=</span> <span class="n">get_fundamental_frequencies</span><span class="p">(</span><span class="n">a_abs</span><span class="p">,</span> <span class="n">p_</span><span class="p">,</span> <span class="n">e_</span><span class="p">,</span> <span class="n">x_in</span><span class="p">)</span>
             <span class="k">return</span> <span class="n">jnp</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">m</span> <span class="o">*</span> <span class="n">Om_phi</span> <span class="o">+</span> <span class="n">k</span> <span class="o">*</span> <span class="n">Om_theta</span> <span class="o">+</span> <span class="n">n</span> <span class="o">*</span> <span class="n">Om_r</span><span class="p">)</span> <span class="o">/</span> <span class="p">(</span><span class="mf">2.0</span> <span class="o">*</span> <span class="n">jnp</span><span class="o">.</span><span class="n">pi</span><span class="p">)</span>
 
-        <span class="c1"># Physical frequency: convert Mino-time Ω (rad/M) to Hz</span>
-        <span class="c1"># Ω [rad/M] × (M_s)^{-1} [1/s] / (2π) [already included above]</span>
-        <span class="n">M_s</span> <span class="o">=</span> <span class="n">M</span> <span class="o">*</span> <span class="n">MTSUN_SI</span>
+        <span class="c1"># Physical frequency: convert geometric Ω (rad/M) to Hz.</span>
+        <span class="c1"># Use total mass M+mu to match the geometric time convention.</span>
+        <span class="n">M_s</span> <span class="o">=</span> <span class="p">(</span><span class="n">M</span> <span class="o">+</span> <span class="n">mu</span><span class="p">)</span> <span class="o">*</span> <span class="n">MTSUN_SI</span>
         <span class="n">f_arr</span> <span class="o">=</span> <span class="n">jax</span><span class="o">.</span><span class="n">vmap</span><span class="p">(</span><span class="n">_freq_at_point</span><span class="p">)(</span><span class="n">jnp</span><span class="o">.</span><span class="n">stack</span><span class="p">([</span><span class="n">p_arr</span><span class="p">,</span> <span class="n">e_arr</span><span class="p">],</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">))</span> <span class="o">/</span> <span class="n">M_s</span>
         <span class="k">return</span> <span class="n">t_s</span><span class="p">,</span> <span class="n">f_arr</span></div>
+
+
+<div class="viewcode-block" id="EMRIInspiral.get_multi_track">
+<a class="viewcode-back" href="../../../api.html#fewtrax.trajectory.inspiral.EMRIInspiral.get_multi_track">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_multi_track</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">modes</span><span class="p">:</span> <span class="nb">list</span><span class="p">,</span>
+        <span class="n">p0</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
+        <span class="n">e0</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
+        <span class="n">T</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
+        <span class="n">a</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
+        <span class="n">M</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1e6</span><span class="p">,</span>
+        <span class="n">mu</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">10.0</span><span class="p">,</span>
+        <span class="n">x0</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1.0</span><span class="p">,</span>
+        <span class="n">dense_steps</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">200</span><span class="p">,</span>
+        <span class="n">backward</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+        <span class="n">e_f</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">with_amplitudes</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+        <span class="n">amp_interp</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+        <span class="n">return_dict</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+        <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
+    <span class="p">):</span>
+<span class="w">        </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;Frequency tracks for multiple harmonic modes along one shared trajectory.</span>
+
+<span class="sd">        Runs the ODE integrator once and evaluates all mode frequencies</span>
+<span class="sd">        simultaneously via a single matrix–vector product at each trajectory</span>
+<span class="sd">        point, which is significantly faster than calling</span>
+<span class="sd">        :meth:`get_frequency_track` once per mode.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        modes : list of tuples</span>
+<span class="sd">            Each entry is ``(m, k, n)`` or ``(l, m, k, n)``.  The ``l``</span>
+<span class="sd">            index is only used for amplitude look-up (when</span>
+<span class="sd">            ``with_amplitudes=True``); it has no effect on frequencies.</span>
+<span class="sd">        p0, e0 : float</span>
+<span class="sd">            Initial orbital parameters.</span>
+<span class="sd">        T : float</span>
+<span class="sd">            Observation time [years].</span>
+<span class="sd">        a : float</span>
+<span class="sd">            Dimensionless BH spin.</span>
+<span class="sd">        M, mu : float</span>
+<span class="sd">            Primary and secondary masses [:math:`M_\odot`].</span>
+<span class="sd">        x0 : float</span>
+<span class="sd">            Inclination cosine (``+1`` prograde, ``-1`` retrograde).</span>
+<span class="sd">        dense_steps : int</span>
+<span class="sd">            Number of output trajectory/frequency points.</span>
+<span class="sd">        backward : bool</span>
+<span class="sd">            If ``True``, integrate backward from the separatrix.</span>
+<span class="sd">        e_f : float, optional</span>
+<span class="sd">            Eccentricity at plunge; required when ``backward=True``.</span>
+<span class="sd">        with_amplitudes : bool</span>
+<span class="sd">            If ``True``, also return the mode amplitudes ``|A_{lmkn}(t)|``</span>
+<span class="sd">            along the track.  Requires ``amp_interp``.</span>
+<span class="sd">        amp_interp : AmplitudeInterpolator, optional</span>
+<span class="sd">            Pre-constructed amplitude interpolator.  Required when</span>
+<span class="sd">            ``with_amplitudes=True``.</span>
+<span class="sd">        return_dict : bool</span>
+<span class="sd">            If ``True``, return a dictionary keyed by the mode tuples</span>
+<span class="sd">            instead of plain arrays.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        If ``return_dict=False`` (default):</span>
+<span class="sd">            t : jnp.ndarray, shape (dense_steps,)</span>
+<span class="sd">                Time [s].</span>
+<span class="sd">            freqs : jnp.ndarray, shape (N_modes, dense_steps)</span>
+<span class="sd">                Instantaneous frequency [Hz] for each mode, always</span>
+<span class="sd">                non-negative.</span>
+<span class="sd">            amps : jnp.ndarray, shape (N_modes, dense_steps), optional</span>
+<span class="sd">                ``|A_{lmkn}(t)|`` — only present when</span>
+<span class="sd">                ``with_amplitudes=True``.</span>
+
+<span class="sd">        If ``return_dict=True``:</span>
+<span class="sd">            dict mapping each mode tuple to ``(t, f)`` or</span>
+<span class="sd">            ``(t, f, A)`` arrays (``A`` only when</span>
+<span class="sd">            ``with_amplitudes=True``).</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">modes</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;modes must be a non-empty list.&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">with_amplitudes</span> <span class="ow">and</span> <span class="n">amp_interp</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="s2">&quot;amp_interp is required when with_amplitudes=True.&quot;</span>
+            <span class="p">)</span>
+
+        <span class="c1"># Normalise mode tuples to (l, m, k, n); use l=None if not given</span>
+        <span class="n">norm_modes</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">entry</span> <span class="ow">in</span> <span class="n">modes</span><span class="p">:</span>
+            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">entry</span><span class="p">)</span> <span class="o">==</span> <span class="mi">3</span><span class="p">:</span>
+                <span class="n">norm_modes</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="kc">None</span><span class="p">,</span> <span class="n">entry</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">entry</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">entry</span><span class="p">[</span><span class="mi">2</span><span class="p">]))</span>
+            <span class="k">elif</span> <span class="nb">len</span><span class="p">(</span><span class="n">entry</span><span class="p">)</span> <span class="o">==</span> <span class="mi">4</span><span class="p">:</span>
+                <span class="n">norm_modes</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="nb">tuple</span><span class="p">(</span><span class="n">entry</span><span class="p">))</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;Each mode must be a (m,k,n) or (l,m,k,n) tuple; got </span><span class="si">{</span><span class="n">entry</span><span class="si">!r}</span><span class="s2">.&quot;</span>
+                <span class="p">)</span>
+
+        <span class="c1"># --- Run ODE once ---</span>
+        <span class="n">a_</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">jnp</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
+        <span class="n">t_s</span><span class="p">,</span> <span class="n">p_arr</span><span class="p">,</span> <span class="n">e_arr</span><span class="p">,</span> <span class="o">*</span><span class="n">_</span> <span class="o">=</span> <span class="bp">self</span><span class="p">(</span>
+            <span class="n">p0</span><span class="o">=</span><span class="n">p0</span><span class="p">,</span> <span class="n">e0</span><span class="o">=</span><span class="n">e0</span><span class="p">,</span> <span class="n">T</span><span class="o">=</span><span class="n">T</span><span class="p">,</span> <span class="n">M</span><span class="o">=</span><span class="n">M</span><span class="p">,</span> <span class="n">mu</span><span class="o">=</span><span class="n">mu</span><span class="p">,</span> <span class="n">a</span><span class="o">=</span><span class="n">a_</span><span class="p">,</span> <span class="n">x0</span><span class="o">=</span><span class="n">x0</span><span class="p">,</span>
+            <span class="n">dense_steps</span><span class="o">=</span><span class="n">dense_steps</span><span class="p">,</span> <span class="n">backward</span><span class="o">=</span><span class="n">backward</span><span class="p">,</span> <span class="n">e_f</span><span class="o">=</span><span class="n">e_f</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span>
+        <span class="p">)</span>
+
+        <span class="n">a_abs</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">a_</span><span class="p">)</span>
+        <span class="n">x_in</span> <span class="o">=</span> <span class="n">_x_sign</span><span class="p">(</span><span class="n">a_</span><span class="p">,</span> <span class="n">x0</span><span class="p">)</span>
+        <span class="n">M_s</span> <span class="o">=</span> <span class="p">(</span><span class="n">M</span> <span class="o">+</span> <span class="n">mu</span><span class="p">)</span> <span class="o">*</span> <span class="n">MTSUN_SI</span>
+
+        <span class="c1"># Build integer coefficient matrix: shape (N_modes, 3) — columns are m, k, n</span>
+        <span class="n">mkn_arr</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">array</span><span class="p">(</span>
+            <span class="p">[[</span><span class="n">lmkn</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">lmkn</span><span class="p">[</span><span class="mi">2</span><span class="p">],</span> <span class="n">lmkn</span><span class="p">[</span><span class="mi">3</span><span class="p">]]</span> <span class="k">for</span> <span class="n">lmkn</span> <span class="ow">in</span> <span class="n">norm_modes</span><span class="p">],</span>
+            <span class="n">dtype</span><span class="o">=</span><span class="n">jnp</span><span class="o">.</span><span class="n">float64</span><span class="p">,</span>
+        <span class="p">)</span>  <span class="c1"># (N_modes, 3)</span>
+
+        <span class="c1"># Compute Omegas at every trajectory point: shape (dense_steps, 3)</span>
+        <span class="k">def</span><span class="w"> </span><span class="nf">_omegas_at</span><span class="p">(</span><span class="n">pe</span><span class="p">):</span>
+            <span class="n">p_</span><span class="p">,</span> <span class="n">e_</span> <span class="o">=</span> <span class="n">pe</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">pe</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+            <span class="n">Om_phi</span><span class="p">,</span> <span class="n">Om_theta</span><span class="p">,</span> <span class="n">Om_r</span> <span class="o">=</span> <span class="n">get_fundamental_frequencies</span><span class="p">(</span><span class="n">a_abs</span><span class="p">,</span> <span class="n">p_</span><span class="p">,</span> <span class="n">e_</span><span class="p">,</span> <span class="n">x_in</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">jnp</span><span class="o">.</span><span class="n">stack</span><span class="p">([</span><span class="n">Om_phi</span><span class="p">,</span> <span class="n">Om_theta</span><span class="p">,</span> <span class="n">Om_r</span><span class="p">])</span>
+
+        <span class="n">Omegas</span> <span class="o">=</span> <span class="n">jax</span><span class="o">.</span><span class="n">vmap</span><span class="p">(</span><span class="n">_omegas_at</span><span class="p">)(</span><span class="n">jnp</span><span class="o">.</span><span class="n">stack</span><span class="p">([</span><span class="n">p_arr</span><span class="p">,</span> <span class="n">e_arr</span><span class="p">],</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">))</span>  <span class="c1"># (dense_steps, 3)</span>
+
+        <span class="c1"># All mode frequencies in one matrix multiply: (N_modes, dense_steps)</span>
+        <span class="n">freqs</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">mkn_arr</span> <span class="o">@</span> <span class="n">Omegas</span><span class="o">.</span><span class="n">T</span><span class="p">)</span> <span class="o">/</span> <span class="p">(</span><span class="mf">2.0</span> <span class="o">*</span> <span class="n">jnp</span><span class="o">.</span><span class="n">pi</span> <span class="o">*</span> <span class="n">M_s</span><span class="p">)</span>
+
+        <span class="c1"># --- Optional amplitude evaluation ---</span>
+        <span class="n">amps</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="k">if</span> <span class="n">with_amplitudes</span><span class="p">:</span>
+            <span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">_np</span>
+            <span class="n">p_np</span> <span class="o">=</span> <span class="n">_np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">p_arr</span><span class="p">)</span>
+            <span class="n">e_np</span> <span class="o">=</span> <span class="n">_np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">e_arr</span><span class="p">)</span>
+            <span class="n">a_float</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">jnp</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">a_</span><span class="p">))</span>
+
+            <span class="c1"># Build list of amplitude mode indices for look-up</span>
+            <span class="c1"># Each norm_mode has (l, m, k, n); find matching index in amp_interp</span>
+            <span class="n">amp_indices</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="k">for</span> <span class="n">lmkn</span> <span class="ow">in</span> <span class="n">norm_modes</span><span class="p">:</span>
+                <span class="n">l_</span><span class="p">,</span> <span class="n">m_</span><span class="p">,</span> <span class="n">k_</span><span class="p">,</span> <span class="n">n_</span> <span class="o">=</span> <span class="n">lmkn</span>
+                <span class="k">if</span> <span class="n">l_</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                    <span class="c1"># Search by (m, k, n) only</span>
+                    <span class="n">mask</span> <span class="o">=</span> <span class="p">(</span>
+                        <span class="p">(</span><span class="n">amp_interp</span><span class="o">.</span><span class="n">m_arr</span> <span class="o">==</span> <span class="n">m_</span><span class="p">)</span>
+                        <span class="o">&amp;</span> <span class="p">(</span><span class="n">amp_interp</span><span class="o">.</span><span class="n">k_arr</span> <span class="o">==</span> <span class="n">k_</span><span class="p">)</span>
+                        <span class="o">&amp;</span> <span class="p">(</span><span class="n">amp_interp</span><span class="o">.</span><span class="n">n_arr</span> <span class="o">==</span> <span class="n">n_</span><span class="p">)</span>
+                    <span class="p">)</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">mask</span> <span class="o">=</span> <span class="p">(</span>
+                        <span class="p">(</span><span class="n">amp_interp</span><span class="o">.</span><span class="n">l_arr</span> <span class="o">==</span> <span class="n">l_</span><span class="p">)</span>
+                        <span class="o">&amp;</span> <span class="p">(</span><span class="n">amp_interp</span><span class="o">.</span><span class="n">m_arr</span> <span class="o">==</span> <span class="n">m_</span><span class="p">)</span>
+                        <span class="o">&amp;</span> <span class="p">(</span><span class="n">amp_interp</span><span class="o">.</span><span class="n">k_arr</span> <span class="o">==</span> <span class="n">k_</span><span class="p">)</span>
+                        <span class="o">&amp;</span> <span class="p">(</span><span class="n">amp_interp</span><span class="o">.</span><span class="n">n_arr</span> <span class="o">==</span> <span class="n">n_</span><span class="p">)</span>
+                    <span class="p">)</span>
+                <span class="n">idx</span> <span class="o">=</span> <span class="n">_np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">mask</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+                <span class="n">amp_indices</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">idx</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span> <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">idx</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span> <span class="k">else</span> <span class="kc">None</span><span class="p">)</span>
+
+            <span class="c1"># Filter to modes that exist in the amplitude data</span>
+            <span class="n">valid_amp_idx</span> <span class="o">=</span> <span class="p">[</span><span class="n">i</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">amp_indices</span> <span class="k">if</span> <span class="n">i</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">]</span>
+            <span class="n">valid_mode_idx</span> <span class="o">=</span> <span class="p">[</span><span class="n">j</span> <span class="k">for</span> <span class="n">j</span><span class="p">,</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">amp_indices</span><span class="p">)</span> <span class="k">if</span> <span class="n">i</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">]</span>
+
+            <span class="k">if</span> <span class="n">valid_amp_idx</span><span class="p">:</span>
+                <span class="n">A_raw</span> <span class="o">=</span> <span class="n">amp_interp</span><span class="o">.</span><span class="n">evaluate</span><span class="p">(</span>
+                    <span class="n">a_float</span><span class="p">,</span> <span class="n">p_np</span><span class="p">,</span> <span class="n">e_np</span><span class="p">,</span> <span class="n">specific_modes</span><span class="o">=</span><span class="n">valid_amp_idx</span>
+                <span class="p">)</span>  <span class="c1"># (dense_steps, len(valid_amp_idx)), complex</span>
+                <span class="n">A_abs</span> <span class="o">=</span> <span class="n">_np</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">A_raw</span><span class="p">)</span><span class="o">.</span><span class="n">T</span>  <span class="c1"># (len(valid_amp_idx), dense_steps)</span>
+                <span class="c1"># Build full amps array (NaN for missing modes)</span>
+                <span class="n">amps_np</span> <span class="o">=</span> <span class="n">_np</span><span class="o">.</span><span class="n">full</span><span class="p">(</span>
+                    <span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">norm_modes</span><span class="p">),</span> <span class="nb">len</span><span class="p">(</span><span class="n">t_s</span><span class="p">)),</span> <span class="n">_np</span><span class="o">.</span><span class="n">nan</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">_np</span><span class="o">.</span><span class="n">float64</span>
+                <span class="p">)</span>
+                <span class="k">for</span> <span class="n">out_row</span><span class="p">,</span> <span class="n">mode_row</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">valid_mode_idx</span><span class="p">):</span>
+                    <span class="n">amps_np</span><span class="p">[</span><span class="n">mode_row</span><span class="p">]</span> <span class="o">=</span> <span class="n">A_abs</span><span class="p">[</span><span class="n">out_row</span><span class="p">]</span>
+                <span class="n">amps</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">amps_np</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">amps</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">full</span><span class="p">((</span><span class="nb">len</span><span class="p">(</span><span class="n">norm_modes</span><span class="p">),</span> <span class="nb">len</span><span class="p">(</span><span class="n">t_s</span><span class="p">)),</span> <span class="n">jnp</span><span class="o">.</span><span class="n">nan</span><span class="p">)</span>
+
+        <span class="c1"># --- Build output ---</span>
+        <span class="k">if</span> <span class="n">return_dict</span><span class="p">:</span>
+            <span class="n">result</span> <span class="o">=</span> <span class="p">{}</span>
+            <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">entry</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">modes</span><span class="p">):</span>
+                <span class="n">key</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">entry</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">with_amplitudes</span><span class="p">:</span>
+                    <span class="n">result</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="n">t_s</span><span class="p">,</span> <span class="n">freqs</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="n">amps</span><span class="p">[</span><span class="n">i</span><span class="p">])</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">result</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="n">t_s</span><span class="p">,</span> <span class="n">freqs</span><span class="p">[</span><span class="n">i</span><span class="p">])</span>
+            <span class="k">return</span> <span class="n">result</span>
+
+        <span class="k">if</span> <span class="n">with_amplitudes</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">t_s</span><span class="p">,</span> <span class="n">freqs</span><span class="p">,</span> <span class="n">amps</span>
+        <span class="k">return</span> <span class="n">t_s</span><span class="p">,</span> <span class="n">freqs</span></div>
 </div>
 
 
@@ -552,9 +762,9 @@
 <span class="sd">    t, p, e, Phi_phi, Phi_theta, Phi_r : jnp.ndarray</span>
 <span class="sd">        Trajectory arrays.  In backward mode ``t`` is time before plunge.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
-    <span class="n">traj</span> <span class="o">=</span> <span class="n">EMRIInspiral</span><span class="p">(</span><span class="n">flux_data</span><span class="p">,</span> <span class="n">a</span><span class="o">=</span><span class="n">a</span><span class="p">,</span> <span class="n">x0</span><span class="o">=</span><span class="n">x0</span><span class="p">)</span>
+    <span class="n">traj</span> <span class="o">=</span> <span class="n">EMRIInspiral</span><span class="p">(</span><span class="n">flux_data</span><span class="p">)</span>
     <span class="k">return</span> <span class="n">traj</span><span class="p">(</span>
-        <span class="n">p0</span><span class="o">=</span><span class="n">p0</span><span class="p">,</span> <span class="n">e0</span><span class="o">=</span><span class="n">e0</span><span class="p">,</span> <span class="n">T</span><span class="o">=</span><span class="n">T</span><span class="p">,</span> <span class="n">dt</span><span class="o">=</span><span class="n">dt</span><span class="p">,</span> <span class="n">M</span><span class="o">=</span><span class="n">M</span><span class="p">,</span> <span class="n">mu</span><span class="o">=</span><span class="n">mu</span><span class="p">,</span>
+        <span class="n">p0</span><span class="o">=</span><span class="n">p0</span><span class="p">,</span> <span class="n">e0</span><span class="o">=</span><span class="n">e0</span><span class="p">,</span> <span class="n">T</span><span class="o">=</span><span class="n">T</span><span class="p">,</span> <span class="n">a</span><span class="o">=</span><span class="n">a</span><span class="p">,</span> <span class="n">x0</span><span class="o">=</span><span class="n">x0</span><span class="p">,</span> <span class="n">dt</span><span class="o">=</span><span class="n">dt</span><span class="p">,</span> <span class="n">M</span><span class="o">=</span><span class="n">M</span><span class="p">,</span> <span class="n">mu</span><span class="o">=</span><span class="n">mu</span><span class="p">,</span>
         <span class="n">Phi_phi0</span><span class="o">=</span><span class="n">Phi_phi0</span><span class="p">,</span> <span class="n">Phi_theta0</span><span class="o">=</span><span class="n">Phi_theta0</span><span class="p">,</span> <span class="n">Phi_r0</span><span class="o">=</span><span class="n">Phi_r0</span><span class="p">,</span>
         <span class="n">dense_steps</span><span class="o">=</span><span class="n">dense_steps</span><span class="p">,</span> <span class="n">backward</span><span class="o">=</span><span class="n">backward</span><span class="p">,</span> <span class="n">e_f</span><span class="o">=</span><span class="n">e_f</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
     <span class="p">)</span></div>
