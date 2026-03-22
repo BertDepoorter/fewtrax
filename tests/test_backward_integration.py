@@ -88,9 +88,9 @@ class TestBackwardBasics:
     def test_e_f_required(self, flux_data):
         """ValueError must be raised when backward=True and e_f is None."""
         from fewtrax.trajectory import EMRIInspiral
-        traj = EMRIInspiral(flux_data, a=0.3)
+        traj = EMRIInspiral(flux_data)
         with pytest.raises(ValueError, match="e_f must be provided"):
-            traj(p0=10.0, e0=0.4, T=0.1, M=1e6, mu=10.0,
+            traj(p0=10.0, e0=0.4, T=0.1, M=1e6, mu=10.0, a=0.3,
                  dense_steps=10, backward=True, e_f=None)
 
     def test_schwarzschild_backward(self, flux_data):
@@ -112,9 +112,9 @@ class TestBackwardFrequencyTrack:
         """Frequency must be positive at all trajectory points."""
         from fewtrax.trajectory import EMRIInspiral
 
-        traj = EMRIInspiral(flux_data, a=0.3)
+        traj = EMRIInspiral(flux_data)
         t, f = traj.get_frequency_track(
-            p0=None, e0=None, T=0.2, M=1e6, mu=10.0,
+            p0=None, e0=None, T=0.2, M=1e6, mu=10.0, a=0.3,
             l=2, m=2, k=0, n=1,
             dense_steps=50, backward=True, e_f=0.35,
         )
@@ -124,9 +124,9 @@ class TestBackwardFrequencyTrack:
         """Frequency should decrease along backward trajectory (moving earlier in inspiral)."""
         from fewtrax.trajectory import EMRIInspiral
 
-        traj = EMRIInspiral(flux_data, a=0.3)
+        traj = EMRIInspiral(flux_data)
         t, f = traj.get_frequency_track(
-            p0=None, e0=None, T=0.3, M=1e6, mu=10.0,
+            p0=None, e0=None, T=0.3, M=1e6, mu=10.0, a=0.3,
             l=2, m=2, k=0, n=1,
             dense_steps=60, backward=True, e_f=0.3,
         )
@@ -159,11 +159,11 @@ class TestBackwardForwardConsistency:
         a, e_f = 0.3, 0.3
         T = 0.05   # short enough that numerical drift is small
 
-        traj = EMRIInspiral(flux_data, a=a)
+        traj = EMRIInspiral(flux_data)
 
         # Step 1: backward run
         _, p_bwd, e_bwd, _, _, _ = traj(
-            p0=None, e0=None, T=T, M=1e6, mu=10.0,
+            p0=None, e0=None, T=T, M=1e6, mu=10.0, a=a,
             dense_steps=80, backward=True, e_f=e_f,
         )
         p0_rt = float(p_bwd[-1])
@@ -171,7 +171,7 @@ class TestBackwardForwardConsistency:
 
         # Step 2: forward run from backward endpoint
         _, p_fwd, e_fwd, _, _, _ = traj(
-            p0=p0_rt, e0=e0_rt, T=T, M=1e6, mu=10.0, dense_steps=80,
+            p0=p0_rt, e0=e0_rt, T=T, M=1e6, mu=10.0, a=a, dense_steps=80,
         )
         p_np = np.asarray(p_fwd)
         e_np = np.asarray(e_fwd)

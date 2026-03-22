@@ -108,11 +108,11 @@ class TestTrajectoryDifferentiability:
         """Gradient of final phase w.r.t. p0 should be finite."""
         from fewtrax.trajectory import EMRIInspiral
 
-        traj = EMRIInspiral(flux_data, a=0.3)
+        traj = EMRIInspiral(flux_data)
 
         def final_phase(p0):
             _, _, _, Phi_phi, _, _ = traj(
-                p0=p0, e0=0.4, T=0.1, M=1e6, mu=10.0, dense_steps=20,
+                p0=p0, e0=0.4, T=0.1, M=1e6, mu=10.0, a=0.3, dense_steps=20,
             )
             valid = jnp.isfinite(Phi_phi)
             return jnp.sum(jnp.where(valid, Phi_phi, 0.0))
@@ -124,11 +124,11 @@ class TestTrajectoryDifferentiability:
         """Gradient of final phase w.r.t. e0 should be finite."""
         from fewtrax.trajectory import EMRIInspiral
 
-        traj = EMRIInspiral(flux_data, a=0.3)
+        traj = EMRIInspiral(flux_data)
 
         def final_phase(e0):
             _, _, _, _, _, Phi_r = traj(
-                p0=10.0, e0=e0, T=0.1, M=1e6, mu=10.0, dense_steps=20,
+                p0=10.0, e0=e0, T=0.1, M=1e6, mu=10.0, a=0.3, dense_steps=20,
             )
             valid = jnp.isfinite(Phi_r)
             return jnp.sum(jnp.where(valid, Phi_r, 0.0))
@@ -140,10 +140,11 @@ class TestTrajectoryDifferentiability:
         """Gradient of final phase w.r.t. spin a should be finite and non-zero."""
         from fewtrax.trajectory import EMRIInspiral
 
+        traj = EMRIInspiral(flux_data)
+
         def final_phase(a):
-            traj = EMRIInspiral(flux_data, a=a)
             _, _, _, Phi_phi, _, _ = traj(
-                p0=10.0, e0=0.4, T=0.1, M=1e6, mu=10.0, dense_steps=20,
+                p0=10.0, e0=0.4, T=0.1, M=1e6, mu=10.0, a=a, dense_steps=20,
             )
             valid = jnp.isfinite(Phi_phi)
             return jnp.sum(jnp.where(valid, Phi_phi, 0.0))

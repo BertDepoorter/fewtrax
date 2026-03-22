@@ -413,16 +413,16 @@ def main() -> None:
     T = args.obs_time
     dense_steps = args.dense_steps
 
-    traj = EMRIInspiral(flux_data, a=a)
+    traj = EMRIInspiral(flux_data)
 
     # Single-call JIT baseline
     print(f"\nJIT-compiling single trajectory call (dense_steps={dense_steps}) ...")
     t0 = time.perf_counter()
-    r = traj(p0=10.0, e0=0.4, T=T, M=M, mu=mu, dense_steps=dense_steps)
+    r = traj(p0=10.0, e0=0.4, a=a, T=T, M=M, mu=mu, dense_steps=dense_steps)
     jax.block_until_ready(r)
     compile_ms = (time.perf_counter() - t0) * 1e3
     single_ms, _, _ = _warmup_and_time(
-        lambda: traj(p0=10.0, e0=0.4, T=T, M=M, mu=mu, dense_steps=dense_steps),
+        lambda: traj(p0=10.0, e0=0.4, a=a, T=T, M=M, mu=mu, dense_steps=dense_steps),
         args.repeats,
     )
     print(f"  compile + first call : {compile_ms:.0f} ms")
