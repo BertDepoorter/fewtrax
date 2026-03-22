@@ -257,9 +257,9 @@ class KerrEccentricEquatorialWaveform:
         self._ensure_amp_loaded()
 
         # --- Trajectory ---
-        traj = EMRIInspiral(self._flux_data, a=a, x0=x0)
+        traj = EMRIInspiral(self._flux_data)
         t, p, e, Phi_phi, Phi_theta, Phi_r = traj(
-            p0=p0, e0=e0, T=T, dt=dt, M=M, mu=mu,
+            p0=p0, e0=e0, T=T, a=a, x0=x0, dt=dt, M=M, mu=mu,
             Phi_phi0=Phi_phi0, Phi_theta0=Phi_theta0, Phi_r0=Phi_r0,
             dense_steps=self.dense_steps,
             **traj_kwargs,
@@ -487,9 +487,9 @@ class KerrEccentricEquatorialWaveform:
         f : jnp.ndarray
             Instantaneous frequency [Hz], always non-negative.
         """
-        traj = EMRIInspiral(self._flux_data, a=a, x0=x0)
+        traj = EMRIInspiral(self._flux_data)
         return traj.get_frequency_track(
-            p0=p0, e0=e0, T=T, M=M, mu=mu,
+            p0=p0, e0=e0, T=T, M=M, mu=mu, a=a, x0=x0,
             l=l, m=m, k=k, n=n,
             dense_steps=self.dense_steps,
             backward=backward, e_f=e_f,
