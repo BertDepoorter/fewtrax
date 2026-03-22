@@ -130,14 +130,14 @@ from fewtrax.data import load_flux_data
 from fewtrax.trajectory import EMRIInspiral
 
 flux_data = wf._flux_data
-traj = EMRIInspiral(flux_data, a=params["a"])
+traj = EMRIInspiral(flux_data)
 
 
 def phase_at_end(p0):
     """Total azimuthal phase accumulated during the inspiral."""
     _, _, _, Phi_phi, _, _ = traj(
         p0=p0, e0=params["e0"], T=0.05,
-        M=params["M"], mu=params["mu"],
+        a=params["a"], M=params["M"], mu=params["mu"],
         dense_steps=20,
     )
     valid = jnp.isfinite(Phi_phi)
