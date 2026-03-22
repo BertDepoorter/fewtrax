@@ -233,40 +233,6 @@ open build/html/index.html
 ```
 
 
-### Alternative: ReadTheDocs
-
-Add a `.readthedocs.yaml` at the repository root:
-
-```yaml
-version: 2
-
-build:
-  os: ubuntu-22.04
-  tools:
-    python: "3.11"
-
-sphinx:
-  configuration: docs/source/conf.py
-
-python:
-  install:
-    - method: pip
-      path: .
-    - requirements: docs/requirements.txt
-```
-
-Create `docs/requirements.txt`:
-
-```
-sphinx
-sphinx-autodoc-typehints
-sphinx-rtd-theme
-myst-parser
-```
-
-Then connect the repository on [readthedocs.org](https://readthedocs.org) and
-the docs will build automatically on every push to `main`.
-
 ## Citation
 
 If you use fewtrax in your research, please cite the original FEW papers:
