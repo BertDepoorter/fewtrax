@@ -41,7 +41,11 @@ from utils import (
 # ---------------------------------------------------------------------------
 
 def run_few_trajectory(params: dict) -> tuple[np.ndarray, ...]:
-    """Run the FEW EMRIInspiral integrator and return (t, p, e, Phi_phi, Phi_theta, Phi_r)."""
+    """Run the FEW EMRIInspiral integrator and return (t, p, e, Phi_phi, Phi_theta, Phi_r).
+
+    FEW returns 7 arrays: (t, p, e, x, Phi_phi, Phi_theta, Phi_r).
+    The inclination x is discarded here.
+    """
     from few.trajectory.inspiral import EMRIInspiral as FEWInspiral
     traj = FEWInspiral(func='KerrEccEqFlux')
     result = traj(
@@ -50,9 +54,12 @@ def run_few_trajectory(params: dict) -> tuple[np.ndarray, ...]:
         params["p0"], params["e0"], params["x0"],
         T=params["T"],
         dt=params["dt"],
+        Phi_phi0=params.get("Phi_phi0", 0.0),
+        Phi_theta0=params.get("Phi_theta0", 0.0),
+        Phi_r0=params.get("Phi_r0", 0.0),
     )
-    # FEW returns (t, p, e, Phi_phi, Phi_theta, Phi_r, ...)
-    t, p, e, Phi_phi, Phi_theta, Phi_r = (np.asarray(r) for r in result[:6])
+    # result = (t, p, e, x, Phi_phi, Phi_theta, Phi_r)
+    t, p, e, _x, Phi_phi, Phi_theta, Phi_r = (np.asarray(r) for r in result[:7])
     return t, p, e, Phi_phi, Phi_theta, Phi_r
 
 
@@ -123,20 +130,10 @@ def compare_one(params: dict, flux_data) -> dict:
     with timer(f"  fewtrax trajectory ({label})", verbose=False):
         t_ft, p_ft, e_ft, Phi_phi_ft, Phi_theta_ft, Phi_r_ft = run_fewtrax_trajectory(params, flux_data)
 
-    # Interpolate phases using the common Phi_phi0 offset if non-zero
-    Phi_phi0 = params.get("Phi_phi0", 0.0)
-    Phi_theta0 = params.get("Phi_theta0", 0.0)
-    Phi_r0  = params.get("Phi_r0", 0.0)
-
-    # FEW initialises phases at 0 by default; shift fewtrax to match if needed
-    Phi_phi_ft_adj   = Phi_phi_ft   - Phi_phi0
-    Phi_theta_ft_adj = Phi_theta_ft - Phi_theta0
-    Phi_r_ft_adj     = Phi_r_ft     - Phi_r0
-
     try:
         t_grid, ref_vals, ft_vals = interpolate_to_common_grid(
             t_few,  [p_few,  e_few,  Phi_phi_few,  Phi_theta_few,  Phi_r_few],
-            t_ft,   [p_ft,   e_ft,   Phi_phi_ft_adj, Phi_theta_ft_adj, Phi_r_ft_adj],
+            t_ft,   [p_ft,   e_ft,   Phi_phi_ft,   Phi_theta_ft,   Phi_r_ft],
         )
     except ValueError as exc:
         return dict(label=label, error=str(exc))
@@ -175,10 +172,12 @@ def compare_one(params: dict, flux_data) -> dict:
         e_final_ft=e_final_ft,
         T_few_days=T_few_days,
         T_ft_days=T_ft_days,
-        # Store arrays for optional plotting
+        # Store raw arrays for plotting
         t_few=t_few, p_few=p_few, e_few=e_few,
-        t_ft=t_ft, p_ft=p_ft, e_ft=e_ft,
-        Phi_phi_few=Phi_phi_few, Phi_phi_ft=Phi_phi_ft_adj,
+        t_ft=t_ft,   p_ft=p_ft,   e_ft=e_ft,
+        Phi_phi_few=Phi_phi_few, Phi_phi_ft=Phi_phi_ft,
+        Phi_theta_few=Phi_theta_few, Phi_theta_ft=Phi_theta_ft,
+        Phi_r_few=Phi_r_few, Phi_r_ft=Phi_r_ft,
     )
 
 
@@ -187,16 +186,13 @@ def compare_one(params: dict, flux_data) -> dict:
 # ---------------------------------------------------------------------------
 
 def plot_comparison(result: dict, out_dir: str = ".") -> None:
-    """Save a 4-panel figure: p(t), e(t), Φ_φ(t) comparison, and phase difference.
+    """Save a 6-panel figure: p(t), e(t), and dephasing for Φ_φ, Φ_θ, Φ_r.
 
     Notes
     -----
-    Both fewtrax and FEW accumulate orbital phases **without wrapping**.
-    Φ_φ grows monotonically from the initial value (Phi_phi0) to ∼ Ω_φ × T
-    radians.  For a 0.1-yr inspiral of a 10⁶ M_⊙ EMRI at p≈10M this is
-    typically 10,000–30,000 rad.  Any visible difference between the two
-    curves reflects a genuine discrepancy in the trajectory integration
-    (flux or frequency computation), not a phase-wrapping artefact.
+    Both fewtrax and FEW accumulate orbital phases without wrapping.
+    A linearly growing ΔΦ indicates a constant frequency offset between
+    the two implementations.
     """
     try:
         import matplotlib.pyplot as plt
@@ -208,57 +204,137 @@ def plot_comparison(result: dict, out_dir: str = ".") -> None:
     t_few = result["t_few"] / 86400.0   # → days
     t_ft  = result["t_ft"]  / 86400.0
 
-    Phi_phi_few = result["Phi_phi_few"]
-    Phi_phi_ft  = result["Phi_phi_ft"]   # already adjusted by Phi_phi0
-
-    # Phase difference on a common time grid
+    # Build common time grid for phase differences
     t_lo = max(float(t_few[0]),  float(t_ft[0]))
     t_hi = min(float(t_few[-1]), float(t_ft[-1]))
-    t_common = np.linspace(t_lo, t_hi, 500)
-    Phi_few_c = np.interp(t_common, t_few, Phi_phi_few)
-    Phi_ft_c  = np.interp(t_common, t_ft,  Phi_phi_ft)
-    delta_phi = Phi_ft_c - Phi_few_c
+    t_common = np.linspace(t_lo, t_hi, 1000)
 
-    fig, axes = plt.subplots(4, 1, figsize=(10, 13), sharex=False)
+    def _phase_diff(key):
+        few_arr = result[f"{key}_few"]
+        ft_arr  = result[f"{key}_ft"]
+        t_few_s = result["t_few"]
+        t_ft_s  = result["t_ft"]
+        t_lo_s  = t_lo * 86400.0
+        t_hi_s  = t_hi * 86400.0
+        t_c_s   = np.linspace(t_lo_s, t_hi_s, 1000)
+        few_c = np.interp(t_c_s, t_few_s, few_arr)
+        ft_c  = np.interp(t_c_s, t_ft_s,  ft_arr)
+        return few_c, ft_c, ft_c - few_c
 
-    # p(t)
-    axes[0].plot(t_few, result["p_few"], label="FEW",     lw=1.5)
-    axes[0].plot(t_ft,  result["p_ft"],  label="fewtrax", lw=1.2, ls="--")
-    axes[0].set_ylabel(r"$p\;[M]$")
-    axes[0].set_title(f"Trajectory comparison – {label}")
-    axes[0].legend()
+    Pp_few_c, Pp_ft_c, dPp = _phase_diff("Phi_phi")
+    Pt_few_c, Pt_ft_c, dPt = _phase_diff("Phi_theta")
+    Pr_few_c, Pr_ft_c, dPr = _phase_diff("Phi_r")
 
-    # e(t)
-    axes[1].plot(t_few, result["e_few"], label="FEW",     lw=1.5)
-    axes[1].plot(t_ft,  result["e_ft"],  label="fewtrax", lw=1.2, ls="--")
-    axes[1].set_ylabel(r"$e$")
-    axes[1].legend()
+    fig, axes = plt.subplots(3, 2, figsize=(14, 12))
 
-    # Phi_phi(t) — accumulated (unwrapped) orbital phase
-    axes[2].plot(t_few, Phi_phi_few, label="FEW",     lw=1.5)
-    axes[2].plot(t_ft,  Phi_phi_ft,  label="fewtrax", lw=1.2, ls="--")
-    axes[2].set_ylabel(r"$\Phi_\phi\;[\mathrm{rad}]$  (accumulated, unwrapped)")
-    axes[2].legend()
-    axes[2].annotate(
-        "Both curves show the cumulative BL-time phase.\n"
-        "A linear offset means a constant frequency error.",
-        xy=(0.02, 0.05), xycoords="axes fraction", fontsize=8,
-        color="grey",
+    # --- Row 0: p(t) and Phi_phi dephasing ---
+    axes[0, 0].plot(t_few, result["p_few"], label="FEW",     lw=1.5)
+    axes[0, 0].plot(t_ft,  result["p_ft"],  label="fewtrax", lw=1.2, ls="--")
+    axes[0, 0].set_ylabel(r"$p\;[M]$")
+    axes[0, 0].set_title(f"Trajectory comparison – {label}")
+    axes[0, 0].legend(fontsize=9)
+
+    axes[0, 1].plot(t_common, dPp, lw=1.2, color="C0")
+    axes[0, 1].axhline(0, color="k", lw=0.5, ls="--")
+    axes[0, 1].set_ylabel(r"$\Delta\Phi_\phi\;[\mathrm{rad}]$")
+    axes[0, 1].set_title(
+        fr"$\Phi_\phi$ dephasing  "
+        fr"(mean = {result['Phi_phi_mean_rad']:.2e} rad, "
+        fr"max = {result['Phi_phi_max_rad']:.2e} rad)"
     )
 
-    # Phase difference Δφ = φ_fewtrax − φ_FEW
-    axes[3].plot(t_common, delta_phi, lw=1.2, color="C2")
-    axes[3].axhline(0, color="k", lw=0.5, ls="--")
-    axes[3].set_ylabel(r"$\Delta\Phi_\phi = \Phi_\phi^{\rm ft} - \Phi_\phi^{\rm FEW}\;[\mathrm{rad}]$")
-    axes[3].set_xlabel("Time [days]")
-    axes[3].set_title(
-        fr"Phase difference  "
-        fr"(mean |ΔΦ| = {result['Phi_phi_mean_rad']:.2e} rad, "
-        fr"max = {result['Phi_phi_max_rad']:.2e} rad)"
+    # --- Row 1: e(t) and Phi_theta dephasing ---
+    axes[1, 0].plot(t_few, result["e_few"], label="FEW",     lw=1.5)
+    axes[1, 0].plot(t_ft,  result["e_ft"],  label="fewtrax", lw=1.2, ls="--")
+    axes[1, 0].set_ylabel(r"$e$")
+    axes[1, 0].legend(fontsize=9)
+
+    axes[1, 1].plot(t_common, dPt, lw=1.2, color="C1")
+    axes[1, 1].axhline(0, color="k", lw=0.5, ls="--")
+    axes[1, 1].set_ylabel(r"$\Delta\Phi_\theta\;[\mathrm{rad}]$")
+    axes[1, 1].set_title(
+        fr"$\Phi_\theta$ dephasing  "
+        fr"(mean = {result['Phi_theta_mean_rad']:.2e} rad, "
+        fr"max = {result['Phi_theta_max_rad']:.2e} rad)"
+    )
+
+    # --- Row 2: accumulated Phi_phi(t) and Phi_r dephasing ---
+    axes[2, 0].plot(t_common, Pp_few_c, label="FEW",     lw=1.5)
+    axes[2, 0].plot(t_common, Pp_ft_c,  label="fewtrax", lw=1.2, ls="--")
+    axes[2, 0].set_ylabel(r"$\Phi_\phi\;[\mathrm{rad}]$")
+    axes[2, 0].set_xlabel("Time [days]")
+    axes[2, 0].legend(fontsize=9)
+
+    axes[2, 1].plot(t_common, dPr, lw=1.2, color="C2")
+    axes[2, 1].axhline(0, color="k", lw=0.5, ls="--")
+    axes[2, 1].set_ylabel(r"$\Delta\Phi_r\;[\mathrm{rad}]$")
+    axes[2, 1].set_xlabel("Time [days]")
+    axes[2, 1].set_title(
+        fr"$\Phi_r$ dephasing  "
+        fr"(mean = {result['Phi_r_mean_rad']:.2e} rad, "
+        fr"max = {result['Phi_r_max_rad']:.2e} rad)"
     )
 
     plt.tight_layout()
     out_path = f"{out_dir}/trajectory_{label}.png"
+    plt.savefig(out_path, dpi=150)
+    plt.close(fig)
+    print(f"  Saved {out_path}")
+
+    # --- Second figure: accumulated phases side by side ---
+    _plot_accumulated_phases(result, t_common, out_dir)
+
+
+def _plot_accumulated_phases(result: dict, t_common: np.ndarray, out_dir: str) -> None:
+    """Save a 3×2 figure showing accumulated phase and dephasing for all three angles."""
+    try:
+        import matplotlib.pyplot as plt
+    except ImportError:
+        return
+
+    label = result["label"]
+    t_few_s = result["t_few"]
+    t_ft_s  = result["t_ft"]
+    t_c_s   = np.linspace(t_few_s[0], t_few_s[-1], 1000)
+    t_c_days = t_c_s / 86400.0
+
+    phases = [
+        ("Phi_phi",   r"$\Phi_\phi$",   "C0"),
+        ("Phi_theta", r"$\Phi_\theta$", "C1"),
+        ("Phi_r",     r"$\Phi_r$",      "C2"),
+    ]
+
+    fig, axes = plt.subplots(len(phases), 2, figsize=(14, 4 * len(phases)))
+    fig.suptitle(f"Accumulated phases & dephasing – {label}", fontsize=12)
+
+    for row, (key, label_tex, color) in enumerate(phases):
+        few_arr = result[f"{key}_few"]
+        ft_arr  = result[f"{key}_ft"]
+
+        few_c = np.interp(t_c_s, t_few_s, few_arr)
+        ft_c  = np.interp(t_c_s, t_ft_s,  ft_arr)
+        delta = ft_c - few_c
+
+        # Left: accumulated phase
+        axes[row, 0].plot(t_c_days, few_c, label="FEW",     lw=1.5)
+        axes[row, 0].plot(t_c_days, ft_c,  label="fewtrax", lw=1.2, ls="--")
+        axes[row, 0].set_ylabel(fr"{label_tex} [rad]")
+        axes[row, 0].legend(fontsize=9)
+        if row == len(phases) - 1:
+            axes[row, 0].set_xlabel("Time [days]")
+
+        # Right: dephasing
+        axes[row, 1].plot(t_c_days, delta, lw=1.2, color=color)
+        axes[row, 1].axhline(0, color="k", lw=0.5, ls="--")
+        axes[row, 1].set_ylabel(fr"$\Delta${label_tex} [rad]")
+        mean_err = result[f"{key}_mean_rad"]
+        max_err  = result[f"{key}_max_rad"]
+        axes[row, 1].set_title(fr"mean|Δ| = {mean_err:.2e} rad,  max|Δ| = {max_err:.2e} rad")
+        if row == len(phases) - 1:
+            axes[row, 1].set_xlabel("Time [days]")
+
+    plt.tight_layout()
+    out_path = f"{out_dir}/trajectory_{label}_phases.png"
     plt.savefig(out_path, dpi=150)
     plt.close(fig)
     print(f"  Saved {out_path}")
@@ -299,20 +375,23 @@ def main():
                 print(f"  Duration:  FEW = {res['T_few_days']:.3f} d,  fewtrax = {res['T_ft_days']:.3f} d")
                 print(f"  p(t) RMS relative error:  {res['p_rms']:.2e}")
                 print(f"  e(t) RMS relative error:  {res['e_rms']:.2e}")
-                print(f"  Φ_φ  mean/max error:  {res['Phi_phi_mean_rad']:.2e} / {res['Phi_phi_max_rad']:.2e}  rad")
-                print(f"  Φ_θ  mean/max error:  {res['Phi_theta_mean_rad']:.2e} / {res['Phi_theta_max_rad']:.2e}  rad")
-                print(f"  Φ_r  mean/max error:  {res['Phi_r_mean_rad']:.2e} / {res['Phi_r_max_rad']:.2e}  rad")
+                print(f"  Φ_φ  mean/max dephasing:  {res['Phi_phi_mean_rad']:.2e} / {res['Phi_phi_max_rad']:.2e}  rad")
+                print(f"  Φ_θ  mean/max dephasing:  {res['Phi_theta_mean_rad']:.2e} / {res['Phi_theta_max_rad']:.2e}  rad")
+                print(f"  Φ_r  mean/max dephasing:  {res['Phi_r_mean_rad']:.2e} / {res['Phi_r_max_rad']:.2e}  rad")
                 print(f"  p_final:  FEW = {res['p_final_few']:.6f},  fewtrax = {res['p_final_ft']:.6f}")
                 print(f"  e_final:  FEW = {res['e_final_few']:.6f},  fewtrax = {res['e_final_ft']:.6f}")
         except Exception as exc:
+            import traceback
             print(f"  FAILED: {exc}")
+            traceback.print_exc()
+            results.append(dict(label=label, error=str(exc)))
 
     # Summary table
     print_header("Summary table")
     ok = [r for r in results if "error" not in r]
     if ok:
-        headers = ["label", "p RMS err", "e RMS err", "Φφ mean [rad]", "Φφ max [rad]"]
-        widths  = [14, 12, 12, 16, 16]
+        headers = ["label", "p RMS err", "e RMS err", "Φφ mean [rad]", "Φφ max [rad]", "Φθ max [rad]", "Φr max [rad]"]
+        widths  = [14, 12, 12, 16, 16, 16, 16]
         rows = [
             (
                 r["label"],
@@ -320,6 +399,8 @@ def main():
                 f"{r['e_rms']:.2e}",
                 f"{r['Phi_phi_mean_rad']:.2e}",
                 f"{r['Phi_phi_max_rad']:.2e}",
+                f"{r['Phi_theta_max_rad']:.2e}",
+                f"{r['Phi_r_max_rad']:.2e}",
             )
             for r in ok
         ]

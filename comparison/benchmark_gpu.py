@@ -87,12 +87,13 @@ def bench_fewtrax_trajectory(params: dict, flux_data, dense_steps: int,
                               n_warmup: int, n_repeat: int) -> tuple[float, float]:
     """Time fewtrax EMRIInspiral (includes JIT overhead on first call)."""
     from fewtrax.trajectory import EMRIInspiral
-    traj = EMRIInspiral(flux_data, a=params["a"], x0=params.get("x0", 1.0))
+    traj = EMRIInspiral(flux_data)
 
     def fn():
         result = traj(
             p0=params["p0"], e0=params["e0"],
             T=params["T"], dt=params["dt"],
+            a=params["a"], x0=params.get("x0", 1.0),
             M=params["M"], mu=params["mu"],
             Phi_phi0=params.get("Phi_phi0", 0.0),
             Phi_theta0=params.get("Phi_theta0", 0.0),
@@ -236,12 +237,14 @@ def bench_vmap_waveforms(
     Only the trajectory step is vmapped (amplitude evaluation is CPU-bound).
     """
     from fewtrax.trajectory import EMRIInspiral
-    traj = EMRIInspiral(flux_data, a=base_params["a"], x0=base_params.get("x0", 1.0))
+    traj = EMRIInspiral(flux_data)
 
     fixed_kwargs = dict(
         e0=base_params["e0"],
         T=base_params["T"],
         dt=base_params["dt"],
+        a=base_params["a"],
+        x0=base_params.get("x0", 1.0),
         M=base_params["M"],
         mu=base_params["mu"],
         dense_steps=100,
