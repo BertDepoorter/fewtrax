@@ -308,6 +308,7 @@ class KerrEccentricEquatorialWaveform:
         dt: float = 10.0,
         mode_selection_threshold: Optional[float] = None,
         return_sparse: bool = False,
+        return_complex: bool = False,
         **kwargs,
     ) -> tuple[jnp.ndarray, jnp.ndarray]:
         r"""Generate the EMRI gravitational waveform.
@@ -344,15 +345,25 @@ class KerrEccentricEquatorialWaveform:
         return_sparse : bool
             If True, also return the sparse trajectory dictionary as a
             third element of the tuple.
+        return_complex : bool
+            If True, return the complex strain ``h = h₊ + i·h×`` as a
+            single array instead of the ``(hp, hx)`` tuple.  This is the
+            natural input format for
+            :class:`~jaxlisaresponse.ResponseWrapper`.
 
         Returns
         -------
         hp : jnp.ndarray, shape (N,)
-            Plus-polarisation strain :math:`h_+` at the detector [dimensionless].
+            Plus-polarisation strain :math:`h_+` [dimensionless].
+            *Not returned when* ``return_complex=True``.
         hx : jnp.ndarray, shape (N,)
             Cross-polarisation strain :math:`h_{\times}` [dimensionless].
+            *Not returned when* ``return_complex=True``.
+        h : jnp.ndarray, shape (N,), complex
+            Complex strain ``h₊ + i·h×``.  Returned *instead of*
+            ``(hp, hx)`` when ``return_complex=True``.
         (optional) sparse_dict : dict
-            Returned if ``return_sparse=True``.
+            Returned as the last element if ``return_sparse=True``.
 
         Notes
         -----
@@ -428,6 +439,12 @@ class KerrEccentricEquatorialWaveform:
 
         # Rotate from source frame to SSB frame
         hp, hx = _to_ssb_frame(hp, hx, float(qS), float(phiS), qK_eff, phiK_eff)
+
+        if return_complex:
+            h_out = hp + 1j * hx
+            if return_sparse:
+                return h_out, sparse
+            return h_out
 
         if return_sparse:
             return hp, hx, sparse
