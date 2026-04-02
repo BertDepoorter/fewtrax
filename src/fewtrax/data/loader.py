@@ -37,7 +37,7 @@ import h5py
 import numpy as np
 import equinox as eqx
 
-from fewtrax.utils.splines import CubicSpline3D
+from fewtrax.utils.splines import CubicSpline3D, TricubicSplineE3
 
 log = logging.getLogger(__name__)
 
@@ -195,17 +195,18 @@ class FluxData(eqx.Module):
 
     Attributes
     ----------
-    pdot_A, edot_A : CubicSpline3D
+    pdot_A, edot_A : TricubicSplineE3
         Semi-latus rectum and eccentricity rate ratio interpolators for
         Region A.  Inputs are normalised coordinates (u, w, z) ∈ [0, 1]³.
-    pdot_B, edot_B : CubicSpline3D
+        Uses E(3) / not-a-knot boundary conditions (matching FEW exactly).
+    pdot_B, edot_B : TricubicSplineE3
         Same for Region B.
     """
 
-    pdot_A: CubicSpline3D
-    edot_A: CubicSpline3D
-    pdot_B: CubicSpline3D
-    edot_B: CubicSpline3D
+    pdot_A: TricubicSplineE3
+    edot_A: TricubicSplineE3
+    pdot_B: TricubicSplineE3
+    edot_B: TricubicSplineE3
 
 
 @dataclass
@@ -360,7 +361,6 @@ def _densify_grid(
 def load_flux_data(
     data_dir: Optional[str | Path] = None,
     downsample: Optional[list] = None,
-    densify_factor: int = 1,
 ) -> FluxData:
     r"""Load Kerr eccentric equatorial flux data in pex convention.
 
@@ -368,26 +368,20 @@ def load_flux_data(
     analytical Kerr Jacobian, then normalises by the separatrix-dependent PN
     functions to obtain dimensionless ratios ṗ/ṗ_PN and ė/ė_PN.
 
-    By default the pex-ratio grids are densified by ``densify_factor`` (default
-    3) using E(3) cubic splines from ``multispline`` before being stored in
-    JAX ``interpax`` C² splines.  This eliminates the ~1.6e-6 relative
-    interpolation error that would otherwise accumulate as a phase drift of
-    ~2.6 rad yr⁻¹, causing the waveform overlap to collapse for T ≳ 0.1 yr.
+    The pex-ratio grids are stored as :class:`~fewtrax.utils.splines.TricubicSplineE3`
+    instances using E(3) / not-a-knot boundary conditions, matching FEW's
+    ``multispline.TricubicSpline`` convention exactly.  This eliminates the
+    systematic boundary-condition interpolation error that previously accumulated
+    as a ~2.6 rad yr⁻¹ phase drift at high eccentricity / high spin.
 
     Parameters
     ----------
     data_dir : str or Path, optional
         Directory containing ``KerrEccEqFluxData.h5``.
     downsample : list of two 3-tuples, optional
-        ``[(dU_A, dW_A, dZ_A), (dU_B, dW_B, dZ_B)]`` downsampling factors
-        applied before densification.  Default ``[(1,1,1),(1,1,1)]`` keeps
-        the full grid.
-    densify_factor : int, optional
-        Grid densification factor applied after ELQ→pex conversion.
-        ``densify_factor=3`` (default) inserts 2 extra points between every
-        original grid point in each dimension, reducing the C²-vs-E(3)
-        boundary-condition interpolation error by ~(1/3)⁴ ≈ 80×.
-        Set to 1 to skip densification.
+        ``[(dU_A, dW_A, dZ_A), (dU_B, dW_B, dZ_B)]`` downsampling factors.
+        Default ``[(1,1,1),(1,1,1)]`` keeps the full grid.  Useful for
+        convergence testing; do not use in production.
 
     Returns
     -------
@@ -473,23 +467,12 @@ def load_flux_data(
     log.info("Computing pex convention for Region B …")
     rp_B, re_B = _pex_normalise(u_B, w_B, z_B, Edot_B, Ldot_B, False)
 
-    if densify_factor > 1:
-        log.info(
-            "Densifying flux grids by factor %d using E(3) cubic splines …",
-            densify_factor,
-        )
-        u_A, w_A, z_A, rp_A, re_A = _densify_grid(u_A, w_A, z_A, rp_A, re_A, densify_factor)
-        u_B, w_B, z_B, rp_B, re_B = _densify_grid(u_B, w_B, z_B, rp_B, re_B, densify_factor)
-        log.info(
-            "Dense grids — Region A: (%d, %d, %d),  Region B: (%d, %d, %d)",
-            u_A.size, w_A.size, z_A.size, u_B.size, w_B.size, z_B.size,
-        )
-
+    log.info("Building E(3) tricubic splines (matching FEW convention) …")
     return FluxData(
-        pdot_A=CubicSpline3D(u_A, w_A, z_A, rp_A),
-        edot_A=CubicSpline3D(u_A, w_A, z_A, re_A),
-        pdot_B=CubicSpline3D(u_B, w_B, z_B, rp_B),
-        edot_B=CubicSpline3D(u_B, w_B, z_B, re_B),
+        pdot_A=TricubicSplineE3.from_multispline(u_A, w_A, z_A, rp_A),
+        edot_A=TricubicSplineE3.from_multispline(u_A, w_A, z_A, re_A),
+        pdot_B=TricubicSplineE3.from_multispline(u_B, w_B, z_B, rp_B),
+        edot_B=TricubicSplineE3.from_multispline(u_B, w_B, z_B, re_B),
     )
 
 
