@@ -46,7 +46,7 @@ wavelet = [
     "pywavelet>=0.1.0",
 ]
 dev = [
-    "fewtrax[test,compare,wavelet]",
+    "fewtrax[test,compare,wavelet,gpu]",
     "jupyter>=1.0.0",
 ]
 
