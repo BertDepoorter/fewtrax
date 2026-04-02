@@ -1,5 +1,5 @@
 # fewtrax
-
+[![Doc badge](https://img.shields.io/badge/Docs-master-brightgreen)](https://bertdepoorter.github.io/fewtrax)
 JAX implementation of the **KerrEccentricEquatorial** EMRI waveform model from [FastEMRIWaveforms (FEW)](https://github.com/BlackHolePerturbationToolkit/FastEMRIWaveforms), with full support for JIT compilation, automatic differentiation, and batched evaluation via `vmap`.
 
 ## Features
