@@ -1,14 +1,17 @@
 """GPU runtime comparison: fewtrax vs FastEMRIWaveforms on NVIDIA A100.
 
 Designed and tested for an A100-80GB.  JAX will automatically use the GPU
-if ``jax[cuda12]`` is installed.
+if ``jax[cuda12]`` is installed.  FEW is also run on GPU (via cupy/CUDA)
+when available; JAX GPU memory is released before each FEW benchmark to
+avoid OOM errors.
 
 What is measured
 ----------------
 A. **Component timings** (per single waveform)
-   1. Trajectory only: fewtrax (GPU) vs FEW (CPU)
-   2. Mode summation only: fewtrax JAX (GPU) vs numpy reference (CPU)
-   3. Full end-to-end: fewtrax (GPU) vs FEW (CPU)
+   1. Sparse trajectory only: fewtrax (GPU) vs FEW (GPU/CPU)
+   2. Dense trajectory (ODE + amplitude eval): fewtrax (GPU) vs FEW (GPU/CPU)
+   3. Mode summation only: fewtrax JAX (GPU) vs numpy reference (CPU)
+   4. Full end-to-end: fewtrax (GPU) vs FEW (GPU/CPU)
 
 B. **Observation-time scaling**
    T ∈ {0.05, 0.1, 0.5, 1.0} years (fixed dt = 10 s)
@@ -16,13 +19,18 @@ B. **Observation-time scaling**
 C. **Sample-rate scaling**
    dt ∈ {1, 5, 10, 30, 60} s (fixed T = 0.1 yr)
 
-D. **Batch / vmap scaling** (fewtrax only)
+D. **Mode-summation scaling** (GPU stress test)
+   N_modes ∈ {100, 500, 1000, 2000, 4000, 8000} (fixed N_t = 2000)
+
+E. **Batch / vmap scaling** (fewtrax only)
    N_batch ∈ {1, 8, 32, 128, 512, 1024} waveforms evaluated simultaneously
    via ``jax.vmap``.  Tests GPU throughput on the A100's 80 GB.
 
 Usage
 -----
-    python benchmark_gpu.py [/path/to/few/data] [--n-repeat 5] [--skip-few]
+    python benchmark_gpu.py [/path/to/few/data] \\
+        [--n-repeat 5] [--skip-few] [--skip-vmap] \\
+        [--M 1e6] [--mu 10] [--a 0.3] [--p0 10] [--e0 0.4]
 
 Requirements
 ------------
@@ -32,6 +40,7 @@ Requirements
 from __future__ import annotations
 
 import argparse
+import gc
 import sys
 import numpy as np
 import jax
@@ -79,13 +88,34 @@ def is_gpu_available() -> bool:
     return any(d.platform == "gpu" for d in jax.devices())
 
 
+def clear_gpu_memory() -> None:
+    """Release JAX GPU caches and cupy memory pools before running FEW.
+
+    FEW uses cupy (not JAX) for GPU operations, so both memory pools must
+    be freed to avoid OOM errors when the two frameworks coexist.
+    """
+    jax.clear_caches()
+    gc.collect()
+    try:
+        import cupy
+        cupy.get_default_memory_pool().free_all_blocks()
+        cupy.get_default_pinned_memory_pool().free_all_blocks()
+    except ImportError:
+        pass
+
+
 # ---------------------------------------------------------------------------
 # Trajectory benchmark helpers
 # ---------------------------------------------------------------------------
 
-def bench_fewtrax_trajectory(params: dict, flux_data, dense_steps: int,
-                              n_warmup: int, n_repeat: int) -> tuple[float, float]:
-    """Time fewtrax EMRIInspiral (includes JIT overhead on first call)."""
+def bench_fewtrax_trajectory_sparse(
+    params: dict,
+    flux_data,
+    dense_steps: int,
+    n_warmup: int,
+    n_repeat: int,
+) -> tuple[float, float]:
+    """Time fewtrax EMRIInspiral (ODE only → sparse trajectory output)."""
     from fewtrax.trajectory import EMRIInspiral
     traj = EMRIInspiral(flux_data)
 
@@ -105,9 +135,48 @@ def bench_fewtrax_trajectory(params: dict, flux_data, dense_steps: int,
     return repeat_timer(fn, n_warmup=n_warmup, n_repeat=n_repeat)
 
 
-def bench_few_trajectory(params: dict, n_warmup: int, n_repeat: int) -> tuple[float, float]:
+def bench_fewtrax_trajectory_dense(
+    params: dict,
+    wf_gen,
+    n_warmup: int,
+    n_repeat: int,
+) -> tuple[float, float]:
+    """Time fewtrax generate_sparse (ODE + Teukolsky amplitude evaluation).
+
+    This covers the complete trajectory pipeline: ODE integration over
+    ``dense_steps`` sparse points followed by scipy B-spline amplitude
+    evaluation at each point.  The result is the sparse trajectory dict
+    used as input to the mode summation step.
+    """
+    call_kwargs = dict(
+        M=params["M"], mu=params["mu"],
+        a=params["a"],
+        p0=params["p0"], e0=params["e0"],
+        x0=params.get("x0", 1.0),
+        T=params["T"], dt=params["dt"],
+        Phi_phi0=params.get("Phi_phi0", 0.0),
+        Phi_theta0=params.get("Phi_theta0", 0.0),
+        Phi_r0=params.get("Phi_r0", 0.0),
+    )
+
+    def fn():
+        sparse = wf_gen.generate_sparse(**call_kwargs)
+        # Block on JAX arrays inside the returned dict
+        block_jax(tuple(
+            v for v in sparse.values() if hasattr(v, "block_until_ready")
+        ))
+
+    return repeat_timer(fn, n_warmup=n_warmup, n_repeat=n_repeat)
+
+
+def bench_few_trajectory(
+    params: dict,
+    n_warmup: int,
+    n_repeat: int,
+    use_gpu: bool = False,
+) -> tuple[float, float]:
     from few.trajectory.inspiral import EMRIInspiral as FEWInspiral
-    traj = FEWInspiral()
+    traj = FEWInspiral(use_gpu=use_gpu)
 
     def fn():
         traj(
@@ -125,7 +194,12 @@ def bench_few_trajectory(params: dict, n_warmup: int, n_repeat: int) -> tuple[fl
 # Full waveform benchmark helpers
 # ---------------------------------------------------------------------------
 
-def bench_fewtrax_waveform(params: dict, wf_gen, n_warmup: int, n_repeat: int) -> tuple[float, float]:
+def bench_fewtrax_waveform(
+    params: dict,
+    wf_gen,
+    n_warmup: int,
+    n_repeat: int,
+) -> tuple[float, float]:
     call_kwargs = {k: v for k, v in params.items() if k != "label"}
 
     def fn():
@@ -135,9 +209,17 @@ def bench_fewtrax_waveform(params: dict, wf_gen, n_warmup: int, n_repeat: int) -
     return repeat_timer(fn, n_warmup=n_warmup, n_repeat=n_repeat)
 
 
-def bench_few_waveform(params: dict, n_warmup: int, n_repeat: int) -> tuple[float, float]:
+def bench_few_waveform(
+    params: dict,
+    n_warmup: int,
+    n_repeat: int,
+    use_gpu: bool = False,
+) -> tuple[float, float]:
     from few.waveform import GenerateEMRIWaveform
-    gen = GenerateEMRIWaveform("FastKerrEccentricEquatorialFlux")
+    gen = GenerateEMRIWaveform(
+        "FastKerrEccentricEquatorialFlux",
+        use_gpu=use_gpu,
+    )
     call_kwargs = dict(
         M=params["M"], mu=params["mu"],
         a=params["a"],
@@ -285,21 +367,50 @@ def main():
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
-    parser.add_argument("data_dir", nargs="?", default=None)
-    parser.add_argument("--n-repeat", type=int, default=5)
-    parser.add_argument("--n-warmup", type=int, default=2)
+    parser.add_argument("data_dir", nargs="?", default=None,
+                        help="Path to FEW HDF5 data directory")
+    parser.add_argument("--n-repeat", type=int, default=5,
+                        help="Number of timed repetitions (default: 5)")
+    parser.add_argument("--n-warmup", type=int, default=2,
+                        help="Number of warm-up calls before timing (default: 2)")
     parser.add_argument("--skip-few", action="store_true",
-                        help="Skip FEW benchmarks (requires FEW not installed)")
+                        help="Skip FEW benchmarks (use when FEW is not installed)")
     parser.add_argument("--skip-vmap", action="store_true",
                         help="Skip vmap batch benchmark (faster)")
+
+    # Intrinsic parameters
+    parser.add_argument("--M", type=float, default=None,
+                        help="Primary BH mass [M_sun] (default: 1e6)")
+    parser.add_argument("--mu", type=float, default=None,
+                        help="Secondary mass [M_sun] (default: 10.0)")
+    parser.add_argument("--a", type=float, default=None,
+                        help="Dimensionless Kerr spin, |a| < 1 (default: 0.3)")
+    parser.add_argument("--p0", type=float, default=None,
+                        help="Initial semi-latus rectum [M] (default: 10.0)")
+    parser.add_argument("--e0", type=float, default=None,
+                        help="Initial eccentricity, 0 ≤ e0 < 1 (default: 0.4)")
+
     args = parser.parse_args()
 
     nw, nr = args.n_warmup, args.n_repeat
 
     describe_devices()
-    if not is_gpu_available():
+    gpu = is_gpu_available()
+    if not gpu:
         print("\n[WARNING] No GPU detected. Results will reflect CPU performance.")
         print("  Install jax[cuda12] and run on an A100 for GPU results.\n")
+
+    # Build parameter dict, applying any CLI overrides
+    params = dict(PARAMS_DEFAULT)
+    for key, val in [("M", args.M), ("mu", args.mu), ("a", args.a),
+                     ("p0", args.p0), ("e0", args.e0)]:
+        if val is not None:
+            params[key] = val
+
+    print(f"\nBenchmark parameters:")
+    print(f"  M={params['M']:.3g} M_sun  mu={params['mu']:.3g} M_sun  "
+          f"a={params['a']:.3g}  p0={params['p0']:.3g}  e0={params['e0']:.3g}")
+    print(f"  T={params['T']} yr  dt={params['dt']} s")
 
     data_dir = find_data_dir(args.data_dir)
     print(f"\nFEW data directory: {data_dir}")
@@ -316,36 +427,59 @@ def main():
     )
     print("  Done.")
 
-    params = dict(PARAMS_DEFAULT)
+    # FEW: use GPU when available (requires cupy / FEW cuda build)
+    few_device = "GPU" if gpu else "CPU"
+    few_use_gpu = gpu
 
     # ------------------------------------------------------------------
     # A. Component timings (single waveform)
     # ------------------------------------------------------------------
     print_header("A. Component timings (single waveform, default params)")
 
-    print("\n  [Trajectory]")
-    ft_t_mean, ft_t_std = bench_fewtrax_trajectory(params, flux_data, 100, nw, nr)
-    print(f"    fewtrax (JAX):    {ft_t_mean*1e3:.2f} ± {ft_t_std*1e3:.2f} ms")
+    # A1. Sparse trajectory (ODE integration only)
+    print("\n  [Trajectory — sparse (ODE only)]")
+    ft_ts_mean, ft_ts_std = bench_fewtrax_trajectory_sparse(
+        params, flux_data, dense_steps=100, n_warmup=nw, n_repeat=nr,
+    )
+    print(f"    fewtrax (JAX, {few_device}):  {ft_ts_mean*1e3:.2f} ± {ft_ts_std*1e3:.2f} ms")
 
     if not args.skip_few:
-        few_t_mean, few_t_std = bench_few_trajectory(params, nw, nr)
-        print(f"    FEW (CPU):        {few_t_mean*1e3:.2f} ± {few_t_std*1e3:.2f} ms")
-        print(f"    Speedup:          {few_t_mean/ft_t_mean:.2f}×")
+        print(f"    Clearing JAX GPU memory before FEW …")
+        clear_gpu_memory()
+        few_ts_mean, few_ts_std = bench_few_trajectory(
+            params, nw, nr, use_gpu=few_use_gpu,
+        )
+        tag = f"FEW ({few_device})"
+        print(f"    {tag}:          {few_ts_mean*1e3:.2f} ± {few_ts_std*1e3:.2f} ms")
+        print(f"    Speedup:                  {few_ts_mean/ft_ts_mean:.2f}×")
 
+    # A2. Dense trajectory (ODE + amplitude evaluation)
+    print("\n  [Trajectory — dense (ODE + amplitude eval)]")
+    ft_td_mean, ft_td_std = bench_fewtrax_trajectory_dense(
+        params, wf_gen, n_warmup=nw, n_repeat=nr,
+    )
+    print(f"    fewtrax (JAX traj + CPU amp): {ft_td_mean*1e3:.2f} ± {ft_td_std*1e3:.2f} ms")
+
+    # A3. Mode summation only
     print("\n  [Mode summation  N_t=500, N_modes=200]")
     ft_s_mean, ft_s_std = bench_fewtrax_summation(500, 200, nw, nr)
     np_s_mean, np_s_std = bench_numpy_summation(500, 200, nw, nr)
-    print(f"    fewtrax JAX:      {ft_s_mean*1e3:.2f} ± {ft_s_std*1e3:.2f} ms")
-    print(f"    numpy (CPU ref):  {np_s_mean*1e3:.2f} ± {np_s_std*1e3:.2f} ms")
-    print(f"    Speedup:          {np_s_mean/ft_s_mean:.2f}×")
+    print(f"    fewtrax JAX ({few_device}): {ft_s_mean*1e3:.2f} ± {ft_s_std*1e3:.2f} ms")
+    print(f"    numpy (CPU ref):    {np_s_mean*1e3:.2f} ± {np_s_std*1e3:.2f} ms")
+    print(f"    Speedup:            {np_s_mean/ft_s_mean:.2f}×")
 
+    # A4. Full end-to-end
     print("\n  [Full end-to-end  T=0.1yr, dt=10s]")
     ft_f_mean, ft_f_std = bench_fewtrax_waveform(params, wf_gen, nw, nr)
-    print(f"    fewtrax total:    {ft_f_mean:.3f} ± {ft_f_std:.3f} s")
+    print(f"    fewtrax total:      {ft_f_mean:.3f} ± {ft_f_std:.3f} s")
     if not args.skip_few:
-        few_f_mean, few_f_std = bench_few_waveform(params, nw, nr)
-        print(f"    FEW total:        {few_f_mean:.3f} ± {few_f_std:.3f} s")
-        print(f"    Speedup:          {few_f_mean/ft_f_mean:.2f}×")
+        print(f"    Clearing JAX GPU memory before FEW …")
+        clear_gpu_memory()
+        few_f_mean, few_f_std = bench_few_waveform(
+            params, nw, nr, use_gpu=few_use_gpu,
+        )
+        print(f"    FEW ({few_device}) total: {few_f_mean:.3f} ± {few_f_std:.3f} s")
+        print(f"    Speedup:            {few_f_mean/ft_f_mean:.2f}×")
 
     # ------------------------------------------------------------------
     # B. Observation-time scaling
@@ -353,8 +487,8 @@ def main():
     print_header("B. Observation-time scaling  (dt = 10 s, fewtrax)")
 
     T_SWEEP = [0.05, 0.1, 0.5, 1.0]
-    headers = ["T [yr]", "N_samples", "fewtrax [s]", "FEW [s]", "speedup"]
-    widths  = [10, 12, 16, 14, 10]
+    headers = ["T [yr]", "N_samples", "fewtrax [s]", f"FEW [{few_device}] [s]", "speedup"]
+    widths  = [10, 12, 16, 18, 10]
     rows = []
     for T in T_SWEEP:
         p = dict(params, T=T)
@@ -362,7 +496,8 @@ def main():
         N_s = int(T * 365.25 * 86400 / params["dt"])
 
         if not args.skip_few:
-            few_mean, few_std = bench_few_waveform(p, nw, nr)
+            clear_gpu_memory()
+            few_mean, few_std = bench_few_waveform(p, nw, nr, use_gpu=few_use_gpu)
             sp = f"{few_mean/ft_mean:.2f}×"
             few_str = f"{few_mean:.3f} ± {few_std:.3f}"
         else:
@@ -391,7 +526,8 @@ def main():
         N_s = int(params["T"] * 365.25 * 86400 / dt)
 
         if not args.skip_few:
-            few_mean, few_std = bench_few_waveform(p, nw, nr)
+            clear_gpu_memory()
+            few_mean, few_std = bench_few_waveform(p, nw, nr, use_gpu=few_use_gpu)
             sp = f"{few_mean/ft_mean:.2f}×"
             few_str = f"{few_mean:.3f} ± {few_std:.3f}"
         else:
@@ -405,8 +541,8 @@ def main():
             few_str,
             sp,
         ))
-    headers = ["dt [s]", "N_samples", "fewtrax [s]", "FEW [s]", "speedup"]
-    widths  = [10, 12, 16, 14, 10]
+    headers = ["dt [s]", "N_samples", "fewtrax [s]", f"FEW [{few_device}] [s]", "speedup"]
+    widths  = [10, 12, 16, 18, 10]
     print_table(rows, headers, widths)
 
     # ------------------------------------------------------------------
@@ -455,7 +591,6 @@ def main():
         ]
         print_table(rows, headers, widths)
 
-        # Roofline note
         peak = max(r["throughput"] for r in vmap_results)
         print(f"\n  Peak throughput: {peak:.1f} waveforms/s")
         print(
