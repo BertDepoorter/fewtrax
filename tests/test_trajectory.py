@@ -176,3 +176,142 @@ class TestTrajectoryParameterVariation:
             M=1e6, mu=10.0, dense_steps=30,
         )
         assert np.isfinite(float(t[0])), f"Trajectory failed for e0={e0}"
+
+
+class TestHighEccentricityHighSpin:
+    """Near-separatrix accuracy tests for high-e / high-a systems.
+
+    These are the hardest cases for the ODE solver and flux interpolator:
+    - high spin (a ≥ 0.98) pushes p_sep very close to r_ISCO
+    - high eccentricity (e ≥ 0.7) stresses the e-axis compression and
+      makes the w-coordinate approach 1 near the separatrix
+    - together they probe the most challenging corner of the flux grid
+
+    Tests verify that the trajectory:
+    1. Completes without NaN values at the starting point.
+    2. Stays above the separatrix throughout.
+    3. Accumulates orbital phases monotonically.
+    4. Terminates at p no more than 1.0 M above the separatrix (i.e., the
+       solver actually reaches the separatrix region rather than stopping
+       prematurely due to numerical failure).
+    """
+
+    # (a, e0, p0_above_sep) — p0 is set relative to p_sep so every case
+    # starts just outside the separatrix.  p0 = p_sep + offset.
+    _CASES = [
+        (0.98, 0.70, 2.0),
+        (0.98, 0.75, 2.0),
+        (0.99, 0.70, 2.0),
+        (0.99, 0.75, 1.5),
+        (0.999, 0.65, 1.5),
+        (0.999, 0.70, 1.5),
+    ]
+
+    @pytest.fixture(params=_CASES, ids=[f"a{a}_e{e}" for a, e, _ in _CASES])
+    def high_ae_params(self, request, flux_data):
+        """Run trajectory for extreme (a, e) case and return results."""
+        from fewtrax.trajectory import run_inspiral
+        from fewtrax.utils.geodesic import get_separatrix
+
+        a, e0, dp = request.param
+        p_sep = float(get_separatrix(a, e0, 1.0))
+        p0 = p_sep + dp
+
+        t, p, e, Phi_phi, Phi_theta, Phi_r = run_inspiral(
+            a=a, p0=p0, e0=e0, T=0.5,
+            flux_data=flux_data,
+            M=1e6, mu=10.0,
+            dense_steps=100,
+            max_steps=8192,
+        )
+        return {
+            "a": a, "e0": e0, "p0": p0, "p_sep": p_sep,
+            "t": t, "p": p, "e": e,
+            "Phi_phi": Phi_phi, "Phi_theta": Phi_theta, "Phi_r": Phi_r,
+        }
+
+    def test_no_initial_nan(self, high_ae_params):
+        """First trajectory point must be finite — solver must not fail immediately."""
+        r = high_ae_params
+        assert np.isfinite(float(r["p"][0])), (
+            f"a={r['a']}, e0={r['e0']}: p[0] is NaN"
+        )
+        assert np.isfinite(float(r["e"][0])), (
+            f"a={r['a']}, e0={r['e0']}: e[0] is NaN"
+        )
+
+    def test_separatrix_not_crossed(self, high_ae_params):
+        """p must stay above the separatrix at every valid point."""
+        from fewtrax.utils.geodesic import get_separatrix
+
+        r = high_ae_params
+        p_np = np.asarray(r["p"])
+        e_np = np.asarray(r["e"])
+        valid = np.isfinite(p_np) & np.isfinite(e_np)
+        for p_val, e_val in zip(p_np[valid], e_np[valid]):
+            p_s = float(get_separatrix(r["a"], float(e_val), 1.0))
+            assert float(p_val) >= p_s - 1e-4, (
+                f"a={r['a']}, e0={r['e0']}: p={p_val:.5f} < p_sep={p_s:.5f}"
+            )
+
+    def test_phases_monotone(self, high_ae_params):
+        """Orbital phases should be non-decreasing at all valid points."""
+        r = high_ae_params
+        for name, arr in [("Phi_phi", r["Phi_phi"]),
+                          ("Phi_theta", r["Phi_theta"]),
+                          ("Phi_r", r["Phi_r"])]:
+            ph = np.asarray(arr)
+            valid = np.isfinite(ph)
+            if valid.sum() > 1:
+                dph = np.diff(ph[valid])
+                assert np.all(dph >= -1e-6), (
+                    f"a={r['a']}, e0={r['e0']}: {name} decreased by "
+                    f"{dph.min():.2e} rad"
+                )
+
+    def test_inspiral_reaches_separatrix_region(self, high_ae_params):
+        """The trajectory should spiral inward; final p must be within 1 M of p_sep.
+
+        If the solver terminates too early (e.g. a numerical failure causes it
+        to stall), the final valid p will be far above p_sep.  With T=0.5 yr
+        these systems plunge in < 0.2 yr for the given mass ratio.
+        """
+        from fewtrax.utils.geodesic import get_separatrix
+
+        r = high_ae_params
+        p_np = np.asarray(r["p"])
+        e_np = np.asarray(r["e"])
+        valid = np.isfinite(p_np) & np.isfinite(e_np)
+        if valid.sum() < 2:
+            pytest.skip("Trajectory has fewer than 2 valid points.")
+        p_final = float(p_np[valid][-1])
+        e_final = float(e_np[valid][-1])
+        p_sep_final = float(get_separatrix(r["a"], e_final, 1.0))
+        gap = p_final - p_sep_final
+        assert gap < 1.0, (
+            f"a={r['a']}, e0={r['e0']}: final p={p_final:.4f} is {gap:.3f} M "
+            f"above p_sep={p_sep_final:.4f}; trajectory may have stalled."
+        )
+
+    @pytest.mark.parametrize("a", [0.98, 0.99, 0.999])
+    def test_grad_p0_high_spin(self, flux_data, a):
+        """Gradient w.r.t. p0 should be finite even at high spin."""
+        from fewtrax.trajectory import EMRIInspiral
+        from fewtrax.utils.geodesic import get_separatrix
+
+        traj = EMRIInspiral(flux_data)
+        p_sep = float(get_separatrix(a, 0.3, 1.0))
+        p0_val = p_sep + 3.0
+
+        def final_phase(p0):
+            _, _, _, Phi_phi, _, _ = traj(
+                p0=p0, e0=0.3, T=0.1, M=1e6, mu=10.0, a=a,
+                dense_steps=20, max_steps=4096,
+            )
+            valid = jnp.isfinite(Phi_phi)
+            return jnp.sum(jnp.where(valid, Phi_phi, 0.0))
+
+        grad = jax.grad(final_phase)(jnp.float64(p0_val))
+        assert jnp.isfinite(grad), (
+            f"Gradient w.r.t. p0 is not finite for a={a}"
+        )
