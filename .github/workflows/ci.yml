@@ -1,0 +1,30 @@
+name: CI
+  on: [push, pull_request]
+  jobs:
+    lint:
+      runs-on: ubuntu-latest
+      steps:
+        - uses: actions/checkout@v4
+        - uses: actions/setup-python@v5
+          with: { python-version: "3.12" }
+        - run: pip install ruff
+        - run: ruff check src/ tests/
+        - run: ruff format --check src/ tests/
+
+    typecheck:
+      runs-on: ubuntu-latest
+      steps:
+        - uses: actions/checkout@v4
+        - uses: actions/setup-python@v5
+          with: { python-version: "3.12" }
+        - run: pip install -e ".[test]" mypy
+        - run: mypy src/fewtrax --ignore-missing-imports
+
+    test:
+      runs-on: ubuntu-latest
+      steps:
+        - uses: actions/checkout@v4
+        - uses: actions/setup-python@v5
+          with: { python-version: "3.12" }
+        - run: pip install -e ".[test]"
+        - run: pytest tests/ -v --ignore=tests/test_compare_few.py
