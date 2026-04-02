@@ -558,9 +558,9 @@ def plot_diagnostic(
     ax.grid(True, alpha=0.3)
 
     ax = axes[0, 1]
-    ax.plot(t_mid_days, freq_cmp["rel_phi"] * 1e5, "C0o-", ms=4, lw=1.0)
+    ax.plot(t_mid_days, freq_cmp["rel_phi"] , "C0o-", ms=4, lw=1.0)
     ax.axhline(0, color="k", lw=0.5, ls="--")
-    ax.set_ylabel(r"$\delta\Omega_\phi / \Omega_\phi \times 10^5$")
+    ax.set_ylabel(r"$\delta\Omega_\phi / \Omega_\phi$")
     ax.set_title(
         r"Relative $\Omega_\phi$ mismatch $(\Omega_{\rm ft} - \Omega_{\rm FEW}) / \Omega_{\rm FEW}$"
     )
@@ -585,9 +585,9 @@ def plot_diagnostic(
 
     # Row 1 right: Ω_r comparison
     ax = axes[1, 1]
-    ax.plot(t_mid_days, freq_cmp["rel_r"] * 1e5, "C2o-", ms=4, lw=1.0)
+    ax.plot(t_mid_days, freq_cmp["rel_r"], "C2o-", ms=4, lw=1.0)
     ax.axhline(0, color="k", lw=0.5, ls="--")
-    ax.set_ylabel(r"$\delta\Omega_r / \Omega_r \times 10^5$")
+    ax.set_ylabel(r"$\delta\Omega_r / \Omega_r$")
     ax.set_title(r"Relative $\Omega_r$ mismatch")
     ax.grid(True, alpha=0.3)
 
