@@ -18,9 +18,7 @@ jobs:
           python-version: "3.12"
 
       - name: Install package and doc dependencies
-        run: |
-          pip install -e .
-          pip install sphinx sphinx-autodoc-typehints sphinx-rtd-theme myst-parser
+        run: pip install -e ".[docs]"
 
       - name: Build HTML docs
         run: |
