@@ -177,9 +177,9 @@ class EMRIInspiral(eqx.Module):
         t_save: jnp.ndarray,
         T_geo: jnp.ndarray,
         ode_args: tuple,
-        atol: float,
-        rtol: float,
         max_steps: int,
+        atol: float=1e-10,
+        rtol: float=1e-10,
     ):
         """JIT-compiled diffrax solve.  All shape-determining args are static."""
         def _event_cond(t, y, args, **kwargs):
@@ -209,9 +209,9 @@ class EMRIInspiral(eqx.Module):
         t_save: jnp.ndarray,
         T_geo: jnp.ndarray,
         ode_args: tuple,
-        atol: float,
-        rtol: float,
         max_steps: int,
+        atol: float=1e-10,
+        rtol: float=1e-10,
     ):
         r"""JIT-compiled backward diffrax solve.
 
@@ -340,10 +340,10 @@ class EMRIInspiral(eqx.Module):
             y0 = jnp.array(
                 [p_start, e_f_, Phi_phi0, Phi_theta0, Phi_r0], dtype=jnp.float64
             )
-            sol = self._solve_backward(y0, t_save, T_geo, ode_args, atol, rtol, max_steps)
+            sol = self._solve_backward(y0, t_save, T_geo, ode_args, max_steps, atol, rtol)
         else:
             y0 = jnp.array([p0, e0, Phi_phi0, Phi_theta0, Phi_r0], dtype=jnp.float64)
-            sol = self._solve(y0, t_save, T_geo, ode_args, atol, rtol, max_steps)
+            sol = self._solve(y0, t_save, T_geo, ode_args, max_steps, atol, rtol)
 
         ys = sol.ys          # (dense_steps, 5)
         t_arr = sol.ts       # (dense_steps,)

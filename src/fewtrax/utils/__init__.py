@@ -22,6 +22,7 @@ from fewtrax.utils.coordinates import (
     kerrecceq_forward_map_B,
     kerrecceq_forward_map,
 )
+from fewtrax.utils.splines import TricubicSplineE3
 
 __all__ = [
     "PI", "G_SI", "C_SI", "MSUN_SI", "PC_SI", "GPC_SI", "YEAR_SI", "MTSUN_SI", "MRSUN_SI",
@@ -43,4 +44,5 @@ __all__ = [
     "analytical_tf_track",
     "sparse_wdm_track",
     "build_tf_tracks",
+    "TricubicSplineE3",
 ]
