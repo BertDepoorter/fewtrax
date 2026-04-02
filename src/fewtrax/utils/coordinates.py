@@ -27,7 +27,7 @@ import jax.numpy as jnp
 from jax import jit
 from functools import partial
 
-from fewtrax.utils.geodesic import get_separatrix
+from fewtrax.utils.geodesic import get_separatrix, get_separatrix_fast
 
 # ---------------------------------------------------------------------------
 # Constants matching the FEW source
@@ -240,6 +240,49 @@ def kerrecceq_forward_map(
     x_in = jnp.where(x_in == 0.0, 1.0, x_in)
     pLSO = get_separatrix(a_in, e, x_in)
 
+    in_A = p <= pLSO + DELTAPMAX
+
+    u_A, w_A, z_A = kerrecceq_forward_map_A(a_in, p, e, pLSO, alpha, beta)
+    u_B, w_B, z_B = kerrecceq_forward_map_B(a_in, p, e, pLSO, is_flux)
+
+    u = jnp.where(in_A, u_A, u_B)
+    w = jnp.where(in_A, w_A, w_B)
+    z = jnp.where(in_A, z_A, z_B)
+
+    return u, w, z, in_A
+
+
+@partial(jit, static_argnames=("kind",))
+def kerrecceq_forward_map_fast(
+    a: float, p: float, e: float, pLSO: float, kind: str = "flux"
+) -> tuple[float, float, float, bool]:
+    r"""Like :func:`kerrecceq_forward_map` but accepts a pre-computed ``pLSO``.
+
+    Avoids the internal :func:`~fewtrax.utils.geodesic.get_separatrix` call,
+    allowing the caller to compute the separatrix once per ODE step and reuse
+    it for both the flux interpolation and the event condition.
+
+    Parameters
+    ----------
+    a, p, e : float
+        Orbital parameters.
+    pLSO : float
+        Pre-computed separatrix :math:`p_{\rm sep}(a, e)`.
+    kind : str
+        ``"flux"`` or ``"amplitude"``.
+
+    Returns
+    -------
+    u, w, z : float
+        Compressed coordinates.
+    in_region_A : bool
+        True when the point is in Region A.
+    """
+    alpha  = ALPHA_FLUX if kind == "flux" else ALPHA_AMP
+    beta   = BETA_FLUX  if kind == "flux" else BETA_AMP
+    is_flux = kind == "flux"
+
+    a_in = jnp.abs(a)
     in_A = p <= pLSO + DELTAPMAX
 
     u_A, w_A, z_A = kerrecceq_forward_map_A(a_in, p, e, pLSO, alpha, beta)
