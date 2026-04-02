@@ -209,13 +209,13 @@ fewtrax.waveform      – High-level waveform interface</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>data_dir</strong> (<em>str</em><em> or </em><em>Path</em><em>, </em><em>optional</em>) – Directory containing the FEW HDF5 data files.</p></li>
-<li><p><strong>amp_filename</strong> (<em>str</em>) – Amplitude data file name.</p></li>
-<li><p><strong>mode_selection_threshold</strong> (<em>float</em>) – Relative power threshold for mode selection.  Modes whose
+<li><p><strong>data_dir</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-data docutils literal notranslate"><span class="pre">Optional</span></code>[<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>]</span>) – Directory containing the FEW HDF5 data files.</p></li>
+<li><p><strong>amp_filename</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code></span>) – Amplitude data file name.</p></li>
+<li><p><strong>mode_selection_threshold</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Relative power threshold for mode selection.  Modes whose
 time-averaged power is below this fraction of the dominant mode
 power are discarded.</p></li>
-<li><p><strong>dense_steps</strong> (<em>int</em>) – Number of sparse trajectory points used in the ODE integration.</p></li>
-<li><p><strong>preload_amplitude</strong> (<em>bool</em>) – If True, load the amplitude data file at construction time.
+<li><p><strong>dense_steps</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code></span>) – Number of sparse trajectory points used in the ODE integration.</p></li>
+<li><p><strong>preload_amplitude</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code></span>) – If True, load the amplitude data file at construction time.
 Set to False to defer loading (useful if amplitude data is
 large and the user only wants to compare trajectory outputs).</p></li>
 </ul>
@@ -231,17 +231,17 @@ the trajectory components are JAX arrays.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>M</strong> (<em>float</em>) – Primary BH mass [<span class="math notranslate nohighlight">\(M_\odot\)</span>].</p></li>
-<li><p><strong>mu</strong> (<em>float</em>) – Secondary mass [<span class="math notranslate nohighlight">\(M_\odot\)</span>].</p></li>
-<li><p><strong>a</strong> (<em>float</em>) – Dimensionless spin parameter.</p></li>
-<li><p><strong>p0</strong> (<em>float</em>) – Initial semi-latus rectum [<span class="math notranslate nohighlight">\(M\)</span>].</p></li>
-<li><p><strong>e0</strong> (<em>float</em>) – Initial eccentricity.</p></li>
-<li><p><strong>x0</strong> (<em>float</em>) – Cosine of inclination (<span class="math notranslate nohighlight">\(\pm 1\)</span>).</p></li>
-<li><p><strong>T</strong> (<em>float</em>) – Observation time [years].</p></li>
-<li><p><strong>dt</strong> (<em>float</em>) – Waveform sampling interval [s] (used for output).</p></li>
-<li><p><strong>Phi_phi0</strong> (<em>float</em>) – Initial orbital phases [rad].</p></li>
-<li><p><strong>Phi_theta0</strong> (<em>float</em>) – Initial orbital phases [rad].</p></li>
-<li><p><strong>Phi_r0</strong> (<em>float</em>) – Initial orbital phases [rad].</p></li>
+<li><p><strong>M</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Primary BH mass [<span class="math notranslate nohighlight">\(M_\odot\)</span>].</p></li>
+<li><p><strong>mu</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Secondary mass [<span class="math notranslate nohighlight">\(M_\odot\)</span>].</p></li>
+<li><p><strong>a</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Dimensionless spin parameter.</p></li>
+<li><p><strong>p0</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Initial semi-latus rectum [<span class="math notranslate nohighlight">\(M\)</span>].</p></li>
+<li><p><strong>e0</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Initial eccentricity.</p></li>
+<li><p><strong>x0</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Cosine of inclination (<span class="math notranslate nohighlight">\(\pm 1\)</span>).</p></li>
+<li><p><strong>T</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Observation time [years].</p></li>
+<li><p><strong>dt</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Waveform sampling interval [s] (used for output).</p></li>
+<li><p><strong>Phi_phi0</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Initial orbital phases [rad].</p></li>
+<li><p><strong>Phi_theta0</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Initial orbital phases [rad].</p></li>
+<li><p><strong>Phi_r0</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Initial orbital phases [rad].</p></li>
 <li><p><strong>**traj_kwargs</strong> – Extra keyword arguments forwarded to <code class="xref py py-class docutils literal notranslate"><span class="pre">EMRIInspiral</span></code>.</p></li>
 </ul>
 </dd>
@@ -259,7 +259,7 @@ the trajectory components are JAX arrays.</p>
 </p>
 </dd>
 <dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>dict with keys</p>
+<dd class="field-odd"><p><span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">dict</span></code></span></p>
 </dd>
 </dl>
 </dd></dl>
@@ -280,23 +280,23 @@ Boyer-Lindquist coordinate time evaluated along the trajectory.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>l</strong> (<em>int</em>) – Mode indices.</p></li>
-<li><p><strong>m</strong> (<em>int</em>) – Mode indices.</p></li>
-<li><p><strong>k</strong> (<em>int</em>) – Mode indices.</p></li>
-<li><p><strong>n</strong> (<em>int</em>) – Mode indices.</p></li>
-<li><p><strong>M</strong> (as for <code class="xref py py-meth docutils literal notranslate"><span class="pre">__call__()</span></code>.)</p></li>
-<li><p><strong>mu</strong> (as for <code class="xref py py-meth docutils literal notranslate"><span class="pre">__call__()</span></code>.)</p></li>
-<li><p><strong>a</strong> (as for <code class="xref py py-meth docutils literal notranslate"><span class="pre">__call__()</span></code>.)</p></li>
-<li><p><strong>p0</strong> (as for <code class="xref py py-meth docutils literal notranslate"><span class="pre">__call__()</span></code>.)</p></li>
-<li><p><strong>e0</strong> (as for <code class="xref py py-meth docutils literal notranslate"><span class="pre">__call__()</span></code>.)</p></li>
-<li><p><strong>T</strong> (as for <code class="xref py py-meth docutils literal notranslate"><span class="pre">__call__()</span></code>.)</p></li>
-<li><p><strong>x0</strong> (as for <code class="xref py py-meth docutils literal notranslate"><span class="pre">__call__()</span></code>.)</p></li>
-<li><p><strong>backward</strong> (<em>bool</em>) – If <code class="docutils literal notranslate"><span class="pre">True</span></code>, integrate backward from the separatrix.  The
+<li><p><strong>l</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code></span>) – Mode indices.</p></li>
+<li><p><strong>m</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code></span>) – Mode indices.</p></li>
+<li><p><strong>k</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code></span>) – Mode indices.</p></li>
+<li><p><strong>n</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code></span>) – Mode indices.</p></li>
+<li><p><strong>M</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>)</p></li>
+<li><p><strong>mu</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>)</p></li>
+<li><p><strong>a</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>)</p></li>
+<li><p><strong>p0</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>)</p></li>
+<li><p><strong>e0</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>)</p></li>
+<li><p><strong>T</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>)</p></li>
+<li><p><strong>x0</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>)</p></li>
+<li><p><strong>backward</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code></span>) – If <code class="docutils literal notranslate"><span class="pre">True</span></code>, integrate backward from the separatrix.  The
 returned time axis <code class="docutils literal notranslate"><span class="pre">t</span></code> is time before plunge
 (<span class="math notranslate nohighlight">\(\tau = T_{\rm plunge} - t\)</span>), so <code class="docutils literal notranslate"><span class="pre">t[0]</span> <span class="pre">=</span> <span class="pre">0</span></code> is at
 plunge and <code class="docutils literal notranslate"><span class="pre">t[-1]</span></code> is <code class="docutils literal notranslate"><span class="pre">T</span></code> years earlier.  Frequency
 decreases as <code class="docutils literal notranslate"><span class="pre">t</span></code> increases.</p></li>
-<li><p><strong>e_f</strong> (<em>float</em><em>, </em><em>optional</em>) – Eccentricity at plunge, required when <code class="docutils literal notranslate"><span class="pre">backward=True</span></code>.
+<li><p><strong>e_f</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-data docutils literal notranslate"><span class="pre">Optional</span></code>[<code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code>]</span>) – Eccentricity at plunge, required when <code class="docutils literal notranslate"><span class="pre">backward=True</span></code>.
 Obtain this from a forward run:
 <code class="docutils literal notranslate"><span class="pre">e_f</span> <span class="pre">=</span> <span class="pre">float(e_arr[jnp.isfinite(e_arr)][-1])</span></code>.</p></li>
 </ul>

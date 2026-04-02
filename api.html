@@ -194,13 +194,13 @@ directly inside <code class="docutils literal notranslate"><span class="pre">jax
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>data_dir</strong> (<em>str</em><em> or </em><em>Path</em><em>, </em><em>optional</em>) – Directory containing the FEW HDF5 data files.</p></li>
-<li><p><strong>amp_filename</strong> (<em>str</em>) – Amplitude data file name.</p></li>
-<li><p><strong>mode_selection_threshold</strong> (<em>float</em>) – Relative power threshold for mode selection.  Modes whose
+<li><p><strong>data_dir</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-data docutils literal notranslate"><span class="pre">Optional</span></code>[<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>]</span>) – Directory containing the FEW HDF5 data files.</p></li>
+<li><p><strong>amp_filename</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code></span>) – Amplitude data file name.</p></li>
+<li><p><strong>mode_selection_threshold</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Relative power threshold for mode selection.  Modes whose
 time-averaged power is below this fraction of the dominant mode
 power are discarded.</p></li>
-<li><p><strong>dense_steps</strong> (<em>int</em>) – Number of sparse trajectory points used in the ODE integration.</p></li>
-<li><p><strong>preload_amplitude</strong> (<em>bool</em>) – If True, load the amplitude data file at construction time.
+<li><p><strong>dense_steps</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code></span>) – Number of sparse trajectory points used in the ODE integration.</p></li>
+<li><p><strong>preload_amplitude</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code></span>) – If True, load the amplitude data file at construction time.
 Set to False to defer loading (useful if amplitude data is
 large and the user only wants to compare trajectory outputs).</p></li>
 </ul>
@@ -216,17 +216,17 @@ the trajectory components are JAX arrays.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>M</strong> (<em>float</em>) – Primary BH mass [<span class="math notranslate nohighlight">\(M_\odot\)</span>].</p></li>
-<li><p><strong>mu</strong> (<em>float</em>) – Secondary mass [<span class="math notranslate nohighlight">\(M_\odot\)</span>].</p></li>
-<li><p><strong>a</strong> (<em>float</em>) – Dimensionless spin parameter.</p></li>
-<li><p><strong>p0</strong> (<em>float</em>) – Initial semi-latus rectum [<span class="math notranslate nohighlight">\(M\)</span>].</p></li>
-<li><p><strong>e0</strong> (<em>float</em>) – Initial eccentricity.</p></li>
-<li><p><strong>x0</strong> (<em>float</em>) – Cosine of inclination (<span class="math notranslate nohighlight">\(\pm 1\)</span>).</p></li>
-<li><p><strong>T</strong> (<em>float</em>) – Observation time [years].</p></li>
-<li><p><strong>dt</strong> (<em>float</em>) – Waveform sampling interval [s] (used for output).</p></li>
-<li><p><strong>Phi_phi0</strong> (<em>float</em>) – Initial orbital phases [rad].</p></li>
-<li><p><strong>Phi_theta0</strong> (<em>float</em>) – Initial orbital phases [rad].</p></li>
-<li><p><strong>Phi_r0</strong> (<em>float</em>) – Initial orbital phases [rad].</p></li>
+<li><p><strong>M</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Primary BH mass [<span class="math notranslate nohighlight">\(M_\odot\)</span>].</p></li>
+<li><p><strong>mu</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Secondary mass [<span class="math notranslate nohighlight">\(M_\odot\)</span>].</p></li>
+<li><p><strong>a</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Dimensionless spin parameter.</p></li>
+<li><p><strong>p0</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Initial semi-latus rectum [<span class="math notranslate nohighlight">\(M\)</span>].</p></li>
+<li><p><strong>e0</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Initial eccentricity.</p></li>
+<li><p><strong>x0</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Cosine of inclination (<span class="math notranslate nohighlight">\(\pm 1\)</span>).</p></li>
+<li><p><strong>T</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Observation time [years].</p></li>
+<li><p><strong>dt</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Waveform sampling interval [s] (used for output).</p></li>
+<li><p><strong>Phi_phi0</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Initial orbital phases [rad].</p></li>
+<li><p><strong>Phi_theta0</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Initial orbital phases [rad].</p></li>
+<li><p><strong>Phi_r0</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Initial orbital phases [rad].</p></li>
 <li><p><strong>**traj_kwargs</strong> – Extra keyword arguments forwarded to <code class="xref py py-class docutils literal notranslate"><span class="pre">EMRIInspiral</span></code>.</p></li>
 </ul>
 </dd>
@@ -244,7 +244,7 @@ the trajectory components are JAX arrays.</p>
 </p>
 </dd>
 <dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>dict with keys</p>
+<dd class="field-odd"><p><span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">dict</span></code></span></p>
 </dd>
 </dl>
 </dd></dl>
@@ -265,23 +265,23 @@ Boyer-Lindquist coordinate time evaluated along the trajectory.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>l</strong> (<em>int</em>) – Mode indices.</p></li>
-<li><p><strong>m</strong> (<em>int</em>) – Mode indices.</p></li>
-<li><p><strong>k</strong> (<em>int</em>) – Mode indices.</p></li>
-<li><p><strong>n</strong> (<em>int</em>) – Mode indices.</p></li>
-<li><p><strong>M</strong> (as for <code class="xref py py-meth docutils literal notranslate"><span class="pre">__call__()</span></code>.)</p></li>
-<li><p><strong>mu</strong> (as for <code class="xref py py-meth docutils literal notranslate"><span class="pre">__call__()</span></code>.)</p></li>
-<li><p><strong>a</strong> (as for <code class="xref py py-meth docutils literal notranslate"><span class="pre">__call__()</span></code>.)</p></li>
-<li><p><strong>p0</strong> (as for <code class="xref py py-meth docutils literal notranslate"><span class="pre">__call__()</span></code>.)</p></li>
-<li><p><strong>e0</strong> (as for <code class="xref py py-meth docutils literal notranslate"><span class="pre">__call__()</span></code>.)</p></li>
-<li><p><strong>T</strong> (as for <code class="xref py py-meth docutils literal notranslate"><span class="pre">__call__()</span></code>.)</p></li>
-<li><p><strong>x0</strong> (as for <code class="xref py py-meth docutils literal notranslate"><span class="pre">__call__()</span></code>.)</p></li>
-<li><p><strong>backward</strong> (<em>bool</em>) – If <code class="docutils literal notranslate"><span class="pre">True</span></code>, integrate backward from the separatrix.  The
+<li><p><strong>l</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code></span>) – Mode indices.</p></li>
+<li><p><strong>m</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code></span>) – Mode indices.</p></li>
+<li><p><strong>k</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code></span>) – Mode indices.</p></li>
+<li><p><strong>n</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code></span>) – Mode indices.</p></li>
+<li><p><strong>M</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>)</p></li>
+<li><p><strong>mu</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>)</p></li>
+<li><p><strong>a</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>)</p></li>
+<li><p><strong>p0</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>)</p></li>
+<li><p><strong>e0</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>)</p></li>
+<li><p><strong>T</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>)</p></li>
+<li><p><strong>x0</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>)</p></li>
+<li><p><strong>backward</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code></span>) – If <code class="docutils literal notranslate"><span class="pre">True</span></code>, integrate backward from the separatrix.  The
 returned time axis <code class="docutils literal notranslate"><span class="pre">t</span></code> is time before plunge
 (<span class="math notranslate nohighlight">\(\tau = T_{\rm plunge} - t\)</span>), so <code class="docutils literal notranslate"><span class="pre">t[0]</span> <span class="pre">=</span> <span class="pre">0</span></code> is at
 plunge and <code class="docutils literal notranslate"><span class="pre">t[-1]</span></code> is <code class="docutils literal notranslate"><span class="pre">T</span></code> years earlier.  Frequency
 decreases as <code class="docutils literal notranslate"><span class="pre">t</span></code> increases.</p></li>
-<li><p><strong>e_f</strong> (<em>float</em><em>, </em><em>optional</em>) – Eccentricity at plunge, required when <code class="docutils literal notranslate"><span class="pre">backward=True</span></code>.
+<li><p><strong>e_f</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-data docutils literal notranslate"><span class="pre">Optional</span></code>[<code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code>]</span>) – Eccentricity at plunge, required when <code class="docutils literal notranslate"><span class="pre">backward=True</span></code>.
 Obtain this from a forward run:
 <code class="docutils literal notranslate"><span class="pre">e_f</span> <span class="pre">=</span> <span class="pre">float(e_arr[jnp.isfinite(e_arr)][-1])</span></code>.</p></li>
 </ul>
@@ -366,7 +366,7 @@ fields, so a single instance can be vmapped over the full five-parameter
 space <span class="math notranslate nohighlight">\((M, \mu, a, p_0, e_0)\)</span> without rebuilding the Module.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><p><strong>flux_data</strong> (<a class="reference internal" href="#fewtrax.data.loader.FluxData" title="fewtrax.data.loader.FluxData"><em>FluxData</em></a>) – Pre-loaded flux interpolators (pex convention).</p>
+<dd class="field-odd"><p><strong>flux_data</strong> (<span class="sphinx_autodoc_typehints-type"><a class="reference internal" href="#fewtrax.data.loader.FluxData" title="fewtrax.data.loader.FluxData"><code class="xref py py-class docutils literal notranslate"><span class="pre">FluxData</span></code></a></span>) – Pre-loaded flux interpolators (pex convention).</p>
 </dd>
 </dl>
 <dl class="py method">
@@ -380,25 +380,25 @@ space <span class="math notranslate nohighlight">\((M, \mu, a, p_0, e_0)\)</span
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>p0</strong> (<em>float</em>) – Initial orbital parameters (forward mode; ignored when
+<li><p><strong>p0</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Initial orbital parameters (forward mode; ignored when
 <code class="docutils literal notranslate"><span class="pre">backward=True</span></code>).</p></li>
-<li><p><strong>e0</strong> (<em>float</em>) – Initial orbital parameters (forward mode; ignored when
+<li><p><strong>e0</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Initial orbital parameters (forward mode; ignored when
 <code class="docutils literal notranslate"><span class="pre">backward=True</span></code>).</p></li>
-<li><p><strong>T</strong> (<em>float</em>) – Observation time [years], primary and secondary masses.</p></li>
-<li><p><strong>M</strong> (<em>float</em>) – Observation time [years], primary and secondary masses.</p></li>
-<li><p><strong>mu</strong> (<em>float</em>) – Observation time [years], primary and secondary masses.</p></li>
-<li><p><strong>a</strong> (<em>float</em>) – Dimensionless BH spin.</p></li>
-<li><p><strong>l</strong> (<em>int</em>) – Harmonic mode indices.</p></li>
-<li><p><strong>m</strong> (<em>int</em>) – Harmonic mode indices.</p></li>
-<li><p><strong>k</strong> (<em>int</em>) – Harmonic mode indices.</p></li>
-<li><p><strong>n</strong> (<em>int</em>) – Harmonic mode indices.</p></li>
-<li><p><strong>x0</strong> (<em>float</em>) – Inclination cosine (+1 prograde, −1 retrograde).</p></li>
-<li><p><strong>dense_steps</strong> (<em>int</em>) – Number of trajectory output points.</p></li>
-<li><p><strong>backward</strong> (<em>bool</em>) – If <code class="docutils literal notranslate"><span class="pre">True</span></code>, integrate backward from the separatrix.  The
+<li><p><strong>T</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Observation time [years], primary and secondary masses.</p></li>
+<li><p><strong>M</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Observation time [years], primary and secondary masses.</p></li>
+<li><p><strong>mu</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Observation time [years], primary and secondary masses.</p></li>
+<li><p><strong>a</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Dimensionless BH spin.</p></li>
+<li><p><strong>l</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code></span>) – Harmonic mode indices.</p></li>
+<li><p><strong>m</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code></span>) – Harmonic mode indices.</p></li>
+<li><p><strong>k</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code></span>) – Harmonic mode indices.</p></li>
+<li><p><strong>n</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code></span>) – Harmonic mode indices.</p></li>
+<li><p><strong>x0</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Inclination cosine (+1 prograde, −1 retrograde).</p></li>
+<li><p><strong>dense_steps</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code></span>) – Number of trajectory output points.</p></li>
+<li><p><strong>backward</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code></span>) – If <code class="docutils literal notranslate"><span class="pre">True</span></code>, integrate backward from the separatrix.  The
 returned time axis is time before plunge (<span class="math notranslate nohighlight">\(\tau\)</span>), so
 <code class="docutils literal notranslate"><span class="pre">t[0]</span> <span class="pre">=</span> <span class="pre">0</span></code> is at plunge.  Frequency decreases as <code class="docutils literal notranslate"><span class="pre">t</span></code>
 increases (moving earlier in the inspiral).</p></li>
-<li><p><strong>e_f</strong> (<em>float</em><em>, </em><em>optional</em>) – Eccentricity at plunge, required when <code class="docutils literal notranslate"><span class="pre">backward=True</span></code>.</p></li>
+<li><p><strong>e_f</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-data docutils literal notranslate"><span class="pre">Optional</span></code>[<code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code>]</span>) – Eccentricity at plunge, required when <code class="docutils literal notranslate"><span class="pre">backward=True</span></code>.</p></li>
 </ul>
 </dd>
 <dt class="field-even">Return type<span class="colon">:</span></dt>
@@ -425,24 +425,24 @@ point, which is significantly faster than calling
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>modes</strong> (<em>list</em><em> of </em><em>tuples</em>) – Each entry is <code class="docutils literal notranslate"><span class="pre">(m,</span> <span class="pre">k,</span> <span class="pre">n)</span></code> or <code class="docutils literal notranslate"><span class="pre">(l,</span> <span class="pre">m,</span> <span class="pre">k,</span> <span class="pre">n)</span></code>.  The <code class="docutils literal notranslate"><span class="pre">l</span></code>
+<li><p><strong>modes</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">list</span></code></span>) – Each entry is <code class="docutils literal notranslate"><span class="pre">(m,</span> <span class="pre">k,</span> <span class="pre">n)</span></code> or <code class="docutils literal notranslate"><span class="pre">(l,</span> <span class="pre">m,</span> <span class="pre">k,</span> <span class="pre">n)</span></code>.  The <code class="docutils literal notranslate"><span class="pre">l</span></code>
 index is only used for amplitude look-up (when
 <code class="docutils literal notranslate"><span class="pre">with_amplitudes=True</span></code>); it has no effect on frequencies.</p></li>
-<li><p><strong>p0</strong> (<em>float</em>) – Initial orbital parameters.</p></li>
-<li><p><strong>e0</strong> (<em>float</em>) – Initial orbital parameters.</p></li>
-<li><p><strong>T</strong> (<em>float</em>) – Observation time [years].</p></li>
-<li><p><strong>a</strong> (<em>float</em>) – Dimensionless BH spin.</p></li>
-<li><p><strong>M</strong> (<em>float</em>) – Primary and secondary masses [<span class="math notranslate nohighlight">\(M_\odot\)</span>].</p></li>
-<li><p><strong>mu</strong> (<em>float</em>) – Primary and secondary masses [<span class="math notranslate nohighlight">\(M_\odot\)</span>].</p></li>
-<li><p><strong>x0</strong> (<em>float</em>) – Inclination cosine (<code class="docutils literal notranslate"><span class="pre">+1</span></code> prograde, <code class="docutils literal notranslate"><span class="pre">-1</span></code> retrograde).</p></li>
-<li><p><strong>dense_steps</strong> (<em>int</em>) – Number of output trajectory/frequency points.</p></li>
-<li><p><strong>backward</strong> (<em>bool</em>) – If <code class="docutils literal notranslate"><span class="pre">True</span></code>, integrate backward from the separatrix.</p></li>
-<li><p><strong>e_f</strong> (<em>float</em><em>, </em><em>optional</em>) – Eccentricity at plunge; required when <code class="docutils literal notranslate"><span class="pre">backward=True</span></code>.</p></li>
-<li><p><strong>with_amplitudes</strong> (<em>bool</em>) – If <code class="docutils literal notranslate"><span class="pre">True</span></code>, also return the mode amplitudes <code class="docutils literal notranslate"><span class="pre">|A_{lmkn}(t)|</span></code>
+<li><p><strong>p0</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Initial orbital parameters.</p></li>
+<li><p><strong>e0</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Initial orbital parameters.</p></li>
+<li><p><strong>T</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Observation time [years].</p></li>
+<li><p><strong>a</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Dimensionless BH spin.</p></li>
+<li><p><strong>M</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Primary and secondary masses [<span class="math notranslate nohighlight">\(M_\odot\)</span>].</p></li>
+<li><p><strong>mu</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Primary and secondary masses [<span class="math notranslate nohighlight">\(M_\odot\)</span>].</p></li>
+<li><p><strong>x0</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Inclination cosine (<code class="docutils literal notranslate"><span class="pre">+1</span></code> prograde, <code class="docutils literal notranslate"><span class="pre">-1</span></code> retrograde).</p></li>
+<li><p><strong>dense_steps</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code></span>) – Number of output trajectory/frequency points.</p></li>
+<li><p><strong>backward</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code></span>) – If <code class="docutils literal notranslate"><span class="pre">True</span></code>, integrate backward from the separatrix.</p></li>
+<li><p><strong>e_f</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-data docutils literal notranslate"><span class="pre">Optional</span></code>[<code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code>]</span>) – Eccentricity at plunge; required when <code class="docutils literal notranslate"><span class="pre">backward=True</span></code>.</p></li>
+<li><p><strong>with_amplitudes</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code></span>) – If <code class="docutils literal notranslate"><span class="pre">True</span></code>, also return the mode amplitudes <code class="docutils literal notranslate"><span class="pre">|A_{lmkn}(t)|</span></code>
 along the track.  Requires <code class="docutils literal notranslate"><span class="pre">amp_interp</span></code>.</p></li>
 <li><p><strong>amp_interp</strong> (<a class="reference internal" href="#fewtrax.amplitude.interp.AmplitudeInterpolator" title="fewtrax.amplitude.interp.AmplitudeInterpolator"><em>AmplitudeInterpolator</em></a><em>, </em><em>optional</em>) – Pre-constructed amplitude interpolator.  Required when
 <code class="docutils literal notranslate"><span class="pre">with_amplitudes=True</span></code>.</p></li>
-<li><p><strong>return_dict</strong> (<em>bool</em>) – If <code class="docutils literal notranslate"><span class="pre">True</span></code>, return a dictionary keyed by the mode tuples
+<li><p><strong>return_dict</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code></span>) – If <code class="docutils literal notranslate"><span class="pre">True</span></code>, return a dictionary keyed by the mode tuples
 instead of plain arrays.</p></li>
 </ul>
 </dd>
@@ -478,27 +478,27 @@ non-negative.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>a</strong> (<em>float</em>) – BH spin parameter.</p></li>
-<li><p><strong>p0</strong> (<em>float</em>) – Initial orbital parameters (forward mode; ignored when
+<li><p><strong>a</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – BH spin parameter.</p></li>
+<li><p><strong>p0</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Initial orbital parameters (forward mode; ignored when
 <code class="docutils literal notranslate"><span class="pre">backward=True</span></code>).</p></li>
-<li><p><strong>e0</strong> (<em>float</em>) – Initial orbital parameters (forward mode; ignored when
+<li><p><strong>e0</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Initial orbital parameters (forward mode; ignored when
 <code class="docutils literal notranslate"><span class="pre">backward=True</span></code>).</p></li>
-<li><p><strong>T</strong> (<em>float</em>) – Observation time [years].</p></li>
-<li><p><strong>flux_data</strong> (<a class="reference internal" href="#fewtrax.data.loader.FluxData" title="fewtrax.data.loader.FluxData"><em>FluxData</em></a>) – Pre-loaded flux data.</p></li>
-<li><p><strong>M</strong> (<em>float</em>) – Primary and secondary masses [<span class="math notranslate nohighlight">\(M_\odot\)</span>].</p></li>
-<li><p><strong>mu</strong> (<em>float</em>) – Primary and secondary masses [<span class="math notranslate nohighlight">\(M_\odot\)</span>].</p></li>
-<li><p><strong>dt</strong> (<em>float</em>) – Waveform sampling interval [s] (not ODE step size).</p></li>
-<li><p><strong>x0</strong> (<em>float</em>) – Inclination cosine.</p></li>
-<li><p><strong>dense_steps</strong> (<em>int</em>) – Number of output trajectory points.</p></li>
-<li><p><strong>backward</strong> (<em>bool</em>) – If <code class="docutils literal notranslate"><span class="pre">True</span></code>, integrate the time-reversed ODE from the separatrix.</p></li>
-<li><p><strong>e_f</strong> (<em>float</em><em>, </em><em>optional</em>) – Eccentricity at plunge, required when <code class="docutils literal notranslate"><span class="pre">backward=True</span></code>.</p></li>
+<li><p><strong>T</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Observation time [years].</p></li>
+<li><p><strong>flux_data</strong> (<span class="sphinx_autodoc_typehints-type"><a class="reference internal" href="#fewtrax.data.loader.FluxData" title="fewtrax.data.loader.FluxData"><code class="xref py py-class docutils literal notranslate"><span class="pre">FluxData</span></code></a></span>) – Pre-loaded flux data.</p></li>
+<li><p><strong>M</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Primary and secondary masses [<span class="math notranslate nohighlight">\(M_\odot\)</span>].</p></li>
+<li><p><strong>mu</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Primary and secondary masses [<span class="math notranslate nohighlight">\(M_\odot\)</span>].</p></li>
+<li><p><strong>dt</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Waveform sampling interval [s] (not ODE step size).</p></li>
+<li><p><strong>x0</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Inclination cosine.</p></li>
+<li><p><strong>dense_steps</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code></span>) – Number of output trajectory points.</p></li>
+<li><p><strong>backward</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code></span>) – If <code class="docutils literal notranslate"><span class="pre">True</span></code>, integrate the time-reversed ODE from the separatrix.</p></li>
+<li><p><strong>e_f</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-data docutils literal notranslate"><span class="pre">Optional</span></code>[<code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code>]</span>) – Eccentricity at plunge, required when <code class="docutils literal notranslate"><span class="pre">backward=True</span></code>.</p></li>
 </ul>
 </dd>
 <dt class="field-even">Returns<span class="colon">:</span></dt>
 <dd class="field-even"><p><strong>t, p, e, Phi_phi, Phi_theta, Phi_r</strong> – Trajectory arrays.  In backward mode <code class="docutils literal notranslate"><span class="pre">t</span></code> is time before plunge.</p>
 </dd>
 <dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>jnp.ndarray</p>
+<dd class="field-odd"><p><span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">tuple</span></code>[<code class="xref py py-class docutils literal notranslate"><span class="pre">Array</span></code>, <code class="xref py py-data docutils literal notranslate"><span class="pre">...</span></code>]</span></p>
 </dd>
 </dl>
 </dd></dl>
@@ -529,7 +529,7 @@ reduce the number of modes passed to the summation step.</p></li>
 <dd><p>Evaluate Teukolsky mode amplitudes <span class="math notranslate nohighlight">\(A_{\ell mkn}(a, p, e)\)</span>.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><p><strong>amp_data</strong> (<a class="reference internal" href="#fewtrax.data.loader.AmplitudeData" title="fewtrax.data.loader.AmplitudeData"><em>AmplitudeData</em></a>) – Pre-loaded amplitude data (B-spline coefficients + mode arrays).</p>
+<dd class="field-odd"><p><strong>amp_data</strong> (<span class="sphinx_autodoc_typehints-type"><a class="reference internal" href="#fewtrax.data.loader.AmplitudeData" title="fewtrax.data.loader.AmplitudeData"><code class="xref py py-class docutils literal notranslate"><span class="pre">AmplitudeData</span></code></a></span>) – Pre-loaded amplitude data (B-spline coefficients + mode arrays).</p>
 </dd>
 </dl>
 <dl class="py method">
@@ -539,18 +539,18 @@ reduce the number of modes passed to the summation step.</p></li>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>a</strong> (<em>float</em>) – Dimensionless BH spin.</p></li>
-<li><p><strong>p</strong> (<em>np.ndarray</em><em>, </em><em>shape</em><em> (</em><em>N</em><em>,</em><em>)</em>) – Semi-latus rectum and eccentricity.</p></li>
-<li><p><strong>e</strong> (<em>np.ndarray</em><em>, </em><em>shape</em><em> (</em><em>N</em><em>,</em><em>)</em>) – Semi-latus rectum and eccentricity.</p></li>
-<li><p><strong>x</strong> (<em>float</em>) – Inclination cosine (±1).</p></li>
-<li><p><strong>specific_modes</strong> (<em>sequence</em><em> of </em><em>int</em><em>, </em><em>optional</em>) – Mode indices to evaluate.  Default: all modes.</p></li>
+<li><p><strong>a</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Dimensionless BH spin.</p></li>
+<li><p><strong>p</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">ndarray</span></code></span>) – Semi-latus rectum and eccentricity.</p></li>
+<li><p><strong>e</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">ndarray</span></code></span>) – Semi-latus rectum and eccentricity.</p></li>
+<li><p><strong>x</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Inclination cosine (±1).</p></li>
+<li><p><strong>specific_modes</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-data docutils literal notranslate"><span class="pre">Optional</span></code>[<code class="xref py py-class docutils literal notranslate"><span class="pre">Sequence</span></code>[<code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code>]]</span>) – Mode indices to evaluate.  Default: all modes.</p></li>
 </ul>
 </dd>
 <dt class="field-even">Returns<span class="colon">:</span></dt>
 <dd class="field-even"><p><strong>amps</strong></p>
 </dd>
 <dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>np.ndarray, shape (N, n_modes) complex</p>
+<dd class="field-odd"><p><span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">ndarray</span></code></span></p>
 </dd>
 </dl>
 </dd></dl>
@@ -575,7 +575,7 @@ reduce the number of modes passed to the summation step.</p></li>
 <dd class="field-odd"><p><strong>indices</strong></p>
 </dd>
 <dt class="field-even">Return type<span class="colon">:</span></dt>
-<dd class="field-even"><p>np.ndarray of int</p>
+<dd class="field-even"><p><span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">ndarray</span></code></span></p>
 </dd>
 </dl>
 </dd></dl>
@@ -641,24 +641,24 @@ harmonics for <span class="math notranslate nohighlight">\(+m\)</span> and <span
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>teuk_modes</strong> (<em>jnp.ndarray</em><em>, </em><em>shape</em><em> (</em><em>N_t</em><em>, </em><em>N_modes</em><em>)</em><em>, </em><em>complex128</em>) – Teukolsky mode amplitudes at each time step.  Assumed to be for
+<li><p><strong>teuk_modes</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">Array</span></code></span>) – Teukolsky mode amplitudes at each time step.  Assumed to be for
 <span class="math notranslate nohighlight">\(m \ge 0\)</span> modes only (the negative-m term uses conjugation).</p></li>
-<li><p><strong>ylms_pos</strong> (<em>jnp.ndarray</em><em>, </em><em>shape</em><em> (</em><em>N_modes</em><em>,</em><em>)</em><em>, </em><em>complex128</em>) – <span class="math notranslate nohighlight">\({}_{-2}Y_{\ell m}(\theta, \phi)\)</span> for each mode.</p></li>
-<li><p><strong>ylms_neg</strong> (<em>jnp.ndarray</em><em>, </em><em>shape</em><em> (</em><em>N_modes</em><em>,</em><em>)</em><em>, </em><em>complex128</em>) – <span class="math notranslate nohighlight">\({}_{-2}Y_{\ell, -m}(\theta, \phi)\)</span> for each mode.</p></li>
-<li><p><strong>Phi_phi</strong> (<em>jnp.ndarray</em><em>, </em><em>shape</em><em> (</em><em>N_t</em><em>,</em><em>)</em>) – Orbital phases.</p></li>
-<li><p><strong>Phi_theta</strong> (<em>jnp.ndarray</em><em>, </em><em>shape</em><em> (</em><em>N_t</em><em>,</em><em>)</em>) – Orbital phases.</p></li>
-<li><p><strong>Phi_r</strong> (<em>jnp.ndarray</em><em>, </em><em>shape</em><em> (</em><em>N_t</em><em>,</em><em>)</em>) – Orbital phases.</p></li>
-<li><p><strong>l_arr</strong> (<em>jnp.ndarray</em><em>, </em><em>shape</em><em> (</em><em>N_modes</em><em>,</em><em>)</em><em>, </em><em>int</em>) – Mode index arrays.</p></li>
-<li><p><strong>m_arr</strong> (<em>jnp.ndarray</em><em>, </em><em>shape</em><em> (</em><em>N_modes</em><em>,</em><em>)</em><em>, </em><em>int</em>) – Mode index arrays.</p></li>
-<li><p><strong>k_arr</strong> (<em>jnp.ndarray</em><em>, </em><em>shape</em><em> (</em><em>N_modes</em><em>,</em><em>)</em><em>, </em><em>int</em>) – Mode index arrays.</p></li>
-<li><p><strong>n_arr</strong> (<em>jnp.ndarray</em><em>, </em><em>shape</em><em> (</em><em>N_modes</em><em>,</em><em>)</em><em>, </em><em>int</em>) – Mode index arrays.</p></li>
+<li><p><strong>ylms_pos</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">Array</span></code></span>) – <span class="math notranslate nohighlight">\({}_{-2}Y_{\ell m}(\theta, \phi)\)</span> for each mode.</p></li>
+<li><p><strong>ylms_neg</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">Array</span></code></span>) – <span class="math notranslate nohighlight">\({}_{-2}Y_{\ell, -m}(\theta, \phi)\)</span> for each mode.</p></li>
+<li><p><strong>Phi_phi</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">Array</span></code></span>) – Orbital phases.</p></li>
+<li><p><strong>Phi_theta</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">Array</span></code></span>) – Orbital phases.</p></li>
+<li><p><strong>Phi_r</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">Array</span></code></span>) – Orbital phases.</p></li>
+<li><p><strong>l_arr</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">Array</span></code></span>) – Mode index arrays.</p></li>
+<li><p><strong>m_arr</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">Array</span></code></span>) – Mode index arrays.</p></li>
+<li><p><strong>k_arr</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">Array</span></code></span>) – Mode index arrays.</p></li>
+<li><p><strong>n_arr</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">Array</span></code></span>) – Mode index arrays.</p></li>
 </ul>
 </dd>
 <dt class="field-even">Returns<span class="colon">:</span></dt>
 <dd class="field-even"><p>Complex strain <span class="math notranslate nohighlight">\(h_+ - i h_{\times}\)</span> at each time step.</p>
 </dd>
 <dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>jnp.ndarray, shape (N_t,), complex128</p>
+<dd class="field-odd"><p><span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">Array</span></code></span></p>
 </dd>
 </dl>
 <p class="rubric">Notes</p>
@@ -677,20 +677,20 @@ cubic spline interpolation, then calls <a class="reference internal" href="#fewt
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>t_traj</strong> (<em>jnp.ndarray</em><em>, </em><em>shape</em><em> (</em><em>N_traj</em><em>,</em><em>)</em>) – Sparse trajectory time stamps [s].</p></li>
-<li><p><strong>teuk_modes</strong> (<em>array_like</em><em>, </em><em>shape</em><em> (</em><em>N_traj</em><em>, </em><em>N_modes</em><em>)</em>) – Mode amplitudes at each trajectory point.</p></li>
-<li><p><strong>ylms_pos</strong> (<em>jnp.ndarray</em><em>, </em><em>shape</em><em> (</em><em>N_modes</em><em>,</em><em>)</em>) – Spherical harmonics.</p></li>
-<li><p><strong>ylms_neg</strong> (<em>jnp.ndarray</em><em>, </em><em>shape</em><em> (</em><em>N_modes</em><em>,</em><em>)</em>) – Spherical harmonics.</p></li>
-<li><p><strong>Phi_phi</strong> (<em>jnp.ndarray</em><em>, </em><em>shape</em><em> (</em><em>N_traj</em><em>,</em><em>)</em>) – Orbital phases at trajectory points.</p></li>
-<li><p><strong>Phi_theta</strong> (<em>jnp.ndarray</em><em>, </em><em>shape</em><em> (</em><em>N_traj</em><em>,</em><em>)</em>) – Orbital phases at trajectory points.</p></li>
-<li><p><strong>Phi_r</strong> (<em>jnp.ndarray</em><em>, </em><em>shape</em><em> (</em><em>N_traj</em><em>,</em><em>)</em>) – Orbital phases at trajectory points.</p></li>
-<li><p><strong>l_arr</strong> (<em>array_like</em><em> of </em><em>int</em>) – Mode index arrays.</p></li>
-<li><p><strong>m_arr</strong> (<em>array_like</em><em> of </em><em>int</em>) – Mode index arrays.</p></li>
-<li><p><strong>k_arr</strong> (<em>array_like</em><em> of </em><em>int</em>) – Mode index arrays.</p></li>
-<li><p><strong>n_arr</strong> (<em>array_like</em><em> of </em><em>int</em>) – Mode index arrays.</p></li>
-<li><p><strong>dt</strong> (<em>float</em>) – Output sampling interval [s].</p></li>
-<li><p><strong>M</strong> (<em>float</em>) – Primary mass <span class="math notranslate nohighlight">\([M_\\odot]\)</span>.</p></li>
-<li><p><strong>T</strong> (<em>float</em><em>, </em><em>optional</em>) – Total duration [years].  If not provided, uses <code class="docutils literal notranslate"><span class="pre">t_traj[-1]</span></code>.</p></li>
+<li><p><strong>t_traj</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">Array</span></code></span>) – Sparse trajectory time stamps [s].</p></li>
+<li><p><strong>teuk_modes</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">ndarray</span></code></span>) – Mode amplitudes at each trajectory point.</p></li>
+<li><p><strong>ylms_pos</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">Array</span></code></span>) – Spherical harmonics.</p></li>
+<li><p><strong>ylms_neg</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">Array</span></code></span>) – Spherical harmonics.</p></li>
+<li><p><strong>Phi_phi</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">Array</span></code></span>) – Orbital phases at trajectory points.</p></li>
+<li><p><strong>Phi_theta</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">Array</span></code></span>) – Orbital phases at trajectory points.</p></li>
+<li><p><strong>Phi_r</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">Array</span></code></span>) – Orbital phases at trajectory points.</p></li>
+<li><p><strong>l_arr</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">ndarray</span></code></span>) – Mode index arrays.</p></li>
+<li><p><strong>m_arr</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">ndarray</span></code></span>) – Mode index arrays.</p></li>
+<li><p><strong>k_arr</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">ndarray</span></code></span>) – Mode index arrays.</p></li>
+<li><p><strong>n_arr</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">ndarray</span></code></span>) – Mode index arrays.</p></li>
+<li><p><strong>dt</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Output sampling interval [s].</p></li>
+<li><p><strong>M</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Primary mass <span class="math notranslate nohighlight">\([M_\\odot]\)</span>.</p></li>
+<li><p><strong>T</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Total duration [years].  If not provided, uses <code class="docutils literal notranslate"><span class="pre">t_traj[-1]</span></code>.</p></li>
 </ul>
 </dd>
 <dt class="field-even">Return type<span class="colon">:</span></dt>
@@ -713,15 +713,15 @@ cubic spline interpolation, then calls <a class="reference internal" href="#fewt
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>l_arr</strong> (<em>array_like</em><em> of </em><em>int</em>) – Mode index arrays.</p></li>
-<li><p><strong>m_arr</strong> (<em>array_like</em><em> of </em><em>int</em>) – Mode index arrays.</p></li>
-<li><p><strong>k_arr</strong> (<em>array_like</em><em> of </em><em>int</em>) – Mode index arrays.</p></li>
-<li><p><strong>n_arr</strong> (<em>array_like</em><em> of </em><em>int</em>) – Mode index arrays.</p></li>
-<li><p><strong>ylms_pos</strong> (<em>array_like</em><em>, </em><em>complex</em>) – Spherical harmonics for each mode.</p></li>
-<li><p><strong>ylms_neg</strong> (<em>array_like</em><em>, </em><em>complex</em>) – Spherical harmonics for each mode.</p></li>
-<li><p><strong>dist</strong> (<em>float</em>) – Luminosity distance [Gpc].</p></li>
-<li><p><strong>M</strong> (<em>float</em>) – Primary mass [<span class="math notranslate nohighlight">\(M_\\odot\)</span>].</p></li>
-<li><p><strong>mu</strong> (<em>float</em>) – Secondary mass [<span class="math notranslate nohighlight">\(M_\\odot\)</span>].</p></li>
+<li><p><strong>l_arr</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">ndarray</span></code></span>) – Mode index arrays.</p></li>
+<li><p><strong>m_arr</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">ndarray</span></code></span>) – Mode index arrays.</p></li>
+<li><p><strong>k_arr</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">ndarray</span></code></span>) – Mode index arrays.</p></li>
+<li><p><strong>n_arr</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">ndarray</span></code></span>) – Mode index arrays.</p></li>
+<li><p><strong>ylms_pos</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">Array</span></code></span>) – Spherical harmonics for each mode.</p></li>
+<li><p><strong>ylms_neg</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">Array</span></code></span>) – Spherical harmonics for each mode.</p></li>
+<li><p><strong>dist</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Luminosity distance [Gpc].</p></li>
+<li><p><strong>M</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Primary mass [<span class="math notranslate nohighlight">\(M_\\odot\)</span>].</p></li>
+<li><p><strong>mu</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Secondary mass [<span class="math notranslate nohighlight">\(M_\\odot\)</span>].</p></li>
 </ul>
 </dd>
 </dl>
@@ -874,10 +874,10 @@ arrays and evaluated at query points using <code class="docutils literal notrans
 FEW package file-manager cache → <code class="docutils literal notranslate"><span class="pre">~/.fewtrax/data/</span></code>.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><p><strong>data_dir</strong> (<em>str</em><em> or </em><em>Path</em><em>, </em><em>optional</em>) – Explicit data directory override.</p>
+<dd class="field-odd"><p><strong>data_dir</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-data docutils literal notranslate"><span class="pre">Union</span></code>[<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>, <code class="xref py py-class docutils literal notranslate"><span class="pre">Path</span></code>, <code class="xref py py-obj docutils literal notranslate"><span class="pre">None</span></code>]</span>) – Explicit data directory override.</p>
 </dd>
 <dt class="field-even">Return type<span class="colon">:</span></dt>
-<dd class="field-even"><p>Path</p>
+<dd class="field-even"><p><span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">Path</span></code></span></p>
 </dd>
 <dt class="field-odd">Raises<span class="colon">:</span></dt>
 <dd class="field-odd"><p><strong>FileNotFoundError</strong> – </p>
@@ -900,11 +900,11 @@ interpolation error that would otherwise accumulate as a phase drift of
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>data_dir</strong> (<em>str</em><em> or </em><em>Path</em><em>, </em><em>optional</em>) – Directory containing <code class="docutils literal notranslate"><span class="pre">KerrEccEqFluxData.h5</span></code>.</p></li>
-<li><p><strong>downsample</strong> (<em>list</em><em> of </em><em>two 3-tuples</em><em>, </em><em>optional</em>) – <code class="docutils literal notranslate"><span class="pre">[(dU_A,</span> <span class="pre">dW_A,</span> <span class="pre">dZ_A),</span> <span class="pre">(dU_B,</span> <span class="pre">dW_B,</span> <span class="pre">dZ_B)]</span></code> downsampling factors
+<li><p><strong>data_dir</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-data docutils literal notranslate"><span class="pre">Union</span></code>[<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>, <code class="xref py py-class docutils literal notranslate"><span class="pre">Path</span></code>, <code class="xref py py-obj docutils literal notranslate"><span class="pre">None</span></code>]</span>) – Directory containing <code class="docutils literal notranslate"><span class="pre">KerrEccEqFluxData.h5</span></code>.</p></li>
+<li><p><strong>downsample</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-data docutils literal notranslate"><span class="pre">Optional</span></code>[<code class="xref py py-class docutils literal notranslate"><span class="pre">list</span></code>]</span>) – <code class="docutils literal notranslate"><span class="pre">[(dU_A,</span> <span class="pre">dW_A,</span> <span class="pre">dZ_A),</span> <span class="pre">(dU_B,</span> <span class="pre">dW_B,</span> <span class="pre">dZ_B)]</span></code> downsampling factors
 applied before densification.  Default <code class="docutils literal notranslate"><span class="pre">[(1,1,1),(1,1,1)]</span></code> keeps
 the full grid.</p></li>
-<li><p><strong>densify_factor</strong> (<em>int</em><em>, </em><em>optional</em>) – Grid densification factor applied after ELQ→pex conversion.
+<li><p><strong>densify_factor</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code></span>) – Grid densification factor applied after ELQ→pex conversion.
 <code class="docutils literal notranslate"><span class="pre">densify_factor=3</span></code> (default) inserts 2 extra points between every
 original grid point in each dimension, reducing the C²-vs-E(3)
 boundary-condition interpolation error by ~(1/3)⁴ ≈ 80×.
@@ -912,7 +912,7 @@ Set to 1 to skip densification.</p></li>
 </ul>
 </dd>
 <dt class="field-even">Return type<span class="colon">:</span></dt>
-<dd class="field-even"><p><a class="reference internal" href="#fewtrax.data.loader.FluxData" title="fewtrax.data.loader.FluxData">FluxData</a></p>
+<dd class="field-even"><p><span class="sphinx_autodoc_typehints-type"><a class="reference internal" href="#fewtrax.data.loader.FluxData" title="fewtrax.data.loader.FluxData"><code class="xref py py-class docutils literal notranslate"><span class="pre">FluxData</span></code></a></span></p>
 </dd>
 </dl>
 </dd></dl>
@@ -928,12 +928,12 @@ points in <a class="reference internal" href="#fewtrax.amplitude.interp.Amplitud
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>data_dir</strong> (<em>str</em><em> or </em><em>Path</em><em>, </em><em>optional</em>) – FEW data directory.</p></li>
-<li><p><strong>filename</strong> (<em>str</em>) – Amplitude HDF5 file.  Default: <code class="docutils literal notranslate"><span class="pre">ZNAmps_l10_m10_n55_DS2Outer.h5</span></code>.</p></li>
+<li><p><strong>data_dir</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-data docutils literal notranslate"><span class="pre">Union</span></code>[<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>, <code class="xref py py-class docutils literal notranslate"><span class="pre">Path</span></code>, <code class="xref py py-obj docutils literal notranslate"><span class="pre">None</span></code>]</span>) – FEW data directory.</p></li>
+<li><p><strong>filename</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code></span>) – Amplitude HDF5 file.  Default: <code class="docutils literal notranslate"><span class="pre">ZNAmps_l10_m10_n55_DS2Outer.h5</span></code>.</p></li>
 </ul>
 </dd>
 <dt class="field-even">Return type<span class="colon">:</span></dt>
-<dd class="field-even"><p><a class="reference internal" href="#fewtrax.data.loader.AmplitudeData" title="fewtrax.data.loader.AmplitudeData">AmplitudeData</a></p>
+<dd class="field-even"><p><span class="sphinx_autodoc_typehints-type"><a class="reference internal" href="#fewtrax.data.loader.AmplitudeData" title="fewtrax.data.loader.AmplitudeData"><code class="xref py py-class docutils literal notranslate"><span class="pre">AmplitudeData</span></code></a></span></p>
 </dd>
 </dl>
 </dd></dl>
@@ -1000,15 +1000,15 @@ encountered in EMRI trajectories.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>n</strong> (<em>float</em>) – Characteristic parameter; must satisfy <span class="math notranslate nohighlight">\(n &lt; 1\)</span>.</p></li>
-<li><p><strong>k</strong> (<em>float</em>) – Modulus; must satisfy <span class="math notranslate nohighlight">\(0 \le k &lt; 1\)</span>.</p></li>
+<li><p><strong>n</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Characteristic parameter; must satisfy <span class="math notranslate nohighlight">\(n &lt; 1\)</span>.</p></li>
+<li><p><strong>k</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Modulus; must satisfy <span class="math notranslate nohighlight">\(0 \le k &lt; 1\)</span>.</p></li>
 </ul>
 </dd>
 <dt class="field-even">Returns<span class="colon">:</span></dt>
 <dd class="field-even"><p><span class="math notranslate nohighlight">\(\Pi(n, k)\)</span>.</p>
 </dd>
 <dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>float</p>
+<dd class="field-odd"><p><span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span></p>
 </dd>
 </dl>
 </dd></dl>
@@ -1023,17 +1023,17 @@ case <span class="math notranslate nohighlight">\(x_I = \pm 1\)</span>.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>a</strong> (<em>float</em>) – Dimensionless spin parameter, <span class="math notranslate nohighlight">\(|a| \le 1\)</span>.</p></li>
-<li><p><strong>p</strong> (<em>float</em>) – Semi-latus rectum in units of <span class="math notranslate nohighlight">\(M\)</span>.</p></li>
-<li><p><strong>e</strong> (<em>float</em>) – Orbital eccentricity, <span class="math notranslate nohighlight">\(0 \le e &lt; 1\)</span>.</p></li>
-<li><p><strong>x</strong> (<em>float</em>) – Cosine of inclination; must be <span class="math notranslate nohighlight">\(\pm 1\)</span> for equatorial orbits.</p></li>
+<li><p><strong>a</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Dimensionless spin parameter, <span class="math notranslate nohighlight">\(|a| \le 1\)</span>.</p></li>
+<li><p><strong>p</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Semi-latus rectum in units of <span class="math notranslate nohighlight">\(M\)</span>.</p></li>
+<li><p><strong>e</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Orbital eccentricity, <span class="math notranslate nohighlight">\(0 \le e &lt; 1\)</span>.</p></li>
+<li><p><strong>x</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Cosine of inclination; must be <span class="math notranslate nohighlight">\(\pm 1\)</span> for equatorial orbits.</p></li>
 </ul>
 </dd>
 <dt class="field-even">Returns<span class="colon">:</span></dt>
 <dd class="field-even"><p>Specific orbital energy <span class="math notranslate nohighlight">\(E\)</span>.</p>
 </dd>
 <dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>float</p>
+<dd class="field-odd"><p><span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span></p>
 </dd>
 </dl>
 </dd></dl>
@@ -1045,18 +1045,18 @@ case <span class="math notranslate nohighlight">\(x_I = \pm 1\)</span>.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>a</strong> (<em>float</em>) – Orbital parameters as for <a class="reference internal" href="#fewtrax.utils.geodesic.kerr_geo_energy_equatorial" title="fewtrax.utils.geodesic.kerr_geo_energy_equatorial"><code class="xref py py-func docutils literal notranslate"><span class="pre">kerr_geo_energy_equatorial()</span></code></a>.</p></li>
-<li><p><strong>p</strong> (<em>float</em>) – Orbital parameters as for <a class="reference internal" href="#fewtrax.utils.geodesic.kerr_geo_energy_equatorial" title="fewtrax.utils.geodesic.kerr_geo_energy_equatorial"><code class="xref py py-func docutils literal notranslate"><span class="pre">kerr_geo_energy_equatorial()</span></code></a>.</p></li>
-<li><p><strong>e</strong> (<em>float</em>) – Orbital parameters as for <a class="reference internal" href="#fewtrax.utils.geodesic.kerr_geo_energy_equatorial" title="fewtrax.utils.geodesic.kerr_geo_energy_equatorial"><code class="xref py py-func docutils literal notranslate"><span class="pre">kerr_geo_energy_equatorial()</span></code></a>.</p></li>
-<li><p><strong>x</strong> (<em>float</em>) – Orbital parameters as for <a class="reference internal" href="#fewtrax.utils.geodesic.kerr_geo_energy_equatorial" title="fewtrax.utils.geodesic.kerr_geo_energy_equatorial"><code class="xref py py-func docutils literal notranslate"><span class="pre">kerr_geo_energy_equatorial()</span></code></a>.</p></li>
-<li><p><strong>En</strong> (<em>float</em>) – Orbital energy (from <a class="reference internal" href="#fewtrax.utils.geodesic.kerr_geo_energy_equatorial" title="fewtrax.utils.geodesic.kerr_geo_energy_equatorial"><code class="xref py py-func docutils literal notranslate"><span class="pre">kerr_geo_energy_equatorial()</span></code></a>).</p></li>
+<li><p><strong>a</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Orbital parameters as for <a class="reference internal" href="#fewtrax.utils.geodesic.kerr_geo_energy_equatorial" title="fewtrax.utils.geodesic.kerr_geo_energy_equatorial"><code class="xref py py-func docutils literal notranslate"><span class="pre">kerr_geo_energy_equatorial()</span></code></a>.</p></li>
+<li><p><strong>p</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Orbital parameters as for <a class="reference internal" href="#fewtrax.utils.geodesic.kerr_geo_energy_equatorial" title="fewtrax.utils.geodesic.kerr_geo_energy_equatorial"><code class="xref py py-func docutils literal notranslate"><span class="pre">kerr_geo_energy_equatorial()</span></code></a>.</p></li>
+<li><p><strong>e</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Orbital parameters as for <a class="reference internal" href="#fewtrax.utils.geodesic.kerr_geo_energy_equatorial" title="fewtrax.utils.geodesic.kerr_geo_energy_equatorial"><code class="xref py py-func docutils literal notranslate"><span class="pre">kerr_geo_energy_equatorial()</span></code></a>.</p></li>
+<li><p><strong>x</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Orbital parameters as for <a class="reference internal" href="#fewtrax.utils.geodesic.kerr_geo_energy_equatorial" title="fewtrax.utils.geodesic.kerr_geo_energy_equatorial"><code class="xref py py-func docutils literal notranslate"><span class="pre">kerr_geo_energy_equatorial()</span></code></a>.</p></li>
+<li><p><strong>En</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Orbital energy (from <a class="reference internal" href="#fewtrax.utils.geodesic.kerr_geo_energy_equatorial" title="fewtrax.utils.geodesic.kerr_geo_energy_equatorial"><code class="xref py py-func docutils literal notranslate"><span class="pre">kerr_geo_energy_equatorial()</span></code></a>).</p></li>
 </ul>
 </dd>
 <dt class="field-even">Returns<span class="colon">:</span></dt>
 <dd class="field-even"><p>Specific orbital angular momentum <span class="math notranslate nohighlight">\(L_z\)</span>.</p>
 </dd>
 <dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>float</p>
+<dd class="field-odd"><p><span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span></p>
 </dd>
 </dl>
 </dd></dl>
@@ -1072,16 +1072,16 @@ found as the root of a polynomial (Glampedakis &amp; Kennefick 2002).</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>a</strong> (<em>float</em>) – Dimensionless BH spin, <span class="math notranslate nohighlight">\(-1 &lt; a &lt; 1\)</span>.</p></li>
-<li><p><strong>e</strong> (<em>float</em>) – Eccentricity.</p></li>
-<li><p><strong>x</strong> (<em>float</em>) – Cosine of inclination; must be <span class="math notranslate nohighlight">\(\pm 1\)</span>.</p></li>
+<li><p><strong>a</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Dimensionless BH spin, <span class="math notranslate nohighlight">\(-1 &lt; a &lt; 1\)</span>.</p></li>
+<li><p><strong>e</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Eccentricity.</p></li>
+<li><p><strong>x</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Cosine of inclination; must be <span class="math notranslate nohighlight">\(\pm 1\)</span>.</p></li>
 </ul>
 </dd>
 <dt class="field-even">Returns<span class="colon">:</span></dt>
 <dd class="field-even"><p><span class="math notranslate nohighlight">\(p_{\rm sep}\)</span>.</p>
 </dd>
 <dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>float</p>
+<dd class="field-odd"><p><span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span></p>
 </dd>
 </dl>
 </dd></dl>
@@ -1097,17 +1097,17 @@ found as the root of a polynomial (Glampedakis &amp; Kennefick 2002).</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>a</strong> (<em>float</em>) – BH spin parameter.</p></li>
-<li><p><strong>p</strong> (<em>float</em>) – Semi-latus rectum in units of <span class="math notranslate nohighlight">\(M\)</span>.</p></li>
-<li><p><strong>e</strong> (<em>float</em>) – Eccentricity.</p></li>
-<li><p><strong>x</strong> (<em>float</em>) – Cosine of inclination (<span class="math notranslate nohighlight">\(\pm 1\)</span> for equatorial).</p></li>
+<li><p><strong>a</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – BH spin parameter.</p></li>
+<li><p><strong>p</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Semi-latus rectum in units of <span class="math notranslate nohighlight">\(M\)</span>.</p></li>
+<li><p><strong>e</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Eccentricity.</p></li>
+<li><p><strong>x</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Cosine of inclination (<span class="math notranslate nohighlight">\(\pm 1\)</span> for equatorial).</p></li>
 </ul>
 </dd>
 <dt class="field-even">Returns<span class="colon">:</span></dt>
 <dd class="field-even"><p><span class="math notranslate nohighlight">\((\Omega_\phi, \Omega_\theta, \Omega_r)\)</span>.</p>
 </dd>
 <dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>tuple of float</p>
+<dd class="field-odd"><p><span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">tuple</span></code>[<code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code>, <code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code>, <code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code>]</span></p>
 </dd>
 </dl>
 </dd></dl>
@@ -1132,17 +1132,17 @@ harmonics for a list of <span class="math notranslate nohighlight">\((\ell, m)\)
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>l</strong> (<em>int</em>) – Degree <span class="math notranslate nohighlight">\(\ell \ge 2\)</span>.</p></li>
-<li><p><strong>m</strong> (<em>int</em>) – Order <span class="math notranslate nohighlight">\(-\ell \le m \le \ell\)</span>.</p></li>
-<li><p><strong>theta</strong> (<em>float</em>) – Polar angle [rad].</p></li>
-<li><p><strong>phi</strong> (<em>float</em>) – Azimuthal angle [rad].</p></li>
+<li><p><strong>l</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code></span>) – Degree <span class="math notranslate nohighlight">\(\ell \ge 2\)</span>.</p></li>
+<li><p><strong>m</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code></span>) – Order <span class="math notranslate nohighlight">\(-\ell \le m \le \ell\)</span>.</p></li>
+<li><p><strong>theta</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Polar angle [rad].</p></li>
+<li><p><strong>phi</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Azimuthal angle [rad].</p></li>
 </ul>
 </dd>
 <dt class="field-even">Returns<span class="colon">:</span></dt>
 <dd class="field-even"><p>The harmonic value.</p>
 </dd>
 <dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>complex</p>
+<dd class="field-odd"><p><span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">complex</span></code></span></p>
 </dd>
 </dl>
 <p class="rubric">Notes</p>
@@ -1159,10 +1159,10 @@ conjugate term in the summation.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>l_arr</strong> (<em>array_like</em><em> of </em><em>int</em>) – Arrays of <span class="math notranslate nohighlight">\(\ell\)</span> and <span class="math notranslate nohighlight">\(m\)</span> values (length N_modes).</p></li>
-<li><p><strong>m_arr</strong> (<em>array_like</em><em> of </em><em>int</em>) – Arrays of <span class="math notranslate nohighlight">\(\ell\)</span> and <span class="math notranslate nohighlight">\(m\)</span> values (length N_modes).</p></li>
-<li><p><strong>theta</strong> (<em>float</em>) – Observer angles [rad].</p></li>
-<li><p><strong>phi</strong> (<em>float</em>) – Observer angles [rad].</p></li>
+<li><p><strong>l_arr</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">ndarray</span></code></span>) – Arrays of <span class="math notranslate nohighlight">\(\ell\)</span> and <span class="math notranslate nohighlight">\(m\)</span> values (length N_modes).</p></li>
+<li><p><strong>m_arr</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">ndarray</span></code></span>) – Arrays of <span class="math notranslate nohighlight">\(\ell\)</span> and <span class="math notranslate nohighlight">\(m\)</span> values (length N_modes).</p></li>
+<li><p><strong>theta</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Observer angles [rad].</p></li>
+<li><p><strong>phi</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Observer angles [rad].</p></li>
 </ul>
 </dd>
 <dt class="field-even">Return type<span class="colon">:</span></dt>

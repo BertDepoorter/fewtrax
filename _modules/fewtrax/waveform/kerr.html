@@ -397,6 +397,7 @@
         <span class="n">dt</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">10.0</span><span class="p">,</span>
         <span class="n">mode_selection_threshold</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
         <span class="n">return_sparse</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+        <span class="n">return_complex</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
         <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">jnp</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">jnp</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]:</span>
 <span class="w">        </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;Generate the EMRI gravitational waveform.</span>
@@ -433,15 +434,25 @@
 <span class="sd">        return_sparse : bool</span>
 <span class="sd">            If True, also return the sparse trajectory dictionary as a</span>
 <span class="sd">            third element of the tuple.</span>
+<span class="sd">        return_complex : bool</span>
+<span class="sd">            If True, return the complex strain ``h = h₊ + i·h×`` as a</span>
+<span class="sd">            single array instead of the ``(hp, hx)`` tuple.  This is the</span>
+<span class="sd">            natural input format for</span>
+<span class="sd">            :class:`~jaxlisaresponse.ResponseWrapper`.</span>
 
 <span class="sd">        Returns</span>
 <span class="sd">        -------</span>
 <span class="sd">        hp : jnp.ndarray, shape (N,)</span>
-<span class="sd">            Plus-polarisation strain :math:`h_+` at the detector [dimensionless].</span>
+<span class="sd">            Plus-polarisation strain :math:`h_+` [dimensionless].</span>
+<span class="sd">            *Not returned when* ``return_complex=True``.</span>
 <span class="sd">        hx : jnp.ndarray, shape (N,)</span>
 <span class="sd">            Cross-polarisation strain :math:`h_{\times}` [dimensionless].</span>
+<span class="sd">            *Not returned when* ``return_complex=True``.</span>
+<span class="sd">        h : jnp.ndarray, shape (N,), complex</span>
+<span class="sd">            Complex strain ``h₊ + i·h×``.  Returned *instead of*</span>
+<span class="sd">            ``(hp, hx)`` when ``return_complex=True``.</span>
 <span class="sd">        (optional) sparse_dict : dict</span>
-<span class="sd">            Returned if ``return_sparse=True``.</span>
+<span class="sd">            Returned as the last element if ``return_sparse=True``.</span>
 
 <span class="sd">        Notes</span>
 <span class="sd">        -----</span>
@@ -517,6 +528,12 @@
 
         <span class="c1"># Rotate from source frame to SSB frame</span>
         <span class="n">hp</span><span class="p">,</span> <span class="n">hx</span> <span class="o">=</span> <span class="n">_to_ssb_frame</span><span class="p">(</span><span class="n">hp</span><span class="p">,</span> <span class="n">hx</span><span class="p">,</span> <span class="nb">float</span><span class="p">(</span><span class="n">qS</span><span class="p">),</span> <span class="nb">float</span><span class="p">(</span><span class="n">phiS</span><span class="p">),</span> <span class="n">qK_eff</span><span class="p">,</span> <span class="n">phiK_eff</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">return_complex</span><span class="p">:</span>
+            <span class="n">h_out</span> <span class="o">=</span> <span class="n">hp</span> <span class="o">+</span> <span class="mi">1</span><span class="n">j</span> <span class="o">*</span> <span class="n">hx</span>
+            <span class="k">if</span> <span class="n">return_sparse</span><span class="p">:</span>
+                <span class="k">return</span> <span class="n">h_out</span><span class="p">,</span> <span class="n">sparse</span>
+            <span class="k">return</span> <span class="n">h_out</span>
 
         <span class="k">if</span> <span class="n">return_sparse</span><span class="p">:</span>
             <span class="k">return</span> <span class="n">hp</span><span class="p">,</span> <span class="n">hx</span><span class="p">,</span> <span class="n">sparse</span>
