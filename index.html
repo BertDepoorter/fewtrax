@@ -16,6 +16,7 @@
       <script src="_static/documentation_options.js?v=01f34227"></script>
       <script src="_static/doctools.js?v=fd6eb6e6"></script>
       <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+      <script>window.MathJax = {"tex": {"inlineMath": [["$", "$"], ["\\(", "\\)"]], "processEscapes": true}, "options": {"ignoreHtmlClass": "tex2jax_ignore|mathjax_ignore|document", "processHtmlClass": "tex2jax_process|mathjax_process|math|output_area"}}</script>
       <script defer="defer" src="https://cdn.jsdelivr.net/npm/mathjax@4/tex-mml-chtml.js"></script>
     <script src="_static/js/theme.js"></script>
     <link rel="index" title="Index" href="genindex.html" />
@@ -53,7 +54,7 @@
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Tutorials</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="examples.html">Examples</a></li>
+<li class="toctree-l1"><a class="reference internal" href="examples.html">Tutorials</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Reference</span></p>
 <ul>
@@ -135,9 +136,17 @@ evaluation via <code class="docutils literal notranslate"><span class="pre">vmap
 <div class="toctree-wrapper compound">
 <p class="caption" role="heading"><span class="caption-text">Tutorials</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="examples.html">Examples</a><ul>
+<li class="toctree-l1"><a class="reference internal" href="examples.html">Tutorials</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="notebooks/01_kerr_geodesics.html">01 — Kerr Geodesics</a></li>
+<li class="toctree-l2"><a class="reference internal" href="notebooks/02_emri_trajectory.html">02 — EMRI Trajectory Integration</a></li>
+<li class="toctree-l2"><a class="reference internal" href="notebooks/03_amplitude_interpolation.html">03 — Teukolsky Amplitude Interpolation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="notebooks/04_mode_summation.html">04 — Mode Summation and Harmonic Decomposition</a></li>
+<li class="toctree-l2"><a class="reference internal" href="notebooks/05_full_waveform.html">05 — Full EMRI Waveform Generation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="notebooks/06_jax_features.html">06 — JAX Features: JIT, vmap, and Autodiff</a></li>
+<li class="toctree-l2"><a class="reference internal" href="examples.html#notebook-descriptions">Notebook descriptions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="examples.html#running-locally">Running locally</a></li>
+<li class="toctree-l2"><a class="reference internal" href="examples.html#pre-executing-notebooks-for-the-docs">Pre-executing notebooks for the docs</a></li>
 <li class="toctree-l2"><a class="reference internal" href="examples.html#standalone-quickstart-script">Standalone quickstart script</a></li>
-<li class="toctree-l2"><a class="reference internal" href="examples.html#running-the-notebooks">Running the notebooks</a></li>
 </ul>
 </li>
 </ul>
@@ -152,6 +161,7 @@ evaluation via <code class="docutils literal notranslate"><span class="pre">vmap
 <li class="toctree-l2"><a class="reference internal" href="api.html#fewtrax.waveform.kerr.KerrEccentricEquatorialWaveform"><code class="docutils literal notranslate"><span class="pre">KerrEccentricEquatorialWaveform</span></code></a></li>
 <li class="toctree-l2"><a class="reference internal" href="api.html#backward-integration">Backward integration</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api.html#fewtrax.trajectory.inspiral.EMRIInspiral"><code class="docutils literal notranslate"><span class="pre">EMRIInspiral</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api.html#fewtrax.trajectory.inspiral.EMRIInspiralFast"><code class="docutils literal notranslate"><span class="pre">EMRIInspiralFast</span></code></a></li>
 <li class="toctree-l2"><a class="reference internal" href="api.html#fewtrax.trajectory.inspiral.run_inspiral"><code class="docutils literal notranslate"><span class="pre">run_inspiral()</span></code></a></li>
 <li class="toctree-l2"><a class="reference internal" href="api.html#design-notes">Design notes</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api.html#fewtrax.amplitude.interp.AmplitudeInterpolator"><code class="docutils literal notranslate"><span class="pre">AmplitudeInterpolator</span></code></a></li>
@@ -168,10 +178,15 @@ evaluation via <code class="docutils literal notranslate"><span class="pre">vmap
 <li class="toctree-l2"><a class="reference internal" href="api.html#fewtrax.utils.geodesic.ellipk"><code class="docutils literal notranslate"><span class="pre">ellipk()</span></code></a></li>
 <li class="toctree-l2"><a class="reference internal" href="api.html#fewtrax.utils.geodesic.ellipe"><code class="docutils literal notranslate"><span class="pre">ellipe()</span></code></a></li>
 <li class="toctree-l2"><a class="reference internal" href="api.html#fewtrax.utils.geodesic.ellip_pi"><code class="docutils literal notranslate"><span class="pre">ellip_pi()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api.html#fewtrax.utils.geodesic.ellipk_agm"><code class="docutils literal notranslate"><span class="pre">ellipk_agm()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api.html#fewtrax.utils.geodesic.ellipe_agm"><code class="docutils literal notranslate"><span class="pre">ellipe_agm()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api.html#fewtrax.utils.geodesic.ellip_pi_fast"><code class="docutils literal notranslate"><span class="pre">ellip_pi_fast()</span></code></a></li>
 <li class="toctree-l2"><a class="reference internal" href="api.html#fewtrax.utils.geodesic.kerr_geo_energy_equatorial"><code class="docutils literal notranslate"><span class="pre">kerr_geo_energy_equatorial()</span></code></a></li>
 <li class="toctree-l2"><a class="reference internal" href="api.html#fewtrax.utils.geodesic.kerr_geo_angular_momentum_equatorial"><code class="docutils literal notranslate"><span class="pre">kerr_geo_angular_momentum_equatorial()</span></code></a></li>
 <li class="toctree-l2"><a class="reference internal" href="api.html#fewtrax.utils.geodesic.get_separatrix"><code class="docutils literal notranslate"><span class="pre">get_separatrix()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api.html#fewtrax.utils.geodesic.get_separatrix_fast"><code class="docutils literal notranslate"><span class="pre">get_separatrix_fast()</span></code></a></li>
 <li class="toctree-l2"><a class="reference internal" href="api.html#fewtrax.utils.geodesic.get_fundamental_frequencies"><code class="docutils literal notranslate"><span class="pre">get_fundamental_frequencies()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api.html#fewtrax.utils.geodesic.get_fundamental_frequencies_fast"><code class="docutils literal notranslate"><span class="pre">get_fundamental_frequencies_fast()</span></code></a></li>
 <li class="toctree-l2"><a class="reference internal" href="api.html#fewtrax.utils.harmonics.spin_weighted_spherical_harmonic"><code class="docutils literal notranslate"><span class="pre">spin_weighted_spherical_harmonic()</span></code></a></li>
 <li class="toctree-l2"><a class="reference internal" href="api.html#fewtrax.utils.harmonics.get_ylms_for_modes"><code class="docutils literal notranslate"><span class="pre">get_ylms_for_modes()</span></code></a></li>
 </ul>

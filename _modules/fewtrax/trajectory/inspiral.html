@@ -50,7 +50,7 @@
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Tutorials</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="../../../examples.html">Examples</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../examples.html">Tutorials</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Reference</span></p>
 <ul>
@@ -102,9 +102,10 @@
 <span class="sd">Jacobian :math:`\\partial(E,L)/\\partial(p,e)` computed analytically with</span>
 <span class="sd">:func:`jax.jacfwd`.</span>
 
-<span class="sd">Solver: :class:`diffrax.Tsit5` (4th/5th order Runge-Kutta, efficient for</span>
-<span class="sd">smooth problems) with :class:`diffrax.PIDController` adaptive step-size</span>
-<span class="sd">control.  The system is stopped when the orbit approaches the separatrix.</span>
+<span class="sd">Solver: :class:`diffrax.Dopri8` (8th-order Dormand-Prince Runge-Kutta,</span>
+<span class="sd">matching FEW&#39;s DOPR853 in order) with :class:`diffrax.PIDController`</span>
+<span class="sd">adaptive step-size control.  The system is stopped when the orbit approaches</span>
+<span class="sd">the separatrix.</span>
 
 <span class="sd">The ODE is fully JIT-compilable and differentiable with respect to the</span>
 <span class="sd">initial conditions :math:`(p_0, e_0)`, the BH spin :math:`a`, and the</span>
@@ -148,8 +149,13 @@
 <span class="kn">import</span><span class="w"> </span><span class="nn">equinox</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">eqx</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">fewtrax.utils.constants</span><span class="w"> </span><span class="kn">import</span> <span class="n">MTSUN_SI</span><span class="p">,</span> <span class="n">YEAR_SI</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">fewtrax.utils.geodesic</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_separatrix</span><span class="p">,</span> <span class="n">get_fundamental_frequencies</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">fewtrax.utils.coordinates</span><span class="w"> </span><span class="kn">import</span> <span class="n">kerrecceq_forward_map</span><span class="p">,</span> <span class="n">DELTAPMIN</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">fewtrax.utils.geodesic</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">get_separatrix</span><span class="p">,</span> <span class="n">get_fundamental_frequencies</span><span class="p">,</span>
+    <span class="n">get_separatrix_fast</span><span class="p">,</span> <span class="n">get_fundamental_frequencies_fast</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">fewtrax.utils.coordinates</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">kerrecceq_forward_map</span><span class="p">,</span> <span class="n">kerrecceq_forward_map_fast</span><span class="p">,</span> <span class="n">DELTAPMIN</span><span class="p">,</span>
+<span class="p">)</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">fewtrax.data.loader</span><span class="w"> </span><span class="kn">import</span> <span class="n">FluxData</span><span class="p">,</span> <span class="n">_pdot_PN_jax</span><span class="p">,</span> <span class="n">_edot_PN_jax</span>
 
 <span class="n">SEPARATRIX_BUFFER</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">2.0</span> <span class="o">*</span> <span class="n">DELTAPMIN</span>
@@ -166,8 +172,8 @@
 <span class="k">class</span><span class="w"> </span><span class="nc">EMRIInspiral</span><span class="p">(</span><span class="n">eqx</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
 <span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;Adiabatic EMRI trajectory integrator (JIT/vmap-compatible).</span>
 
-<span class="sd">    Integrates the adiabatic inspiral ODE using :class:`diffrax.Tsit5`</span>
-<span class="sd">    with adaptive step-size control.  The radiation-reaction force</span>
+<span class="sd">    Integrates the adiabatic inspiral ODE using :class:`diffrax.Dopri8`</span>
+<span class="sd">    (8th-order Dormand-Prince) with adaptive step-size control.  The radiation-reaction force</span>
 <span class="sd">    (:math:`\dot{p}`, :math:`\dot{e}`) is computed from the FEW flux</span>
 <span class="sd">    tables using the **pex convention** (matching FEW):</span>
 
@@ -276,7 +282,7 @@
 
         <span class="k">return</span> <span class="n">diffrax</span><span class="o">.</span><span class="n">diffeqsolve</span><span class="p">(</span>
             <span class="n">diffrax</span><span class="o">.</span><span class="n">ODETerm</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_ode_rhs</span><span class="p">),</span>
-            <span class="n">diffrax</span><span class="o">.</span><span class="n">Tsit5</span><span class="p">(),</span>
+            <span class="n">diffrax</span><span class="o">.</span><span class="n">Dopri8</span><span class="p">(),</span>
             <span class="n">t0</span><span class="o">=</span><span class="n">jnp</span><span class="o">.</span><span class="n">zeros</span><span class="p">((),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">jnp</span><span class="o">.</span><span class="n">float64</span><span class="p">),</span>
             <span class="n">t1</span><span class="o">=</span><span class="n">T_geo</span><span class="p">,</span>
             <span class="n">dt0</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
@@ -315,7 +321,7 @@
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="k">return</span> <span class="n">diffrax</span><span class="o">.</span><span class="n">diffeqsolve</span><span class="p">(</span>
             <span class="n">diffrax</span><span class="o">.</span><span class="n">ODETerm</span><span class="p">(</span><span class="k">lambda</span> <span class="n">t</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="n">args</span><span class="p">:</span> <span class="o">-</span><span class="bp">self</span><span class="o">.</span><span class="n">_ode_rhs</span><span class="p">(</span><span class="n">t</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="n">args</span><span class="p">)),</span>
-            <span class="n">diffrax</span><span class="o">.</span><span class="n">Tsit5</span><span class="p">(),</span>
+            <span class="n">diffrax</span><span class="o">.</span><span class="n">Dopri8</span><span class="p">(),</span>
             <span class="n">t0</span><span class="o">=</span><span class="n">jnp</span><span class="o">.</span><span class="n">zeros</span><span class="p">((),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">jnp</span><span class="o">.</span><span class="n">float64</span><span class="p">),</span>
             <span class="n">t1</span><span class="o">=</span><span class="n">T_geo</span><span class="p">,</span>
             <span class="n">dt0</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
@@ -376,7 +382,7 @@
 <span class="sd">        atol, rtol : float</span>
 <span class="sd">            Adaptive solver tolerances.</span>
 <span class="sd">        max_steps : int</span>
-<span class="sd">            Maximum number of ODE internal steps.  The Tsit5 solver</span>
+<span class="sd">            Maximum number of ODE internal steps.  The Dopri8 solver</span>
 <span class="sd">            typically uses ≪100 steps for a year-long EMRI inspiral;</span>
 <span class="sd">            the default of 4096 accommodates edge cases without</span>
 <span class="sd">            significant runtime cost (execution scales with actual</span>
@@ -708,6 +714,237 @@
             <span class="k">return</span> <span class="n">t_s</span><span class="p">,</span> <span class="n">freqs</span><span class="p">,</span> <span class="n">amps</span>
         <span class="k">return</span> <span class="n">t_s</span><span class="p">,</span> <span class="n">freqs</span></div>
 </div>
+
+
+
+<div class="viewcode-block" id="EMRIInspiralFast">
+<a class="viewcode-back" href="../../../api.html#fewtrax.trajectory.inspiral.EMRIInspiralFast">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">EMRIInspiralFast</span><span class="p">(</span><span class="n">EMRIInspiral</span><span class="p">):</span>
+<span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;Fast EMRI trajectory integrator — same physics, lower per-step cost.</span>
+
+<span class="sd">    Inherits all public methods from :class:`EMRIInspiral` and overrides the</span>
+<span class="sd">    ODE internals with two independent optimisations:</span>
+
+<span class="sd">    1. **Pre-computed r_ISCO** — :math:`p_{\rm sep}(a, e{=}0)` is constant</span>
+<span class="sd">       along a trajectory (depends only on spin and inclination).  It is</span>
+<span class="sd">       computed once in :meth:`__call__` and passed through ``ode_args``</span>
+<span class="sd">       instead of being recomputed at every RHS evaluation.</span>
+
+<span class="sd">    2. **Fast elliptic integrals** — :func:`get_fundamental_frequencies_fast`</span>
+<span class="sd">       replaces the five 64-point Gauss-Legendre dot products with two</span>
+<span class="sd">       AGM-12 iterations (for K and E) and three 24-point GL evaluations</span>
+<span class="sd">       (for Π).  Accuracy is ~1e-12, well within the 1-rad dephasing budget</span>
+<span class="sd">       over two years.</span>
+
+<span class="sd">    3. **Fast separatrix root-finder** — the event condition and the p_sep</span>
+<span class="sd">       needed by ``_pdot_PN_jax`` / ``_edot_PN_jax`` use Newton-Raphson</span>
+<span class="sd">       (:data:`~fewtrax.utils.geodesic._N_NR` iters) rather than 50-step</span>
+<span class="sd">       bisection.</span>
+
+<span class="sd">    ``ode_args`` tuple is extended to ``(mu_over_M, a, x0, r_isco)``; the</span>
+<span class="sd">    base-class ``_solve`` / ``_solve_backward`` methods are not reused here</span>
+<span class="sd">    because the event condition must also unpack ``r_isco``.</span>
+
+<span class="sd">    Usage is identical to :class:`EMRIInspiral`::</span>
+
+<span class="sd">        traj_fast = EMRIInspiralFast(flux_data)</span>
+<span class="sd">        t, p, e, *_ = traj_fast(p0=10.0, e0=0.4, T=1.0, a=0.5, M=1e6, mu=10.0)</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="c1"># ------------------------------------------------------------------</span>
+    <span class="c1"># Fast internal helpers</span>
+    <span class="c1"># ------------------------------------------------------------------</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_flux_pex_fast</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">a</span><span class="p">:</span> <span class="n">jnp</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+        <span class="n">x0</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
+        <span class="n">r_isco</span><span class="p">:</span> <span class="n">jnp</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+        <span class="n">p_sep</span><span class="p">:</span> <span class="n">jnp</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+        <span class="n">p</span><span class="p">:</span> <span class="n">jnp</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+        <span class="n">e</span><span class="p">:</span> <span class="n">jnp</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">jnp</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">jnp</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]:</span>
+<span class="w">        </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;Physical :math:`(\dot p, \dot e)` with pre-computed separatrix values.</span>
+
+<span class="sd">        ``r_isco`` and ``p_sep`` are passed in from the caller so that</span>
+<span class="sd">        :func:`get_separatrix` is not re-entered here.  ``p_sep`` is</span>
+<span class="sd">        forwarded to :func:`kerrecceq_forward_map_fast` to avoid the</span>
+<span class="sd">        redundant internal separatrix evaluation.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">a_abs</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">a</span><span class="p">)</span>
+
+        <span class="n">u</span><span class="p">,</span> <span class="n">w</span><span class="p">,</span> <span class="n">z</span><span class="p">,</span> <span class="n">in_A</span> <span class="o">=</span> <span class="n">kerrecceq_forward_map_fast</span><span class="p">(</span><span class="n">a_abs</span><span class="p">,</span> <span class="n">p</span><span class="p">,</span> <span class="n">e</span><span class="p">,</span> <span class="n">p_sep</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="s2">&quot;flux&quot;</span><span class="p">)</span>
+
+        <span class="n">rp_A</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">flux_data</span><span class="o">.</span><span class="n">pdot_A</span><span class="p">(</span><span class="n">u</span><span class="p">,</span> <span class="n">w</span><span class="p">,</span> <span class="n">z</span><span class="p">)</span>
+        <span class="n">re_A</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">flux_data</span><span class="o">.</span><span class="n">edot_A</span><span class="p">(</span><span class="n">u</span><span class="p">,</span> <span class="n">w</span><span class="p">,</span> <span class="n">z</span><span class="p">)</span>
+        <span class="n">rp_B</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">flux_data</span><span class="o">.</span><span class="n">pdot_B</span><span class="p">(</span><span class="n">u</span><span class="p">,</span> <span class="n">w</span><span class="p">,</span> <span class="n">z</span><span class="p">)</span>
+        <span class="n">re_B</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">flux_data</span><span class="o">.</span><span class="n">edot_B</span><span class="p">(</span><span class="n">u</span><span class="p">,</span> <span class="n">w</span><span class="p">,</span> <span class="n">z</span><span class="p">)</span>
+
+        <span class="n">rp</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">in_A</span><span class="p">,</span> <span class="n">rp_A</span><span class="p">,</span> <span class="n">rp_B</span><span class="p">)</span>
+        <span class="n">re</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">in_A</span><span class="p">,</span> <span class="n">re_A</span><span class="p">,</span> <span class="n">re_B</span><span class="p">)</span>
+
+        <span class="n">pdot_pn</span> <span class="o">=</span> <span class="n">_pdot_PN_jax</span><span class="p">(</span><span class="n">p</span><span class="p">,</span> <span class="n">e</span><span class="p">,</span> <span class="n">r_isco</span><span class="p">,</span> <span class="n">p_sep</span><span class="p">)</span>
+        <span class="n">edot_pn</span> <span class="o">=</span> <span class="n">_edot_PN_jax</span><span class="p">(</span><span class="n">p</span><span class="p">,</span> <span class="n">e</span><span class="p">,</span> <span class="n">r_isco</span><span class="p">,</span> <span class="n">p_sep</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="o">-</span><span class="n">rp</span> <span class="o">*</span> <span class="n">pdot_pn</span><span class="p">,</span> <span class="o">-</span><span class="n">re</span> <span class="o">*</span> <span class="n">edot_pn</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_ode_rhs_fast</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">t</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">y</span><span class="p">:</span> <span class="n">jnp</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">args</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">jnp</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+<span class="w">        </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;Fast ODE RHS using pre-computed r_isco and fast elliptic integrals.&quot;&quot;&quot;</span>
+        <span class="n">mu_over_M</span><span class="p">,</span> <span class="n">a</span><span class="p">,</span> <span class="n">x0</span><span class="p">,</span> <span class="n">r_isco</span> <span class="o">=</span> <span class="n">args</span>
+        <span class="n">p</span><span class="p">,</span> <span class="n">e</span> <span class="o">=</span> <span class="n">y</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">y</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+        <span class="n">a_abs</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">a</span><span class="p">)</span>
+        <span class="n">x_in</span>  <span class="o">=</span> <span class="n">_x_sign</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">x0</span><span class="p">)</span>
+
+        <span class="c1"># Compute p_sep once; reuse for flux + event condition</span>
+        <span class="n">p_sep</span> <span class="o">=</span> <span class="n">get_separatrix_fast</span><span class="p">(</span><span class="n">a_abs</span><span class="p">,</span> <span class="n">e</span><span class="p">,</span> <span class="n">x_in</span><span class="p">)</span>
+
+        <span class="n">pdot</span><span class="p">,</span> <span class="n">edot</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_flux_pex_fast</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">x0</span><span class="p">,</span> <span class="n">r_isco</span><span class="p">,</span> <span class="n">p_sep</span><span class="p">,</span> <span class="n">p</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
+        <span class="n">Omega_phi</span><span class="p">,</span> <span class="n">Omega_theta</span><span class="p">,</span> <span class="n">Omega_r</span> <span class="o">=</span> <span class="n">get_fundamental_frequencies_fast</span><span class="p">(</span>
+            <span class="n">a_abs</span><span class="p">,</span> <span class="n">p</span><span class="p">,</span> <span class="n">e</span><span class="p">,</span> <span class="n">x_in</span>
+        <span class="p">)</span>
+        <span class="k">return</span> <span class="n">jnp</span><span class="o">.</span><span class="n">array</span><span class="p">(</span>
+            <span class="p">[</span><span class="n">pdot</span> <span class="o">*</span> <span class="n">mu_over_M</span><span class="p">,</span> <span class="n">edot</span> <span class="o">*</span> <span class="n">mu_over_M</span><span class="p">,</span> <span class="n">Omega_phi</span><span class="p">,</span> <span class="n">Omega_theta</span><span class="p">,</span> <span class="n">Omega_r</span><span class="p">]</span>
+        <span class="p">)</span>
+
+    <span class="c1"># ------------------------------------------------------------------</span>
+    <span class="c1"># JIT-compiled fast solvers</span>
+    <span class="c1"># ------------------------------------------------------------------</span>
+
+    <span class="nd">@eqx</span><span class="o">.</span><span class="n">filter_jit</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_solve_fast</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">y0</span><span class="p">:</span> <span class="n">jnp</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+        <span class="n">t_save</span><span class="p">:</span> <span class="n">jnp</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+        <span class="n">T_geo</span><span class="p">:</span> <span class="n">jnp</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+        <span class="n">ode_args</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">,</span>
+        <span class="n">max_steps</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+        <span class="n">atol</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1e-10</span><span class="p">,</span>
+        <span class="n">rtol</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1e-10</span><span class="p">,</span>
+    <span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;JIT-compiled fast forward solve.  ``ode_args`` is a 4-tuple.&quot;&quot;&quot;</span>
+
+        <span class="k">def</span><span class="w"> </span><span class="nf">_event_cond</span><span class="p">(</span><span class="n">t</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+            <span class="n">_</span><span class="p">,</span> <span class="n">a</span><span class="p">,</span> <span class="n">x0</span><span class="p">,</span> <span class="n">_r_isco</span> <span class="o">=</span> <span class="n">args</span>
+            <span class="n">p</span><span class="p">,</span> <span class="n">e</span> <span class="o">=</span> <span class="n">y</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">y</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+            <span class="n">p_sep</span> <span class="o">=</span> <span class="n">get_separatrix_fast</span><span class="p">(</span><span class="n">jnp</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">a</span><span class="p">),</span> <span class="n">e</span><span class="p">,</span> <span class="n">_x_sign</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">x0</span><span class="p">))</span>
+            <span class="k">return</span> <span class="n">p</span> <span class="o">&lt;</span> <span class="n">p_sep</span> <span class="o">+</span> <span class="n">SEPARATRIX_BUFFER</span>
+
+        <span class="k">return</span> <span class="n">diffrax</span><span class="o">.</span><span class="n">diffeqsolve</span><span class="p">(</span>
+            <span class="n">diffrax</span><span class="o">.</span><span class="n">ODETerm</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_ode_rhs_fast</span><span class="p">),</span>
+            <span class="n">diffrax</span><span class="o">.</span><span class="n">Dopri8</span><span class="p">(),</span>
+            <span class="n">t0</span><span class="o">=</span><span class="n">jnp</span><span class="o">.</span><span class="n">zeros</span><span class="p">((),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">jnp</span><span class="o">.</span><span class="n">float64</span><span class="p">),</span>
+            <span class="n">t1</span><span class="o">=</span><span class="n">T_geo</span><span class="p">,</span>
+            <span class="n">dt0</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+            <span class="n">y0</span><span class="o">=</span><span class="n">y0</span><span class="p">,</span>
+            <span class="n">saveat</span><span class="o">=</span><span class="n">diffrax</span><span class="o">.</span><span class="n">SaveAt</span><span class="p">(</span><span class="n">ts</span><span class="o">=</span><span class="n">t_save</span><span class="p">),</span>
+            <span class="n">stepsize_controller</span><span class="o">=</span><span class="n">diffrax</span><span class="o">.</span><span class="n">PIDController</span><span class="p">(</span><span class="n">rtol</span><span class="o">=</span><span class="n">rtol</span><span class="p">,</span> <span class="n">atol</span><span class="o">=</span><span class="n">atol</span><span class="p">),</span>
+            <span class="n">max_steps</span><span class="o">=</span><span class="n">max_steps</span><span class="p">,</span>
+            <span class="n">event</span><span class="o">=</span><span class="n">diffrax</span><span class="o">.</span><span class="n">Event</span><span class="p">(</span><span class="n">_event_cond</span><span class="p">),</span>
+            <span class="n">args</span><span class="o">=</span><span class="n">ode_args</span><span class="p">,</span>
+        <span class="p">)</span>
+
+    <span class="nd">@eqx</span><span class="o">.</span><span class="n">filter_jit</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_solve_fast_backward</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">y0</span><span class="p">:</span> <span class="n">jnp</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+        <span class="n">t_save</span><span class="p">:</span> <span class="n">jnp</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+        <span class="n">T_geo</span><span class="p">:</span> <span class="n">jnp</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+        <span class="n">ode_args</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">,</span>
+        <span class="n">max_steps</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+        <span class="n">atol</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1e-10</span><span class="p">,</span>
+        <span class="n">rtol</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1e-10</span><span class="p">,</span>
+    <span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;JIT-compiled fast backward solve.  No separatrix event needed.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">diffrax</span><span class="o">.</span><span class="n">diffeqsolve</span><span class="p">(</span>
+            <span class="n">diffrax</span><span class="o">.</span><span class="n">ODETerm</span><span class="p">(</span>
+                <span class="k">lambda</span> <span class="n">t</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="n">args</span><span class="p">:</span> <span class="o">-</span><span class="bp">self</span><span class="o">.</span><span class="n">_ode_rhs_fast</span><span class="p">(</span><span class="n">t</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="n">args</span><span class="p">)</span>
+            <span class="p">),</span>
+            <span class="n">diffrax</span><span class="o">.</span><span class="n">Dopri8</span><span class="p">(),</span>
+            <span class="n">t0</span><span class="o">=</span><span class="n">jnp</span><span class="o">.</span><span class="n">zeros</span><span class="p">((),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">jnp</span><span class="o">.</span><span class="n">float64</span><span class="p">),</span>
+            <span class="n">t1</span><span class="o">=</span><span class="n">T_geo</span><span class="p">,</span>
+            <span class="n">dt0</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+            <span class="n">y0</span><span class="o">=</span><span class="n">y0</span><span class="p">,</span>
+            <span class="n">saveat</span><span class="o">=</span><span class="n">diffrax</span><span class="o">.</span><span class="n">SaveAt</span><span class="p">(</span><span class="n">ts</span><span class="o">=</span><span class="n">t_save</span><span class="p">),</span>
+            <span class="n">stepsize_controller</span><span class="o">=</span><span class="n">diffrax</span><span class="o">.</span><span class="n">PIDController</span><span class="p">(</span><span class="n">rtol</span><span class="o">=</span><span class="n">rtol</span><span class="p">,</span> <span class="n">atol</span><span class="o">=</span><span class="n">atol</span><span class="p">),</span>
+            <span class="n">max_steps</span><span class="o">=</span><span class="n">max_steps</span><span class="p">,</span>
+            <span class="n">args</span><span class="o">=</span><span class="n">ode_args</span><span class="p">,</span>
+        <span class="p">)</span>
+
+    <span class="c1"># ------------------------------------------------------------------</span>
+    <span class="c1"># Public interface (overrides __call__ to pass r_isco)</span>
+    <span class="c1"># ------------------------------------------------------------------</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__call__</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">p0</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
+        <span class="n">e0</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
+        <span class="n">T</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
+        <span class="n">a</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
+        <span class="n">x0</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1.0</span><span class="p">,</span>
+        <span class="n">dt</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">10.0</span><span class="p">,</span>
+        <span class="n">M</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1e6</span><span class="p">,</span>
+        <span class="n">mu</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">10.0</span><span class="p">,</span>
+        <span class="n">Phi_phi0</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.0</span><span class="p">,</span>
+        <span class="n">Phi_theta0</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.0</span><span class="p">,</span>
+        <span class="n">Phi_r0</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.0</span><span class="p">,</span>
+        <span class="n">atol</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1e-9</span><span class="p">,</span>
+        <span class="n">rtol</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1e-9</span><span class="p">,</span>
+        <span class="n">max_steps</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">4096</span><span class="p">,</span>
+        <span class="n">dense_steps</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">100</span><span class="p">,</span>
+        <span class="n">backward</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+        <span class="n">e_f</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">jnp</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="o">...</span><span class="p">]:</span>
+<span class="w">        </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;Integrate the EMRI trajectory (fast variant).</span>
+
+<span class="sd">        Interface identical to :meth:`EMRIInspiral.__call__`; ``r_isco`` is</span>
+<span class="sd">        computed once here and threaded through the ODE as a constant arg.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">a_</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">jnp</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
+        <span class="n">M_s</span>    <span class="o">=</span> <span class="p">(</span><span class="n">M</span> <span class="o">+</span> <span class="n">mu</span><span class="p">)</span> <span class="o">*</span> <span class="n">MTSUN_SI</span>
+        <span class="n">T_s</span>    <span class="o">=</span> <span class="n">T</span> <span class="o">*</span> <span class="n">YEAR_SI</span>
+        <span class="n">T_geo</span>  <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">T_s</span> <span class="o">/</span> <span class="n">M_s</span><span class="p">)</span>
+        <span class="n">mu_over_M</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">M</span> <span class="o">*</span> <span class="n">mu</span> <span class="o">/</span> <span class="p">(</span><span class="n">M</span> <span class="o">+</span> <span class="n">mu</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span><span class="p">)</span>
+
+        <span class="n">x_in</span>   <span class="o">=</span> <span class="n">_x_sign</span><span class="p">(</span><span class="n">a_</span><span class="p">,</span> <span class="n">x0</span><span class="p">)</span>
+        <span class="n">a_abs</span>  <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">a_</span><span class="p">)</span>
+
+        <span class="c1"># Precompute r_isco (constant along the trajectory)</span>
+        <span class="n">r_isco</span> <span class="o">=</span> <span class="n">get_separatrix_fast</span><span class="p">(</span><span class="n">a_abs</span><span class="p">,</span> <span class="n">jnp</span><span class="o">.</span><span class="n">zeros</span><span class="p">((),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">jnp</span><span class="o">.</span><span class="n">float64</span><span class="p">),</span> <span class="n">x_in</span><span class="p">)</span>
+
+        <span class="n">ode_args</span> <span class="o">=</span> <span class="p">(</span><span class="n">mu_over_M</span><span class="p">,</span> <span class="n">a_</span><span class="p">,</span> <span class="n">x0</span><span class="p">,</span> <span class="n">r_isco</span><span class="p">)</span>
+        <span class="n">t_save</span>   <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">linspace</span><span class="p">(</span><span class="n">jnp</span><span class="o">.</span><span class="n">zeros</span><span class="p">((),</span> <span class="n">jnp</span><span class="o">.</span><span class="n">float64</span><span class="p">),</span> <span class="n">T_geo</span><span class="p">,</span> <span class="n">dense_steps</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">backward</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">e_f</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                    <span class="s2">&quot;e_f must be provided when backward=True.&quot;</span>
+                <span class="p">)</span>
+            <span class="n">e_f_</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="nb">float</span><span class="p">(</span><span class="n">e_f</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">jnp</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
+            <span class="n">p_sep</span> <span class="o">=</span> <span class="n">get_separatrix_fast</span><span class="p">(</span><span class="n">a_abs</span><span class="p">,</span> <span class="n">e_f_</span><span class="p">,</span> <span class="n">x_in</span><span class="p">)</span>
+            <span class="n">p_start</span> <span class="o">=</span> <span class="n">p_sep</span> <span class="o">+</span> <span class="n">SEPARATRIX_BUFFER</span>
+            <span class="n">y0</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">array</span><span class="p">(</span>
+                <span class="p">[</span><span class="n">p_start</span><span class="p">,</span> <span class="n">e_f_</span><span class="p">,</span> <span class="n">Phi_phi0</span><span class="p">,</span> <span class="n">Phi_theta0</span><span class="p">,</span> <span class="n">Phi_r0</span><span class="p">],</span> <span class="n">dtype</span><span class="o">=</span><span class="n">jnp</span><span class="o">.</span><span class="n">float64</span>
+            <span class="p">)</span>
+            <span class="n">sol</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_solve_fast_backward</span><span class="p">(</span>
+                <span class="n">y0</span><span class="p">,</span> <span class="n">t_save</span><span class="p">,</span> <span class="n">T_geo</span><span class="p">,</span> <span class="n">ode_args</span><span class="p">,</span> <span class="n">max_steps</span><span class="p">,</span> <span class="n">atol</span><span class="p">,</span> <span class="n">rtol</span>
+            <span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">y0</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">array</span><span class="p">(</span>
+                <span class="p">[</span><span class="n">p0</span><span class="p">,</span> <span class="n">e0</span><span class="p">,</span> <span class="n">Phi_phi0</span><span class="p">,</span> <span class="n">Phi_theta0</span><span class="p">,</span> <span class="n">Phi_r0</span><span class="p">],</span> <span class="n">dtype</span><span class="o">=</span><span class="n">jnp</span><span class="o">.</span><span class="n">float64</span>
+            <span class="p">)</span>
+            <span class="n">sol</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_solve_fast</span><span class="p">(</span><span class="n">y0</span><span class="p">,</span> <span class="n">t_save</span><span class="p">,</span> <span class="n">T_geo</span><span class="p">,</span> <span class="n">ode_args</span><span class="p">,</span> <span class="n">max_steps</span><span class="p">,</span> <span class="n">atol</span><span class="p">,</span> <span class="n">rtol</span><span class="p">)</span>
+
+        <span class="n">ys</span>  <span class="o">=</span> <span class="n">sol</span><span class="o">.</span><span class="n">ys</span>
+        <span class="n">t_s</span> <span class="o">=</span> <span class="n">sol</span><span class="o">.</span><span class="n">ts</span> <span class="o">*</span> <span class="n">M_s</span>
+
+        <span class="k">return</span> <span class="p">(</span>
+            <span class="n">t_s</span><span class="p">,</span>
+            <span class="n">ys</span><span class="p">[:,</span> <span class="mi">0</span><span class="p">],</span>
+            <span class="n">ys</span><span class="p">[:,</span> <span class="mi">1</span><span class="p">],</span>
+            <span class="n">ys</span><span class="p">[:,</span> <span class="mi">2</span><span class="p">],</span>
+            <span class="n">ys</span><span class="p">[:,</span> <span class="mi">3</span><span class="p">],</span>
+            <span class="n">ys</span><span class="p">[:,</span> <span class="mi">4</span><span class="p">],</span>
+        <span class="p">)</span></div>
 
 
 

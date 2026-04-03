@@ -16,11 +16,12 @@
       <script src="_static/documentation_options.js?v=01f34227"></script>
       <script src="_static/doctools.js?v=fd6eb6e6"></script>
       <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+      <script>window.MathJax = {"tex": {"inlineMath": [["$", "$"], ["\\(", "\\)"]], "processEscapes": true}, "options": {"ignoreHtmlClass": "tex2jax_ignore|mathjax_ignore|document", "processHtmlClass": "tex2jax_process|mathjax_process|math|output_area"}}</script>
       <script defer="defer" src="https://cdn.jsdelivr.net/npm/mathjax@4/tex-mml-chtml.js"></script>
     <script src="_static/js/theme.js"></script>
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
-    <link rel="prev" title="Examples" href="examples.html" /> 
+    <link rel="prev" title="06 — JAX Features: JIT, vmap, and Autodiff" href="notebooks/06_jax_features.html" /> 
 </head>
 
 <body class="wy-body-for-nav"> 
@@ -53,7 +54,7 @@
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Tutorials</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="examples.html">Examples</a></li>
+<li class="toctree-l1"><a class="reference internal" href="examples.html">Tutorials</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Reference</span></p>
 <ul class="current">
@@ -72,6 +73,7 @@
 <li class="toctree-l3"><a class="reference internal" href="#fewtrax.trajectory.inspiral.EMRIInspiral.get_multi_track"><code class="docutils literal notranslate"><span class="pre">EMRIInspiral.get_multi_track()</span></code></a></li>
 </ul>
 </li>
+<li class="toctree-l2"><a class="reference internal" href="#fewtrax.trajectory.inspiral.EMRIInspiralFast"><code class="docutils literal notranslate"><span class="pre">EMRIInspiralFast</span></code></a></li>
 <li class="toctree-l2"><a class="reference internal" href="#fewtrax.trajectory.inspiral.run_inspiral"><code class="docutils literal notranslate"><span class="pre">run_inspiral()</span></code></a></li>
 <li class="toctree-l2"><a class="reference internal" href="#design-notes">Design notes</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#fewtrax.amplitude.interp.AmplitudeInterpolator"><code class="docutils literal notranslate"><span class="pre">AmplitudeInterpolator</span></code></a><ul>
@@ -97,10 +99,15 @@
 <li class="toctree-l2"><a class="reference internal" href="#fewtrax.utils.geodesic.ellipk"><code class="docutils literal notranslate"><span class="pre">ellipk()</span></code></a></li>
 <li class="toctree-l2"><a class="reference internal" href="#fewtrax.utils.geodesic.ellipe"><code class="docutils literal notranslate"><span class="pre">ellipe()</span></code></a></li>
 <li class="toctree-l2"><a class="reference internal" href="#fewtrax.utils.geodesic.ellip_pi"><code class="docutils literal notranslate"><span class="pre">ellip_pi()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#fewtrax.utils.geodesic.ellipk_agm"><code class="docutils literal notranslate"><span class="pre">ellipk_agm()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#fewtrax.utils.geodesic.ellipe_agm"><code class="docutils literal notranslate"><span class="pre">ellipe_agm()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#fewtrax.utils.geodesic.ellip_pi_fast"><code class="docutils literal notranslate"><span class="pre">ellip_pi_fast()</span></code></a></li>
 <li class="toctree-l2"><a class="reference internal" href="#fewtrax.utils.geodesic.kerr_geo_energy_equatorial"><code class="docutils literal notranslate"><span class="pre">kerr_geo_energy_equatorial()</span></code></a></li>
 <li class="toctree-l2"><a class="reference internal" href="#fewtrax.utils.geodesic.kerr_geo_angular_momentum_equatorial"><code class="docutils literal notranslate"><span class="pre">kerr_geo_angular_momentum_equatorial()</span></code></a></li>
 <li class="toctree-l2"><a class="reference internal" href="#fewtrax.utils.geodesic.get_separatrix"><code class="docutils literal notranslate"><span class="pre">get_separatrix()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#fewtrax.utils.geodesic.get_separatrix_fast"><code class="docutils literal notranslate"><span class="pre">get_separatrix_fast()</span></code></a></li>
 <li class="toctree-l2"><a class="reference internal" href="#fewtrax.utils.geodesic.get_fundamental_frequencies"><code class="docutils literal notranslate"><span class="pre">get_fundamental_frequencies()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#fewtrax.utils.geodesic.get_fundamental_frequencies_fast"><code class="docutils literal notranslate"><span class="pre">get_fundamental_frequencies_fast()</span></code></a></li>
 <li class="toctree-l2"><a class="reference internal" href="#fewtrax.utils.harmonics.spin_weighted_spherical_harmonic"><code class="docutils literal notranslate"><span class="pre">spin_weighted_spherical_harmonic()</span></code></a></li>
 <li class="toctree-l2"><a class="reference internal" href="#fewtrax.utils.harmonics.get_ylms_for_modes"><code class="docutils literal notranslate"><span class="pre">get_ylms_for_modes()</span></code></a></li>
 </ul>
@@ -315,9 +322,10 @@ Obtain this from a forward run:
 and converting them to <span class="math notranslate nohighlight">\(\dot{p}\)</span>, <span class="math notranslate nohighlight">\(\dot{e}\)</span> via the
 Jacobian <span class="math notranslate nohighlight">\(\partial(E,L)/\partial(p,e)\)</span> computed analytically with
 <code class="xref py py-func docutils literal notranslate"><span class="pre">jax.jacfwd()</span></code>.</p>
-<p>Solver: <code class="xref py py-class docutils literal notranslate"><span class="pre">diffrax.Tsit5</span></code> (4th/5th order Runge-Kutta, efficient for
-smooth problems) with <code class="xref py py-class docutils literal notranslate"><span class="pre">diffrax.PIDController</span></code> adaptive step-size
-control.  The system is stopped when the orbit approaches the separatrix.</p>
+<p>Solver: <code class="xref py py-class docutils literal notranslate"><span class="pre">diffrax.Dopri8</span></code> (8th-order Dormand-Prince Runge-Kutta,
+matching FEW’s DOPR853 in order) with <code class="xref py py-class docutils literal notranslate"><span class="pre">diffrax.PIDController</span></code>
+adaptive step-size control.  The system is stopped when the orbit approaches
+the separatrix.</p>
 <p>The ODE is fully JIT-compilable and differentiable with respect to the
 initial conditions <span class="math notranslate nohighlight">\((p_0, e_0)\)</span>, the BH spin <span class="math notranslate nohighlight">\(a\)</span>, and the
 mass parameters <span class="math notranslate nohighlight">\((M, \mu)\)</span>.</p>
@@ -347,8 +355,8 @@ and the integration runs for duration <span class="math notranslate nohighlight"
 <dt class="sig sig-object py" id="fewtrax.trajectory.inspiral.EMRIInspiral">
 <span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">fewtrax.trajectory.inspiral.</span></span><span class="sig-name descname"><span class="pre">EMRIInspiral</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">flux_data</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/fewtrax/trajectory/inspiral.html#EMRIInspiral"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#fewtrax.trajectory.inspiral.EMRIInspiral" title="Link to this definition"></a></dt>
 <dd><p>Adiabatic EMRI trajectory integrator (JIT/vmap-compatible).</p>
-<p>Integrates the adiabatic inspiral ODE using <code class="xref py py-class docutils literal notranslate"><span class="pre">diffrax.Tsit5</span></code>
-with adaptive step-size control.  The radiation-reaction force
+<p>Integrates the adiabatic inspiral ODE using <code class="xref py py-class docutils literal notranslate"><span class="pre">diffrax.Dopri8</span></code>
+(8th-order Dormand-Prince) with adaptive step-size control.  The radiation-reaction force
 (<span class="math notranslate nohighlight">\(\dot{p}\)</span>, <span class="math notranslate nohighlight">\(\dot{e}\)</span>) is computed from the FEW flux
 tables using the <strong>pex convention</strong> (matching FEW):</p>
 <ol class="arabic simple">
@@ -469,6 +477,37 @@ non-negative.</p>
 </dl>
 </dd></dl>
 
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="fewtrax.trajectory.inspiral.EMRIInspiralFast">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">fewtrax.trajectory.inspiral.</span></span><span class="sig-name descname"><span class="pre">EMRIInspiralFast</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">flux_data</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/fewtrax/trajectory/inspiral.html#EMRIInspiralFast"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#fewtrax.trajectory.inspiral.EMRIInspiralFast" title="Link to this definition"></a></dt>
+<dd><p>Fast EMRI trajectory integrator — same physics, lower per-step cost.</p>
+<p>Inherits all public methods from <a class="reference internal" href="#fewtrax.trajectory.inspiral.EMRIInspiral" title="fewtrax.trajectory.inspiral.EMRIInspiral"><code class="xref py py-class docutils literal notranslate"><span class="pre">EMRIInspiral</span></code></a> and overrides the
+ODE internals with two independent optimisations:</p>
+<ol class="arabic simple">
+<li><p><strong>Pre-computed r_ISCO</strong> — <span class="math notranslate nohighlight">\(p_{\rm sep}(a, e{=}0)\)</span> is constant
+along a trajectory (depends only on spin and inclination).  It is
+computed once in <code class="xref py py-meth docutils literal notranslate"><span class="pre">__call__()</span></code> and passed through <code class="docutils literal notranslate"><span class="pre">ode_args</span></code>
+instead of being recomputed at every RHS evaluation.</p></li>
+<li><p><strong>Fast elliptic integrals</strong> — <code class="xref py py-func docutils literal notranslate"><span class="pre">get_fundamental_frequencies_fast()</span></code>
+replaces the five 64-point Gauss-Legendre dot products with two
+AGM-12 iterations (for K and E) and three 24-point GL evaluations
+(for Π).  Accuracy is ~1e-12, well within the 1-rad dephasing budget
+over two years.</p></li>
+<li><p><strong>Fast separatrix root-finder</strong> — the event condition and the p_sep
+needed by <code class="docutils literal notranslate"><span class="pre">_pdot_PN_jax</span></code> / <code class="docutils literal notranslate"><span class="pre">_edot_PN_jax</span></code> use Newton-Raphson
+(<code class="xref py py-data docutils literal notranslate"><span class="pre">_N_NR</span></code> iters) rather than 50-step
+bisection.</p></li>
+</ol>
+<p><code class="docutils literal notranslate"><span class="pre">ode_args</span></code> tuple is extended to <code class="docutils literal notranslate"><span class="pre">(mu_over_M,</span> <span class="pre">a,</span> <span class="pre">x0,</span> <span class="pre">r_isco)</span></code>; the
+base-class <code class="docutils literal notranslate"><span class="pre">_solve</span></code> / <code class="docutils literal notranslate"><span class="pre">_solve_backward</span></code> methods are not reused here
+because the event condition must also unpack <code class="docutils literal notranslate"><span class="pre">r_isco</span></code>.</p>
+<p>Usage is identical to <a class="reference internal" href="#fewtrax.trajectory.inspiral.EMRIInspiral" title="fewtrax.trajectory.inspiral.EMRIInspiral"><code class="xref py py-class docutils literal notranslate"><span class="pre">EMRIInspiral</span></code></a>:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">traj_fast</span> <span class="o">=</span> <span class="n">EMRIInspiralFast</span><span class="p">(</span><span class="n">flux_data</span><span class="p">)</span>
+<span class="n">t</span><span class="p">,</span> <span class="n">p</span><span class="p">,</span> <span class="n">e</span><span class="p">,</span> <span class="o">*</span><span class="n">_</span> <span class="o">=</span> <span class="n">traj_fast</span><span class="p">(</span><span class="n">p0</span><span class="o">=</span><span class="mf">10.0</span><span class="p">,</span> <span class="n">e0</span><span class="o">=</span><span class="mf">0.4</span><span class="p">,</span> <span class="n">T</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span> <span class="n">a</span><span class="o">=</span><span class="mf">0.5</span><span class="p">,</span> <span class="n">M</span><span class="o">=</span><span class="mf">1e6</span><span class="p">,</span> <span class="n">mu</span><span class="o">=</span><span class="mf">10.0</span><span class="p">)</span>
+</pre></div>
+</div>
 </dd></dl>
 
 <dl class="py function">
@@ -770,10 +809,11 @@ can be used inside JIT-compiled functions and vmapped code.</p>
 <dt class="sig sig-object py">
 <span class="sig-name descname"><span class="pre">pdot_A,</span> <span class="pre">edot_A</span></span></dt>
 <dd><p>Semi-latus rectum and eccentricity rate ratio interpolators for
-Region A.  Inputs are normalised coordinates (u, w, z) ∈ [0, 1]³.</p>
+Region A.  Inputs are normalised coordinates (u, w, z) ∈ [0, 1]³.
+Uses E(3) / not-a-knot boundary conditions (matching FEW exactly).</p>
 <dl class="field-list simple">
 <dt class="field-odd">Type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>CubicSpline3D</p>
+<dd class="field-odd"><p>TricubicSplineE3</p>
 </dd>
 </dl>
 </dd></dl>
@@ -784,7 +824,7 @@ Region A.  Inputs are normalised coordinates (u, w, z) ∈ [0, 1]³.</p>
 <dd><p>Same for Region B.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>CubicSpline3D</p>
+<dd class="field-odd"><p>TricubicSplineE3</p>
 </dd>
 </dl>
 </dd></dl>
@@ -887,28 +927,23 @@ FEW package file-manager cache → <code class="docutils literal notranslate"><s
 
 <dl class="py function">
 <dt class="sig sig-object py" id="fewtrax.data.loader.load_flux_data">
-<span class="sig-prename descclassname"><span class="pre">fewtrax.data.loader.</span></span><span class="sig-name descname"><span class="pre">load_flux_data</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data_dir</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">downsample</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">densify_factor</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/fewtrax/data/loader.html#load_flux_data"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#fewtrax.data.loader.load_flux_data" title="Link to this definition"></a></dt>
+<span class="sig-prename descclassname"><span class="pre">fewtrax.data.loader.</span></span><span class="sig-name descname"><span class="pre">load_flux_data</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data_dir</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">downsample</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/fewtrax/data/loader.html#load_flux_data"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#fewtrax.data.loader.load_flux_data" title="Link to this definition"></a></dt>
 <dd><p>Load Kerr eccentric equatorial flux data in pex convention.</p>
 <p>Reads <code class="docutils literal notranslate"><span class="pre">KerrEccEqFluxData.h5</span></code>, converts (Ė, L̇) → (ṗ, ė) via the
 analytical Kerr Jacobian, then normalises by the separatrix-dependent PN
 functions to obtain dimensionless ratios ṗ/ṗ_PN and ė/ė_PN.</p>
-<p>By default the pex-ratio grids are densified by <code class="docutils literal notranslate"><span class="pre">densify_factor</span></code> (default
-3) using E(3) cubic splines from <code class="docutils literal notranslate"><span class="pre">multispline</span></code> before being stored in
-JAX <code class="docutils literal notranslate"><span class="pre">interpax</span></code> C² splines.  This eliminates the ~1.6e-6 relative
-interpolation error that would otherwise accumulate as a phase drift of
-~2.6 rad yr⁻¹, causing the waveform overlap to collapse for T ≳ 0.1 yr.</p>
+<p>The pex-ratio grids are stored as <code class="xref py py-class docutils literal notranslate"><span class="pre">TricubicSplineE3</span></code>
+instances using E(3) / not-a-knot boundary conditions, matching FEW’s
+<code class="docutils literal notranslate"><span class="pre">multispline.TricubicSpline</span></code> convention exactly.  This eliminates the
+systematic boundary-condition interpolation error that previously accumulated
+as a ~2.6 rad yr⁻¹ phase drift at high eccentricity / high spin.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>data_dir</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-data docutils literal notranslate"><span class="pre">Union</span></code>[<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>, <code class="xref py py-class docutils literal notranslate"><span class="pre">Path</span></code>, <code class="xref py py-obj docutils literal notranslate"><span class="pre">None</span></code>]</span>) – Directory containing <code class="docutils literal notranslate"><span class="pre">KerrEccEqFluxData.h5</span></code>.</p></li>
-<li><p><strong>downsample</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-data docutils literal notranslate"><span class="pre">Optional</span></code>[<code class="xref py py-class docutils literal notranslate"><span class="pre">list</span></code>]</span>) – <code class="docutils literal notranslate"><span class="pre">[(dU_A,</span> <span class="pre">dW_A,</span> <span class="pre">dZ_A),</span> <span class="pre">(dU_B,</span> <span class="pre">dW_B,</span> <span class="pre">dZ_B)]</span></code> downsampling factors
-applied before densification.  Default <code class="docutils literal notranslate"><span class="pre">[(1,1,1),(1,1,1)]</span></code> keeps
-the full grid.</p></li>
-<li><p><strong>densify_factor</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code></span>) – Grid densification factor applied after ELQ→pex conversion.
-<code class="docutils literal notranslate"><span class="pre">densify_factor=3</span></code> (default) inserts 2 extra points between every
-original grid point in each dimension, reducing the C²-vs-E(3)
-boundary-condition interpolation error by ~(1/3)⁴ ≈ 80×.
-Set to 1 to skip densification.</p></li>
+<li><p><strong>downsample</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-data docutils literal notranslate"><span class="pre">Optional</span></code>[<code class="xref py py-class docutils literal notranslate"><span class="pre">list</span></code>]</span>) – <code class="docutils literal notranslate"><span class="pre">[(dU_A,</span> <span class="pre">dW_A,</span> <span class="pre">dZ_A),</span> <span class="pre">(dU_B,</span> <span class="pre">dW_B,</span> <span class="pre">dZ_B)]</span></code> downsampling factors.
+Default <code class="docutils literal notranslate"><span class="pre">[(1,1,1),(1,1,1)]</span></code> keeps the full grid.  Useful for
+convergence testing; do not use in production.</p></li>
 </ul>
 </dd>
 <dt class="field-even">Return type<span class="colon">:</span></dt>
@@ -1014,6 +1049,66 @@ encountered in EMRI trajectories.</p>
 </dd></dl>
 
 <dl class="py function">
+<dt class="sig sig-object py" id="fewtrax.utils.geodesic.ellipk_agm">
+<span class="sig-prename descclassname"><span class="pre">fewtrax.utils.geodesic.</span></span><span class="sig-name descname"><span class="pre">ellipk_agm</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">m</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/fewtrax/utils/geodesic.html#ellipk_agm"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#fewtrax.utils.geodesic.ellipk_agm" title="Link to this definition"></a></dt>
+<dd><p>Complete elliptic integral K(m) via the AGM algorithm.</p>
+<p>Uses <span class="math notranslate nohighlight">\(K(m) = \pi / (2\,\mathrm{AGM}(1, \sqrt{1-m}))\)</span>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>m</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Parameter (square of the modulus), <span class="math notranslate nohighlight">\(0 \le m &lt; 1\)</span>.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><span class="math notranslate nohighlight">\(K(m)\)</span>.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="fewtrax.utils.geodesic.ellipe_agm">
+<span class="sig-prename descclassname"><span class="pre">fewtrax.utils.geodesic.</span></span><span class="sig-name descname"><span class="pre">ellipe_agm</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">m</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/fewtrax/utils/geodesic.html#ellipe_agm"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#fewtrax.utils.geodesic.ellipe_agm" title="Link to this definition"></a></dt>
+<dd><p>Complete elliptic integral E(m) via the AGM / Borwein algorithm.</p>
+<p>Uses the identity
+<span class="math notranslate nohighlight">\(E(m) = K(m)\bigl(1 - \sum_{n \ge 0} 2^{n-1} c_n^2\bigr)\)</span>
+where <span class="math notranslate nohighlight">\(c_n\)</span> are the AGM correction terms.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>m</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Parameter, <span class="math notranslate nohighlight">\(0 \le m &lt; 1\)</span>.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><span class="math notranslate nohighlight">\(E(m)\)</span>.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="fewtrax.utils.geodesic.ellip_pi_fast">
+<span class="sig-prename descclassname"><span class="pre">fewtrax.utils.geodesic.</span></span><span class="sig-name descname"><span class="pre">ellip_pi_fast</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">n</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">k</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/fewtrax/utils/geodesic.html#ellip_pi_fast"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#fewtrax.utils.geodesic.ellip_pi_fast" title="Link to this definition"></a></dt>
+<dd><p>Complete elliptic integral Π(n, k) via 24-point GL quadrature.</p>
+<p>Approximately 2.5× faster than <a class="reference internal" href="#fewtrax.utils.geodesic.ellip_pi" title="fewtrax.utils.geodesic.ellip_pi"><code class="xref py py-func docutils literal notranslate"><span class="pre">ellip_pi()</span></code></a> (64-point version)
+with ~1e-12 accuracy for the smooth integrands of bound EMRI orbits.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>n</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Characteristic parameter, <span class="math notranslate nohighlight">\(n &lt; 1\)</span>.</p></li>
+<li><p><strong>k</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Modulus, <span class="math notranslate nohighlight">\(0 \le k &lt; 1\)</span>.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><span class="math notranslate nohighlight">\(\Pi(n, k)\)</span>.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
 <dt class="sig sig-object py" id="fewtrax.utils.geodesic.kerr_geo_energy_equatorial">
 <span class="sig-prename descclassname"><span class="pre">fewtrax.utils.geodesic.</span></span><span class="sig-name descname"><span class="pre">kerr_geo_energy_equatorial</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">a</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">p</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">e</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/fewtrax/utils/geodesic.html#kerr_geo_energy_equatorial"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#fewtrax.utils.geodesic.kerr_geo_energy_equatorial" title="Link to this definition"></a></dt>
 <dd><p>Orbital energy <span class="math notranslate nohighlight">\(E\)</span> for an equatorial Kerr geodesic.</p>
@@ -1087,6 +1182,30 @@ found as the root of a polynomial (Glampedakis &amp; Kennefick 2002).</p>
 </dd></dl>
 
 <dl class="py function">
+<dt class="sig sig-object py" id="fewtrax.utils.geodesic.get_separatrix_fast">
+<span class="sig-prename descclassname"><span class="pre">fewtrax.utils.geodesic.</span></span><span class="sig-name descname"><span class="pre">get_separatrix_fast</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">a</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">e</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/fewtrax/utils/geodesic.html#get_separatrix_fast"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#fewtrax.utils.geodesic.get_separatrix_fast" title="Link to this definition"></a></dt>
+<dd><p>Fast separatrix via Newton-Raphson (replaces 50-step bisection).</p>
+<p>Identical interface to <a class="reference internal" href="#fewtrax.utils.geodesic.get_separatrix" title="fewtrax.utils.geodesic.get_separatrix"><code class="xref py py-func docutils literal notranslate"><span class="pre">get_separatrix()</span></code></a>; uses <code class="xref py py-data docutils literal notranslate"><span class="pre">_N_NR</span></code>
+Newton-Raphson iterations instead of binary search.  Roughly 4–5×
+faster for typical EMRI parameter ranges.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>a</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – BH spin, eccentricity, inclination sign (±1).</p></li>
+<li><p><strong>e</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – BH spin, eccentricity, inclination sign (±1).</p></li>
+<li><p><strong>x</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – BH spin, eccentricity, inclination sign (±1).</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><span class="math notranslate nohighlight">\(p_{\rm sep}\)</span>.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
 <dt class="sig sig-object py" id="fewtrax.utils.geodesic.get_fundamental_frequencies">
 <span class="sig-prename descclassname"><span class="pre">fewtrax.utils.geodesic.</span></span><span class="sig-name descname"><span class="pre">get_fundamental_frequencies</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">a</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">p</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">e</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/fewtrax/utils/geodesic.html#get_fundamental_frequencies"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#fewtrax.utils.geodesic.get_fundamental_frequencies" title="Link to this definition"></a></dt>
 <dd><p>Boyer-Lindquist fundamental frequencies for an equatorial Kerr geodesic.</p>
@@ -1101,6 +1220,31 @@ found as the root of a polynomial (Glampedakis &amp; Kennefick 2002).</p>
 <li><p><strong>p</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Semi-latus rectum in units of <span class="math notranslate nohighlight">\(M\)</span>.</p></li>
 <li><p><strong>e</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Eccentricity.</p></li>
 <li><p><strong>x</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Cosine of inclination (<span class="math notranslate nohighlight">\(\pm 1\)</span> for equatorial).</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><span class="math notranslate nohighlight">\((\Omega_\phi, \Omega_\theta, \Omega_r)\)</span>.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">tuple</span></code>[<code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code>, <code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code>, <code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code>]</span></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="fewtrax.utils.geodesic.get_fundamental_frequencies_fast">
+<span class="sig-prename descclassname"><span class="pre">fewtrax.utils.geodesic.</span></span><span class="sig-name descname"><span class="pre">get_fundamental_frequencies_fast</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">a</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">p</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">e</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/fewtrax/utils/geodesic.html#get_fundamental_frequencies_fast"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#fewtrax.utils.geodesic.get_fundamental_frequencies_fast" title="Link to this definition"></a></dt>
+<dd><p>Boyer-Lindquist fundamental frequencies using fast elliptic integrals.</p>
+<p>Identical interface to <a class="reference internal" href="#fewtrax.utils.geodesic.get_fundamental_frequencies" title="fewtrax.utils.geodesic.get_fundamental_frequencies"><code class="xref py py-func docutils literal notranslate"><span class="pre">get_fundamental_frequencies()</span></code></a>; uses
+<a class="reference internal" href="#fewtrax.utils.geodesic.ellipk_agm" title="fewtrax.utils.geodesic.ellipk_agm"><code class="xref py py-func docutils literal notranslate"><span class="pre">ellipk_agm()</span></code></a>, <a class="reference internal" href="#fewtrax.utils.geodesic.ellipe_agm" title="fewtrax.utils.geodesic.ellipe_agm"><code class="xref py py-func docutils literal notranslate"><span class="pre">ellipe_agm()</span></code></a>, and <a class="reference internal" href="#fewtrax.utils.geodesic.ellip_pi_fast" title="fewtrax.utils.geodesic.ellip_pi_fast"><code class="xref py py-func docutils literal notranslate"><span class="pre">ellip_pi_fast()</span></code></a>
+instead of the 64-point GL versions.  Roughly 3–4× faster.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>a</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Spin, semi-latus rectum, eccentricity, inclination sign.</p></li>
+<li><p><strong>p</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Spin, semi-latus rectum, eccentricity, inclination sign.</p></li>
+<li><p><strong>e</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Spin, semi-latus rectum, eccentricity, inclination sign.</p></li>
+<li><p><strong>x</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Spin, semi-latus rectum, eccentricity, inclination sign.</p></li>
 </ul>
 </dd>
 <dt class="field-even">Returns<span class="colon">:</span></dt>
@@ -1184,7 +1328,7 @@ conjugate term in the summation.</p>
            </div>
           </div>
           <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
-        <a href="examples.html" class="btn btn-neutral float-left" title="Examples" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="notebooks/06_jax_features.html" class="btn btn-neutral float-left" title="06 — JAX Features: JIT, vmap, and Autodiff" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
     </div>
 
   <hr/>

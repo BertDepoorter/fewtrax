@@ -50,7 +50,7 @@
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Tutorials</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="../../../examples.html">Examples</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../examples.html">Tutorials</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Reference</span></p>
 <ul>
@@ -121,7 +121,7 @@
 <span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">equinox</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">eqx</span>
 
-<span class="kn">from</span><span class="w"> </span><span class="nn">fewtrax.utils.splines</span><span class="w"> </span><span class="kn">import</span> <span class="n">CubicSpline3D</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">fewtrax.utils.splines</span><span class="w"> </span><span class="kn">import</span> <span class="n">CubicSpline3D</span><span class="p">,</span> <span class="n">TricubicSplineE3</span>
 
 <span class="n">log</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
 
@@ -281,17 +281,18 @@
 
 <span class="sd">    Attributes</span>
 <span class="sd">    ----------</span>
-<span class="sd">    pdot_A, edot_A : CubicSpline3D</span>
+<span class="sd">    pdot_A, edot_A : TricubicSplineE3</span>
 <span class="sd">        Semi-latus rectum and eccentricity rate ratio interpolators for</span>
 <span class="sd">        Region A.  Inputs are normalised coordinates (u, w, z) ∈ [0, 1]³.</span>
-<span class="sd">    pdot_B, edot_B : CubicSpline3D</span>
+<span class="sd">        Uses E(3) / not-a-knot boundary conditions (matching FEW exactly).</span>
+<span class="sd">    pdot_B, edot_B : TricubicSplineE3</span>
 <span class="sd">        Same for Region B.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
-    <span class="n">pdot_A</span><span class="p">:</span> <span class="n">CubicSpline3D</span>
-    <span class="n">edot_A</span><span class="p">:</span> <span class="n">CubicSpline3D</span>
-    <span class="n">pdot_B</span><span class="p">:</span> <span class="n">CubicSpline3D</span>
-    <span class="n">edot_B</span><span class="p">:</span> <span class="n">CubicSpline3D</span></div>
+    <span class="n">pdot_A</span><span class="p">:</span> <span class="n">TricubicSplineE3</span>
+    <span class="n">edot_A</span><span class="p">:</span> <span class="n">TricubicSplineE3</span>
+    <span class="n">pdot_B</span><span class="p">:</span> <span class="n">TricubicSplineE3</span>
+    <span class="n">edot_B</span><span class="p">:</span> <span class="n">TricubicSplineE3</span></div>
 
 
 
@@ -455,7 +456,6 @@
 <span class="k">def</span><span class="w"> </span><span class="nf">load_flux_data</span><span class="p">(</span>
     <span class="n">data_dir</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span> <span class="o">|</span> <span class="n">Path</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="n">downsample</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">list</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-    <span class="n">densify_factor</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">FluxData</span><span class="p">:</span>
 <span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;Load Kerr eccentric equatorial flux data in pex convention.</span>
 
@@ -463,26 +463,20 @@
 <span class="sd">    analytical Kerr Jacobian, then normalises by the separatrix-dependent PN</span>
 <span class="sd">    functions to obtain dimensionless ratios ṗ/ṗ_PN and ė/ė_PN.</span>
 
-<span class="sd">    By default the pex-ratio grids are densified by ``densify_factor`` (default</span>
-<span class="sd">    3) using E(3) cubic splines from ``multispline`` before being stored in</span>
-<span class="sd">    JAX ``interpax`` C² splines.  This eliminates the ~1.6e-6 relative</span>
-<span class="sd">    interpolation error that would otherwise accumulate as a phase drift of</span>
-<span class="sd">    ~2.6 rad yr⁻¹, causing the waveform overlap to collapse for T ≳ 0.1 yr.</span>
+<span class="sd">    The pex-ratio grids are stored as :class:`~fewtrax.utils.splines.TricubicSplineE3`</span>
+<span class="sd">    instances using E(3) / not-a-knot boundary conditions, matching FEW&#39;s</span>
+<span class="sd">    ``multispline.TricubicSpline`` convention exactly.  This eliminates the</span>
+<span class="sd">    systematic boundary-condition interpolation error that previously accumulated</span>
+<span class="sd">    as a ~2.6 rad yr⁻¹ phase drift at high eccentricity / high spin.</span>
 
 <span class="sd">    Parameters</span>
 <span class="sd">    ----------</span>
 <span class="sd">    data_dir : str or Path, optional</span>
 <span class="sd">        Directory containing ``KerrEccEqFluxData.h5``.</span>
 <span class="sd">    downsample : list of two 3-tuples, optional</span>
-<span class="sd">        ``[(dU_A, dW_A, dZ_A), (dU_B, dW_B, dZ_B)]`` downsampling factors</span>
-<span class="sd">        applied before densification.  Default ``[(1,1,1),(1,1,1)]`` keeps</span>
-<span class="sd">        the full grid.</span>
-<span class="sd">    densify_factor : int, optional</span>
-<span class="sd">        Grid densification factor applied after ELQ→pex conversion.</span>
-<span class="sd">        ``densify_factor=3`` (default) inserts 2 extra points between every</span>
-<span class="sd">        original grid point in each dimension, reducing the C²-vs-E(3)</span>
-<span class="sd">        boundary-condition interpolation error by ~(1/3)⁴ ≈ 80×.</span>
-<span class="sd">        Set to 1 to skip densification.</span>
+<span class="sd">        ``[(dU_A, dW_A, dZ_A), (dU_B, dW_B, dZ_B)]`` downsampling factors.</span>
+<span class="sd">        Default ``[(1,1,1),(1,1,1)]`` keeps the full grid.  Useful for</span>
+<span class="sd">        convergence testing; do not use in production.</span>
 
 <span class="sd">    Returns</span>
 <span class="sd">    -------</span>
@@ -568,23 +562,12 @@
     <span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Computing pex convention for Region B …&quot;</span><span class="p">)</span>
     <span class="n">rp_B</span><span class="p">,</span> <span class="n">re_B</span> <span class="o">=</span> <span class="n">_pex_normalise</span><span class="p">(</span><span class="n">u_B</span><span class="p">,</span> <span class="n">w_B</span><span class="p">,</span> <span class="n">z_B</span><span class="p">,</span> <span class="n">Edot_B</span><span class="p">,</span> <span class="n">Ldot_B</span><span class="p">,</span> <span class="kc">False</span><span class="p">)</span>
 
-    <span class="k">if</span> <span class="n">densify_factor</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
-        <span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
-            <span class="s2">&quot;Densifying flux grids by factor </span><span class="si">%d</span><span class="s2"> using E(3) cubic splines …&quot;</span><span class="p">,</span>
-            <span class="n">densify_factor</span><span class="p">,</span>
-        <span class="p">)</span>
-        <span class="n">u_A</span><span class="p">,</span> <span class="n">w_A</span><span class="p">,</span> <span class="n">z_A</span><span class="p">,</span> <span class="n">rp_A</span><span class="p">,</span> <span class="n">re_A</span> <span class="o">=</span> <span class="n">_densify_grid</span><span class="p">(</span><span class="n">u_A</span><span class="p">,</span> <span class="n">w_A</span><span class="p">,</span> <span class="n">z_A</span><span class="p">,</span> <span class="n">rp_A</span><span class="p">,</span> <span class="n">re_A</span><span class="p">,</span> <span class="n">densify_factor</span><span class="p">)</span>
-        <span class="n">u_B</span><span class="p">,</span> <span class="n">w_B</span><span class="p">,</span> <span class="n">z_B</span><span class="p">,</span> <span class="n">rp_B</span><span class="p">,</span> <span class="n">re_B</span> <span class="o">=</span> <span class="n">_densify_grid</span><span class="p">(</span><span class="n">u_B</span><span class="p">,</span> <span class="n">w_B</span><span class="p">,</span> <span class="n">z_B</span><span class="p">,</span> <span class="n">rp_B</span><span class="p">,</span> <span class="n">re_B</span><span class="p">,</span> <span class="n">densify_factor</span><span class="p">)</span>
-        <span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
-            <span class="s2">&quot;Dense grids — Region A: (</span><span class="si">%d</span><span class="s2">, </span><span class="si">%d</span><span class="s2">, </span><span class="si">%d</span><span class="s2">),  Region B: (</span><span class="si">%d</span><span class="s2">, </span><span class="si">%d</span><span class="s2">, </span><span class="si">%d</span><span class="s2">)&quot;</span><span class="p">,</span>
-            <span class="n">u_A</span><span class="o">.</span><span class="n">size</span><span class="p">,</span> <span class="n">w_A</span><span class="o">.</span><span class="n">size</span><span class="p">,</span> <span class="n">z_A</span><span class="o">.</span><span class="n">size</span><span class="p">,</span> <span class="n">u_B</span><span class="o">.</span><span class="n">size</span><span class="p">,</span> <span class="n">w_B</span><span class="o">.</span><span class="n">size</span><span class="p">,</span> <span class="n">z_B</span><span class="o">.</span><span class="n">size</span><span class="p">,</span>
-        <span class="p">)</span>
-
+    <span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Building E(3) tricubic splines (matching FEW convention) …&quot;</span><span class="p">)</span>
     <span class="k">return</span> <span class="n">FluxData</span><span class="p">(</span>
-        <span class="n">pdot_A</span><span class="o">=</span><span class="n">CubicSpline3D</span><span class="p">(</span><span class="n">u_A</span><span class="p">,</span> <span class="n">w_A</span><span class="p">,</span> <span class="n">z_A</span><span class="p">,</span> <span class="n">rp_A</span><span class="p">),</span>
-        <span class="n">edot_A</span><span class="o">=</span><span class="n">CubicSpline3D</span><span class="p">(</span><span class="n">u_A</span><span class="p">,</span> <span class="n">w_A</span><span class="p">,</span> <span class="n">z_A</span><span class="p">,</span> <span class="n">re_A</span><span class="p">),</span>
-        <span class="n">pdot_B</span><span class="o">=</span><span class="n">CubicSpline3D</span><span class="p">(</span><span class="n">u_B</span><span class="p">,</span> <span class="n">w_B</span><span class="p">,</span> <span class="n">z_B</span><span class="p">,</span> <span class="n">rp_B</span><span class="p">),</span>
-        <span class="n">edot_B</span><span class="o">=</span><span class="n">CubicSpline3D</span><span class="p">(</span><span class="n">u_B</span><span class="p">,</span> <span class="n">w_B</span><span class="p">,</span> <span class="n">z_B</span><span class="p">,</span> <span class="n">re_B</span><span class="p">),</span>
+        <span class="n">pdot_A</span><span class="o">=</span><span class="n">TricubicSplineE3</span><span class="o">.</span><span class="n">from_multispline</span><span class="p">(</span><span class="n">u_A</span><span class="p">,</span> <span class="n">w_A</span><span class="p">,</span> <span class="n">z_A</span><span class="p">,</span> <span class="n">rp_A</span><span class="p">),</span>
+        <span class="n">edot_A</span><span class="o">=</span><span class="n">TricubicSplineE3</span><span class="o">.</span><span class="n">from_multispline</span><span class="p">(</span><span class="n">u_A</span><span class="p">,</span> <span class="n">w_A</span><span class="p">,</span> <span class="n">z_A</span><span class="p">,</span> <span class="n">re_A</span><span class="p">),</span>
+        <span class="n">pdot_B</span><span class="o">=</span><span class="n">TricubicSplineE3</span><span class="o">.</span><span class="n">from_multispline</span><span class="p">(</span><span class="n">u_B</span><span class="p">,</span> <span class="n">w_B</span><span class="p">,</span> <span class="n">z_B</span><span class="p">,</span> <span class="n">rp_B</span><span class="p">),</span>
+        <span class="n">edot_B</span><span class="o">=</span><span class="n">TricubicSplineE3</span><span class="o">.</span><span class="n">from_multispline</span><span class="p">(</span><span class="n">u_B</span><span class="p">,</span> <span class="n">w_B</span><span class="p">,</span> <span class="n">z_B</span><span class="p">,</span> <span class="n">re_B</span><span class="p">),</span>
     <span class="p">)</span></div>
 
 

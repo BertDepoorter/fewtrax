@@ -6,7 +6,7 @@
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Examples &mdash; fewtrax 0.1.0 documentation</title>
+  <title>Tutorials &mdash; fewtrax 0.1.0 documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
       <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=9edc463e" />
 
@@ -16,11 +16,12 @@
       <script src="_static/documentation_options.js?v=01f34227"></script>
       <script src="_static/doctools.js?v=fd6eb6e6"></script>
       <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+      <script>window.MathJax = {"tex": {"inlineMath": [["$", "$"], ["\\(", "\\)"]], "processEscapes": true}, "options": {"ignoreHtmlClass": "tex2jax_ignore|mathjax_ignore|document", "processHtmlClass": "tex2jax_process|mathjax_process|math|output_area"}}</script>
       <script defer="defer" src="https://cdn.jsdelivr.net/npm/mathjax@4/tex-mml-chtml.js"></script>
     <script src="_static/js/theme.js"></script>
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
-    <link rel="next" title="API Reference" href="api.html" />
+    <link rel="next" title="01 — Kerr Geodesics" href="notebooks/01_kerr_geodesics.html" />
     <link rel="prev" title="Mathematical Background" href="math_background.html" /> 
 </head>
 
@@ -54,9 +55,17 @@
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Tutorials</span></p>
 <ul class="current">
-<li class="toctree-l1 current"><a class="current reference internal" href="#">Examples</a><ul>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Tutorials</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="notebooks/01_kerr_geodesics.html">01 — Kerr Geodesics</a></li>
+<li class="toctree-l2"><a class="reference internal" href="notebooks/02_emri_trajectory.html">02 — EMRI Trajectory Integration</a></li>
+<li class="toctree-l2"><a class="reference internal" href="notebooks/03_amplitude_interpolation.html">03 — Teukolsky Amplitude Interpolation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="notebooks/04_mode_summation.html">04 — Mode Summation and Harmonic Decomposition</a></li>
+<li class="toctree-l2"><a class="reference internal" href="notebooks/05_full_waveform.html">05 — Full EMRI Waveform Generation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="notebooks/06_jax_features.html">06 — JAX Features: JIT, vmap, and Autodiff</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#notebook-descriptions">Notebook descriptions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#running-locally">Running locally</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#pre-executing-notebooks-for-the-docs">Pre-executing notebooks for the docs</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#standalone-quickstart-script">Standalone quickstart script</a></li>
-<li class="toctree-l2"><a class="reference internal" href="#running-the-notebooks">Running the notebooks</a></li>
 </ul>
 </li>
 </ul>
@@ -79,7 +88,7 @@
           <div role="navigation" aria-label="Page navigation">
   <ul class="wy-breadcrumbs">
       <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
-      <li class="breadcrumb-item active">Examples</li>
+      <li class="breadcrumb-item active">Tutorials</li>
       <li class="wy-breadcrumbs-aside">
             <a href="_sources/examples.rst.txt" rel="nofollow"> View page source</a>
       </li>
@@ -89,14 +98,33 @@
           <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
            <div itemprop="articleBody">
              
-  <section id="examples">
-<h1>Examples<a class="headerlink" href="#examples" title="Link to this heading"></a></h1>
-<p>The <code class="docutils literal notranslate"><span class="pre">examples/</span></code> directory contains Jupyter notebooks and a standalone script
-that demonstrate each component of fewtrax.</p>
+  <section id="tutorials">
+<h1>Tutorials<a class="headerlink" href="#tutorials" title="Link to this heading"></a></h1>
+<p>The following Jupyter notebooks walk through each component of fewtrax, with
+all code cells pre-executed and output visible inline.  They are rendered here
+via <a class="reference external" href="https://nbsphinx.readthedocs.io">nbsphinx</a>.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>All notebooks call <code class="docutils literal notranslate"><span class="pre">jax.config.update(&quot;jax_enable_x64&quot;,</span> <span class="pre">True)</span></code> at the
+top.  This <strong>must</strong> be done before importing any fewtrax module.</p>
+</div>
+<div class="toctree-wrapper compound">
+<p class="caption" role="heading"><span class="caption-text">Notebook tutorials</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="notebooks/01_kerr_geodesics.html">01 — Kerr Geodesics</a></li>
+<li class="toctree-l1"><a class="reference internal" href="notebooks/02_emri_trajectory.html">02 — EMRI Trajectory Integration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="notebooks/03_amplitude_interpolation.html">03 — Teukolsky Amplitude Interpolation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="notebooks/04_mode_summation.html">04 — Mode Summation and Harmonic Decomposition</a></li>
+<li class="toctree-l1"><a class="reference internal" href="notebooks/05_full_waveform.html">05 — Full EMRI Waveform Generation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="notebooks/06_jax_features.html">06 — JAX Features: JIT, vmap, and Autodiff</a></li>
+</ul>
+</div>
+<section id="notebook-descriptions">
+<h2>Notebook descriptions<a class="headerlink" href="#notebook-descriptions" title="Link to this heading"></a></h2>
 <table class="docutils align-default">
 <colgroup>
-<col style="width: 20.0%" />
-<col style="width: 80.0%" />
+<col style="width: 21.1%" />
+<col style="width: 78.9%" />
 </colgroup>
 <thead>
 <tr class="row-odd"><th class="head"><p>Notebook</p></th>
@@ -104,60 +132,63 @@ that demonstrate each component of fewtrax.</p>
 </tr>
 </thead>
 <tbody>
-<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">01_kerr_geodesics.ipynb</span></code></p></td>
-<td><p>Computing Kerr geodesic frequencies and the separatrix</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="notebooks/01_kerr_geodesics.html"><span class="doc">01 — Kerr geodesics</span></a></p></td>
+<td><p>Computing Boyer-Lindquist frequencies <span class="math notranslate nohighlight">\(\Omega_\phi, \Omega_\theta, \Omega_r\)</span>
+and the separatrix <span class="math notranslate nohighlight">\(p_{\rm sep}(a, e)\)</span> for equatorial orbits.</p></td>
 </tr>
-<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">02_emri_trajectory.ipynb</span></code></p></td>
-<td><p>Integrating the adiabatic inspiral ODE and visualising the orbital evolution</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="notebooks/02_emri_trajectory.html"><span class="doc">02 — EMRI trajectory</span></a></p></td>
+<td><p>Integrating the adiabatic inspiral ODE and visualising how <span class="math notranslate nohighlight">\((p, e)\)</span>
+and the orbital phases evolve toward the separatrix.</p></td>
 </tr>
-<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">03_amplitude_interpolation.ipynb</span></code></p></td>
-<td><p>Loading and B-spline interpolating Teukolsky mode amplitudes</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="notebooks/03_amplitude_interpolation.html"><span class="doc">03 — Amplitude interpolation</span></a></p></td>
+<td><p>Loading and evaluating the Teukolsky mode amplitude B-splines as a
+function of orbital parameters.</p></td>
 </tr>
-<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">04_mode_summation.ipynb</span></code></p></td>
-<td><p>Coherent harmonic mode summation and mode selection</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="notebooks/04_mode_summation.html"><span class="doc">04 — Mode summation</span></a></p></td>
+<td><p>Coherent harmonic mode summation; choosing which <span class="math notranslate nohighlight">\((l,m,k,n)\)</span> modes
+contribute more than a given fractional threshold.</p></td>
 </tr>
-<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">05_full_waveform.ipynb</span></code></p></td>
-<td><p>End-to-end waveform generation, time and frequency domain analysis</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="notebooks/05_full_waveform.html"><span class="doc">05 — Full waveform</span></a></p></td>
+<td><p>End-to-end waveform generation, time-domain and frequency-domain analysis,
+and comparison with the FEW reference implementation.</p></td>
 </tr>
-<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">06_jax_features.ipynb</span></code></p></td>
-<td><p>JIT compilation, automatic differentiation, and <code class="docutils literal notranslate"><span class="pre">vmap</span></code> batching</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="notebooks/06_jax_features.html"><span class="doc">06 — JAX features</span></a></p></td>
+<td><p>JIT compilation, automatic differentiation (<code class="docutils literal notranslate"><span class="pre">jax.grad</span></code>), and batched
+parameter sweeps with <code class="docutils literal notranslate"><span class="pre">jax.vmap</span></code>.</p></td>
 </tr>
 </tbody>
 </table>
-<section id="standalone-quickstart-script">
-<h2>Standalone quickstart script<a class="headerlink" href="#standalone-quickstart-script" title="Link to this heading"></a></h2>
-<p><code class="docutils literal notranslate"><span class="pre">examples/quickstart.py</span></code> is a self-contained script covering the complete
-workflow:</p>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Pass the FEW data directory as an argument</span>
-python<span class="w"> </span>examples/quickstart.py<span class="w"> </span>/path/to/few/data
-
-<span class="c1"># Or set the environment variable</span>
-<span class="nb">export</span><span class="w"> </span><span class="nv">FEW_DATA_DIR</span><span class="o">=</span>/path/to/few/data
-python<span class="w"> </span>examples/quickstart.py
-</pre></div>
-</div>
-<p>The script demonstrates:</p>
-<ol class="arabic simple">
-<li><p>Building the waveform generator</p></li>
-<li><p>Defining source parameters</p></li>
-<li><p>Generating <span class="math notranslate nohighlight">\(h_+\)</span> and <span class="math notranslate nohighlight">\(h_\times\)</span></p></li>
-<li><p>Computing the frequency-domain strain</p></li>
-<li><p>Extracting harmonic frequency tracks</p></li>
-<li><p>Computing a gradient via <code class="docutils literal notranslate"><span class="pre">jax.grad</span></code></p></li>
-<li><p>Plotting all results with matplotlib</p></li>
-</ol>
 </section>
-<section id="running-the-notebooks">
-<h2>Running the notebooks<a class="headerlink" href="#running-the-notebooks" title="Link to this heading"></a></h2>
+<section id="running-locally">
+<h2>Running locally<a class="headerlink" href="#running-locally" title="Link to this heading"></a></h2>
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot;fewtrax[dev]&quot;</span><span class="w">   </span><span class="c1"># installs jupyter and matplotlib</span>
 jupyter<span class="w"> </span>notebook<span class="w"> </span>examples/
 </pre></div>
 </div>
-<div class="admonition note">
-<p class="admonition-title">Note</p>
-<p>All notebooks and the quickstart script call
-<code class="docutils literal notranslate"><span class="pre">jax.config.update(&quot;jax_enable_x64&quot;,</span> <span class="pre">True)</span></code> at the top.  This must be
-done <strong>before</strong> importing any fewtrax module.</p>
+</section>
+<section id="pre-executing-notebooks-for-the-docs">
+<h2>Pre-executing notebooks for the docs<a class="headerlink" href="#pre-executing-notebooks-for-the-docs" title="Link to this heading"></a></h2>
+<p>The docs build uses <code class="docutils literal notranslate"><span class="pre">nbsphinx_execute</span> <span class="pre">=</span> <span class="pre">&quot;never&quot;</span></code>, meaning that notebooks
+must be <strong>committed with output already saved</strong>.  To regenerate output:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Execute all notebooks in-place (requires FEW data files)</span>
+jupyter<span class="w"> </span>nbconvert<span class="w"> </span>--to<span class="w"> </span>notebook<span class="w"> </span>--execute<span class="w"> </span>--inplace<span class="w"> </span>examples/*.ipynb
+
+<span class="c1"># Then rebuild the docs</span>
+<span class="nb">cd</span><span class="w"> </span>docs<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>make<span class="w"> </span>html
+</pre></div>
+</div>
+<p>This separates the (potentially slow, data-dependent) execution from the
+(fast, portable) HTML build.  On ReadTheDocs the notebooks are therefore
+rendered from the committed output cells without requiring the FEW HDF5 data
+files to be present on the build server.</p>
+</section>
+<section id="standalone-quickstart-script">
+<h2>Standalone quickstart script<a class="headerlink" href="#standalone-quickstart-script" title="Link to this heading"></a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">examples/quickstart.py</span></code> is a self-contained script covering the complete
+workflow without Jupyter:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nb">export</span><span class="w"> </span><span class="nv">FEW_DATA_DIR</span><span class="o">=</span>/path/to/few/data
+python<span class="w"> </span>examples/quickstart.py
+</pre></div>
 </div>
 </section>
 </section>
@@ -167,7 +198,7 @@ done <strong>before</strong> importing any fewtrax module.</p>
           </div>
           <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
         <a href="math_background.html" class="btn btn-neutral float-left" title="Mathematical Background" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
-        <a href="api.html" class="btn btn-neutral float-right" title="API Reference" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+        <a href="notebooks/01_kerr_geodesics.html" class="btn btn-neutral float-right" title="01 — Kerr Geodesics" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
     </div>
 
   <hr/>

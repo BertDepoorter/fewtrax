@@ -1,0 +1,400 @@
+{
+ "cells": [
+  {
+   "cell_type": "markdown",
+   "id": "cell-0",
+   "metadata": {},
+   "source": [
+    "# 06 — JAX Features: JIT, vmap, and Autodiff\n",
+    "\n",
+    "This notebook explores the JAX-specific capabilities of `fewtrax` that distinguish it from a standard NumPy/SciPy EMRI implementation.\n",
+    "\n",
+    "**Topics:**\n",
+    "- JIT compilation with `eqx.filter_jit` — first-call overhead vs. subsequent speed\n",
+    "- `jax.vmap` — batching waveform generation over parameter arrays\n",
+    "- `jax.grad` and `jax.jacobian` — differentiating through the trajectory ODE\n",
+    "- Fisher matrix computation for parameter estimation\n",
+    "- Brief outlook: HMC/NUTS sampling with `blackjax`\n",
+    "\n",
+    "---\n",
+    "\n",
+    "## Why JAX?\n",
+    "\n",
+    "The EMRI waveform pipeline has three computationally intensive stages:\n",
+    "\n",
+    "| Stage | fewtrax implementation | JAX benefit |\n",
+    "|---|---|---|\n",
+    "| Inspiral trajectory ODE | `diffrax` + `eqx.filter_jit` | JIT + GPU |\n",
+    "| Amplitude interpolation | `scipy.bisplev` (CPU loop) | *(currently CPU-only)* |\n",
+    "| Mode summation | `jax.numpy` matrix ops | JIT + GPU + vmap |\n",
+    "\n",
+    "The trajectory and summation stages are fully JAX-native and benefit from all four JAX function transformations: `jit`, `vmap`, `grad`, and `pmap`."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 1,
+   "id": "cell-1",
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "FEW_DATA_DIR = /Users/bertd/Documents/PhD/LISA/Codes/FastEMRIWaveforms/src/few/data\n",
+      "JAX version : 0.8.3\n",
+      "Default backend: cpu\n",
+      "Devices: [CpuDevice(id=0)]\n"
+     ]
+    }
+   ],
+   "source": [
+    "import os\n",
+    "import numpy as np\n",
+    "import matplotlib.pyplot as plt\n",
+    "import jax\n",
+    "import jax.numpy as jnp\n",
+    "import equinox as eqx\n",
+    "import time\n",
+    "\n",
+    "jax.config.update(\"jax_enable_x64\", True)\n",
+    "\n",
+    "from dotenv import load_dotenv\n",
+    "load_dotenv()\n",
+    "DATA_DIR = os.getenv(\"FEW_DATA_DIR\")\n",
+    "print(f\"FEW_DATA_DIR = {DATA_DIR}\")\n",
+    "\n",
+    "from fewtrax.data import load_flux_data\n",
+    "from fewtrax.trajectory import EMRIInspiral\n",
+    "\n",
+    "print(f\"JAX version : {jax.__version__}\")\n",
+    "print(f\"Default backend: {jax.default_backend()}\")\n",
+    "print(f\"Devices: {jax.devices()}\")"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "cell-2",
+   "metadata": {},
+   "source": [
+    "## 6.1  JIT Compilation\n",
+    "\n",
+    "JAX's JIT compiler traces Python functions into XLA computations on the first call (\"tracing overhead\"), then executes the compiled graph on all subsequent calls.\n",
+    "\n",
+    "For `fewtrax`, the inspiral ODE is wrapped with `eqx.filter_jit` — an Equinox-aware JIT that handles `eqx.Module` pytrees (like `EMRIInspiral`) without re-tracing when only numeric values change.\n",
+    "\n",
+    "The key distinction:\n",
+    "- **Static arguments** (array shapes, control flow structure) trigger recompilation if changed\n",
+    "- **Dynamic arguments** (numeric parameter values like `p0`, `e0`, `a`) never trigger recompilation"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "cell-3",
+   "metadata": {},
+   "outputs": [],
+   "source": "flux_data = load_flux_data(DATA_DIR)\n\ninspiral = EMRIInspiral(flux_data)\n\n# --- First call: traces + compiles + executes ---\nt0 = time.perf_counter()\nt1, p1, e1, Pphi1, Pth1, Pr1 = inspiral(p0=12.0, e0=0.4, a=0.7, M=1e6, mu=10.0, T=0.5, dense_steps=150)\n# Block until computation is complete\n_ = p1.block_until_ready()\nfirst_call = time.perf_counter() - t0\n\n# --- Second call: runs compiled code, different parameters ---\nt0 = time.perf_counter()\nt2, p2, e2, Pphi2, Pth2, Pr2 = inspiral(p0=10.0, e0=0.3, a=0.7, M=1e6, mu=10.0, T=0.5, dense_steps=150)\n_ = p2.block_until_ready()\nsecond_call = time.perf_counter() - t0\n\n# --- Third call ---\nt0 = time.perf_counter()\nt3, p3, e3, _, _, _ = inspiral(p0=14.0, e0=0.5, a=0.7, M=1e6, mu=10.0, T=0.5, dense_steps=150)\n_ = p3.block_until_ready()\nthird_call = time.perf_counter() - t0\n\nprint(f\"First  call (trace + compile): {first_call*1e3:.0f} ms\")\nprint(f\"Second call (compiled)       : {second_call*1e3:.1f} ms\")\nprint(f\"Third  call (compiled)       : {third_call*1e3:.1f} ms\")\nprint(f\"Speedup (1st → 2nd): {first_call/second_call:.0f}×\")"
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "cell-4",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Visualise the three trajectories\n",
+    "fig, axes = plt.subplots(1, 2, figsize=(12, 4))\n",
+    "\n",
+    "for (t_arr, p_arr, e_arr, lab) in [\n",
+    "    (t1, p1, e1, \"$p_0=12,\\,e_0=0.4$\"),\n",
+    "    (t2, p2, e2, \"$p_0=10,\\,e_0=0.3$\"),\n",
+    "    (t3, p3, e3, \"$p_0=14,\\,e_0=0.5$\"),\n",
+    "]:\n",
+    "    valid = ~jnp.isnan(p_arr)\n",
+    "    t_yr = jnp.asarray(t_arr)[valid] / (365.25 * 86400)\n",
+    "    axes[0].plot(t_yr, jnp.asarray(p_arr)[valid], label=lab)\n",
+    "    axes[1].plot(t_yr, jnp.asarray(e_arr)[valid], label=lab)\n",
+    "\n",
+    "axes[0].set_xlabel(\"Time [yr]\")\n",
+    "axes[0].set_ylabel(\"$p$ [$M$]\")\n",
+    "axes[0].set_title(\"Semi-latus rectum\")\n",
+    "axes[0].legend(fontsize=9)\n",
+    "\n",
+    "axes[1].set_xlabel(\"Time [yr]\")\n",
+    "axes[1].set_ylabel(\"$e$\")\n",
+    "axes[1].set_title(\"Eccentricity\")\n",
+    "axes[1].legend(fontsize=9)\n",
+    "\n",
+    "plt.suptitle(\"Three trajectories — all run with same compiled code\")\n",
+    "plt.tight_layout()\n",
+    "plt.show()"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "cell-5",
+   "metadata": {},
+   "source": [
+    "## 6.2  vmap: Batching Over Parameter Space\n",
+    "\n",
+    "`jax.vmap` vectorises a function along a batch axis without writing explicit loops.  For EMRI parameter estimation, the key use cases are:\n",
+    "\n",
+    "1. **Evaluating waveforms at a grid of parameter points** (for likelihood surfaces)\n",
+    "2. **Batching Fisher matrix columns** (computing all ∂h/∂θᵢ in one pass)\n",
+    "3. **Parallel MCMC chains** (each chain evaluates the waveform at a different point)\n",
+    "\n",
+    "### How vmap works\n",
+    "\n",
+    "```python\n",
+    "# Scalar function: scalar input → scalar output\n",
+    "f(x)  # x is a float\n",
+    "\n",
+    "# Batched version: vector input → vector output\n",
+    "jax.vmap(f)(xs)  # xs has shape (N,)\n",
+    "```\n",
+    "\n",
+    "Under the hood, vmap vectorises the XLA computation — it does NOT loop over the batch dimension.  On GPU this gives near-linear speedup with batch size."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "cell-6",
+   "metadata": {},
+   "outputs": [],
+   "source": "# Define a scalar function: (p0, e0) → final (p_end, e_end) after T=0.5 yr\ndef run_and_get_endpoint(p0: float, e0: float) -> jnp.ndarray:\n    \"\"\"Returns (p_end, e_end) at the end of the inspiral.\"\"\"\n    t_arr, p_arr, e_arr, _, _, _ = inspiral(p0=p0, e0=e0, a=0.7, M=1e6, mu=10.0, T=0.5)\n    valid_mask = ~jnp.isnan(p_arr)\n    n_valid = jnp.sum(valid_mask)\n    p_end = jnp.where(valid_mask, p_arr, jnp.nan)\n    e_end = jnp.where(valid_mask, e_arr, jnp.nan)\n    return jnp.array([jnp.nanmin(p_end), e_end[n_valid - 1]])\n\n# Batch over a grid of initial p0 values\np0_batch = jnp.linspace(10.0, 16.0, 8)\ne0_fixed = jnp.full(8, 0.4)\n\nbatched_run = eqx.filter_jit(jax.vmap(run_and_get_endpoint))\n\nt0 = time.perf_counter()\nendpoints = batched_run(p0_batch, e0_fixed)\n_ = endpoints.block_until_ready()\nbatch_first = time.perf_counter() - t0\n\nt0 = time.perf_counter()\nendpoints = batched_run(p0_batch, e0_fixed)\n_ = endpoints.block_until_ready()\nbatch_second = time.perf_counter() - t0\n\nprint(f\"Batch size: {len(p0_batch)}\")\nprint(f\"Batch first  call: {batch_first*1e3:.0f} ms\")\nprint(f\"Batch second call: {batch_second*1e3:.1f} ms\")\nprint(f\"Per-trajectory (compiled): {batch_second/len(p0_batch)*1e3:.2f} ms\")\nprint(f\"\\nEndpoints (p_end, e_end):\")\nfor i, p0 in enumerate(p0_batch):\n    print(f\"  p0={float(p0):.1f} → p_end={float(endpoints[i,0]):.3f}, e_end={float(endpoints[i,1]):.4f}\")"
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "cell-7",
+   "metadata": {},
+   "outputs": [],
+   "source": "def get_inspiral_duration(p0: float, e0: float) -> float:\n    \"\"\"Returns inspiral time in years.\"\"\"\n    t_arr, p_arr, e_arr, _, _, _ = inspiral(p0=p0, e0=e0, a=0.7, M=1e6, mu=10.0, T=2.0)\n    valid_mask = ~jnp.isnan(p_arr)\n    n_valid = jnp.sum(valid_mask)\n    t_end = t_arr[n_valid - 1]\n    return t_end / (365.25 * 86400)\n\np0_grid = jnp.linspace(10.0, 18.0, 10)\ne0_grid = jnp.linspace(0.05, 0.6, 10)\n\nP0, E0 = jnp.meshgrid(p0_grid, e0_grid, indexing=\"ij\")\np0_flat = P0.ravel()\ne0_flat = E0.ravel()\n\nbatched_duration = eqx.filter_jit(jax.vmap(get_inspiral_duration))\n\nprint(f\"Computing {len(p0_flat)} trajectories on a {len(p0_grid)}×{len(e0_grid)} grid…\")\nt0 = time.perf_counter()\ndurations_flat = batched_duration(p0_flat, e0_flat)\n_ = durations_flat.block_until_ready()\nelapsed = time.perf_counter() - t0\nprint(f\"Wall time (incl. JIT): {elapsed:.2f} s ({elapsed/len(p0_flat)*1e3:.0f} ms per trajectory)\")\n\nt0 = time.perf_counter()\ndurations_flat = batched_duration(p0_flat, e0_flat)\n_ = durations_flat.block_until_ready()\nelapsed2 = time.perf_counter() - t0\nprint(f\"Wall time (compiled) : {elapsed2:.2f} s ({elapsed2/len(p0_flat)*1e3:.1f} ms per trajectory)\")\n\ndurations_2d = np.asarray(durations_flat).reshape(len(p0_grid), len(e0_grid))\n\nfig, ax = plt.subplots(figsize=(8, 6))\nim = ax.pcolormesh(np.asarray(e0_grid), np.asarray(p0_grid), durations_2d, cmap=\"viridis\")\nplt.colorbar(im, ax=ax, label=\"Inspiral duration [yr]\")\nax.set_xlabel(\"Initial eccentricity $e_0$\")\nax.set_ylabel(\"Initial semi-latus rectum $p_0$ [$M$]\")\nax.set_title(\"EMRI inspiral duration ($M=10^6 M_\\\\odot$, $\\\\mu=10 M_\\\\odot$, $a=0.7$)\")\nplt.tight_layout()\nplt.show()"
+  },
+  {
+   "cell_type": "markdown",
+   "id": "cell-8",
+   "metadata": {},
+   "source": [
+    "## 6.3  Automatic Differentiation Through the Trajectory\n",
+    "\n",
+    "JAX's autodiff (`jax.grad`, `jax.jacfwd`, `jax.jacrev`) can differentiate through the entire `diffrax` ODE solver.  This is possible because:\n",
+    "\n",
+    "1. `diffrax` implements adjoint-method backpropagation through ODE solutions\n",
+    "2. All geodesic functions (`kerr_geo_energy_equatorial`, `get_separatrix`, etc.) use `jax.lax.fori_loop` with static loop bounds — the only AD-compatible loop primitive in JAX\n",
+    "3. All JAX operations (`jnp.where`, `jnp.linalg.solve`, etc.) are differentiable\n",
+    "\n",
+    "### Application: Sensitivity of orbital phase to initial conditions\n",
+    "\n",
+    "The quantity $\\partial \\Phi_\\phi / \\partial \\theta_i$ (gradient of accumulated orbital phase w.r.t. source parameters) is the central object in:\n",
+    "- **Fisher matrix** computations: $\\Gamma_{ij} = (\\partial_i h | \\partial_j h) / S_n$\n",
+    "- **Matched filtering**: detecting parameter offsets that cause phase mismatch\n",
+    "- **Gradient-based samplers**: HMC/NUTS requires $\\nabla \\log p(\\theta | d)$"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "cell-9",
+   "metadata": {},
+   "outputs": [],
+   "source": "def total_phase_phi(p0: float, e0: float) -> float:\n    \"\"\"Total accumulated azimuthal phase Φφ at end of inspiral.\"\"\"\n    t_arr, p_arr, e_arr, Phi_phi, _, _ = inspiral(p0=p0, e0=e0, a=0.7, M=1e6, mu=10.0, T=0.5)\n    valid_mask = ~jnp.isnan(p_arr)\n    n_valid = jnp.sum(valid_mask)\n    return Phi_phi[n_valid - 1]\n\ngrad_fn = eqx.filter_jit(jax.grad(total_phase_phi, argnums=(0, 1)))\n\np0_ref, e0_ref = 12.0, 0.4\n\nprint(\"Computing gradient of total phase Φφ w.r.t. initial conditions…\")\nt0 = time.perf_counter()\ndPhi_dp0, dPhi_de0 = grad_fn(jnp.float64(p0_ref), jnp.float64(e0_ref))\n_ = dPhi_dp0.block_until_ready()\nelapsed = time.perf_counter() - t0\n\nprint(f\"\\n∂Φφ/∂p0 = {float(dPhi_dp0):.4e}  (rad / M)\")\nprint(f\"∂Φφ/∂e0 = {float(dPhi_de0):.4e}  (rad / unit-e)\")\nprint(f\"\\nGradient computed in: {elapsed:.2f} s (first call includes JIT)\")\n\ndp = 0.01\nde = 0.001\n\nphi_ref = total_phase_phi(jnp.float64(p0_ref), jnp.float64(e0_ref))\nphi_p   = total_phase_phi(jnp.float64(p0_ref + dp), jnp.float64(e0_ref))\nphi_m   = total_phase_phi(jnp.float64(p0_ref - dp), jnp.float64(e0_ref))\nphi_ep  = total_phase_phi(jnp.float64(p0_ref), jnp.float64(e0_ref + de))\nphi_em  = total_phase_phi(jnp.float64(p0_ref), jnp.float64(e0_ref - de))\n\ndPhi_dp0_fd = float((phi_p - phi_m) / (2 * dp))\ndPhi_de0_fd = float((phi_ep - phi_em) / (2 * de))\n\nprint(f\"\\nFinite-difference cross-check:\")\nprint(f\"  ∂Φφ/∂p0: AD = {float(dPhi_dp0):.4e}, FD = {dPhi_dp0_fd:.4e}, \"\n      f\"err = {abs(float(dPhi_dp0) - dPhi_dp0_fd)/abs(dPhi_dp0_fd):.2e}\")\nprint(f\"  ∂Φφ/∂e0: AD = {float(dPhi_de0):.4e}, FD = {dPhi_de0_fd:.4e}, \"\n      f\"err = {abs(float(dPhi_de0) - dPhi_de0_fd)/abs(dPhi_de0_fd):.2e}\")"
+  },
+  {
+   "cell_type": "markdown",
+   "id": "cell-10",
+   "metadata": {},
+   "source": [
+    "## 6.4  Gradient as a Function of Parameters\n",
+    "\n",
+    "The gradient $\\partial \\Phi_\\phi / \\partial p_0$ measures how sensitively the final phase depends on the initial separation.  In gravitational-wave data analysis this directly sets the parameter estimation uncertainty:\n",
+    "\n",
+    "$$\n",
+    "\\sigma_{p_0} \\sim \\left( \\frac{1}{S_n} \\left| \\frac{\\partial h}{\\partial p_0} \\right|^2 \\right)^{-1/2}\n",
+    "\\approx \\left( \\frac{(\\mu/d_L)^2}{S_n} \\left| \\frac{\\partial \\Phi_\\phi}{\\partial p_0} \\right|^2 \\right)^{-1/2}\n",
+    "$$\n",
+    "\n",
+    "Let's map out how this gradient varies across parameter space."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "cell-11",
+   "metadata": {},
+   "outputs": [],
+   "source": "grad_p0_fn = eqx.filter_jit(jax.grad(total_phase_phi, argnums=0))\ngrad_e0_fn = eqx.filter_jit(jax.grad(total_phase_phi, argnums=1))\n\np0_vals = jnp.linspace(10.0, 16.0, 12)\ne0_vals = jnp.array([0.1, 0.3, 0.5])\n\nfig, axes = plt.subplots(1, 2, figsize=(12, 4))\n\nfor e0_v in e0_vals:\n    dp_grads = []\n    de_grads = []\n    for p0_v in p0_vals:\n        g_p = float(grad_p0_fn(jnp.float64(p0_v), jnp.float64(e0_v)))\n        g_e = float(grad_e0_fn(jnp.float64(p0_v), jnp.float64(e0_v)))\n        dp_grads.append(abs(g_p))\n        de_grads.append(abs(g_e))\n\n    axes[0].semilogy(np.asarray(p0_vals), dp_grads, \"o-\", label=f\"$e_0={float(e0_v):.1f}$\")\n    axes[1].semilogy(np.asarray(p0_vals), de_grads, \"o-\", label=f\"$e_0={float(e0_v):.1f}$\")\n\naxes[0].set_xlabel(\"$p_0$ [$M$]\")\naxes[0].set_ylabel(r\"$|\\partial \\Phi_\\phi / \\partial p_0|$ [rad / $M$]\")\naxes[0].set_title(\"Phase sensitivity to initial separation\")\naxes[0].legend()\n\naxes[1].set_xlabel(\"$p_0$ [$M$]\")\naxes[1].set_ylabel(r\"$|\\partial \\Phi_\\phi / \\partial e_0|$ [rad]\")\naxes[1].set_title(\"Phase sensitivity to initial eccentricity\")\naxes[1].legend()\n\nplt.suptitle(\"JAX autodiff through inspiral ODE ($M=10^6$, $\\\\mu=10$, $a=0.7$, $T=0.5$ yr)\")\nplt.tight_layout()\nplt.show()"
+  },
+  {
+   "cell_type": "markdown",
+   "id": "cell-12",
+   "metadata": {},
+   "source": [
+    "## 6.5  Fisher Matrix (Trajectory Phase)\n",
+    "\n",
+    "The **Fisher information matrix** sets the Cramér–Rao lower bound on parameter estimation uncertainty.  In the large-SNR limit:\n",
+    "\n",
+    "$$\n",
+    "\\Gamma_{ij} = \\left( \\frac{\\partial h}{\\partial \\theta_i} \\,\\middle|\\, \\frac{\\partial h}{\\partial \\theta_j} \\right)\n",
+    "= \\int_0^\\infty \\frac{\\tilde{h}_i^*(f)\\, \\tilde{h}_j(f)}{S_n(f)} \\, df\n",
+    "$$\n",
+    "\n",
+    "For a phase-dominated signal (the EMRI case), the dominant contribution comes from the phase gradient:\n",
+    "\n",
+    "$$\n",
+    "\\Gamma_{ij} \\approx \\text{SNR}^2 \\times \\left\\langle \\frac{\\partial \\Phi}{\\partial \\theta_i} \\frac{\\partial \\Phi}{\\partial \\theta_j} \\right\\rangle_t\n",
+    "$$\n",
+    "\n",
+    "Here we compute the Jacobian $\\partial(\\Phi_\\phi, \\Phi_r)_{\\rm end} / \\partial(p_0, e_0, a)$ using `jax.jacobian`."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "cell-13",
+   "metadata": {},
+   "outputs": [],
+   "source": "from fewtrax.data import load_flux_data\n\ninsp = EMRIInspiral(flux_data)\n\n# Three-parameter function: (p0, e0, a) → (Φφ_end, Φr_end)\n# With a as a call-time argument, we can now differentiate w.r.t. all three.\n\ndef phases_at_end(params):\n    \"\"\"Returns (Φφ_end, Φr_end) as a function of [p0, e0, a].\"\"\"\n    p0, e0, a = params[0], params[1], params[2]\n    _, p_arr, _, Phi_phi, _, Phi_r = insp(p0=p0, e0=e0, a=a, M=1e6, mu=10.0, T=0.5, dense_steps=150)\n    valid_mask = ~jnp.isnan(p_arr)\n    n_valid = jnp.sum(valid_mask)\n    return jnp.array([Phi_phi[n_valid - 1], Phi_r[n_valid - 1]])\n\njac_fn = eqx.filter_jit(jax.jacobian(phases_at_end))\n\nparams_ref = jnp.array([12.0, 0.4, 0.7])\n\nprint(\"Computing Jacobian ∂(Φφ, Φr)/∂(p0, e0, a)…\")\nt0 = time.perf_counter()\nJ = jac_fn(params_ref)\n_ = J.block_until_ready()\nelapsed = time.perf_counter() - t0\nprint(f\"Computed in {elapsed:.2f} s\")\n\nprint(f\"\\nJacobian matrix:\")\nprint(f\"  ∂Φφ/∂p0 = {float(J[0,0]):.4e} rad/M\")\nprint(f\"  ∂Φφ/∂e0 = {float(J[0,1]):.4e} rad\")\nprint(f\"  ∂Φφ/∂a  = {float(J[0,2]):.4e} rad\")\nprint(f\"  ∂Φr/∂p0 = {float(J[1,0]):.4e} rad/M\")\nprint(f\"  ∂Φr/∂e0 = {float(J[1,1]):.4e} rad\")\nprint(f\"  ∂Φr/∂a  = {float(J[1,2]):.4e} rad\")\n\n# Fisher matrix (phase-only approximation, p0/e0/a subspace)\n# Γ ≈ J^T J (for unit noise)\nFisher = J.T @ J\nCov = jnp.linalg.inv(Fisher)\n\nprint(f\"\\nFisher matrix (phase-only, unit noise):\")\nprint(f\"  Γ(p0,p0) = {float(Fisher[0,0]):.3e}\")\nprint(f\"  Γ(e0,e0) = {float(Fisher[1,1]):.3e}\")\nprint(f\"  Γ(a,a)   = {float(Fisher[2,2]):.3e}\")\nprint(f\"\\nCramer-Rao lower bounds (1σ, phase-only):\")\nprint(f\"  σ(p0) ≥ {float(jnp.sqrt(Cov[0,0])):.3e} M\")\nprint(f\"  σ(e0) ≥ {float(jnp.sqrt(Cov[1,1])):.3e}\")\nprint(f\"  σ(a)  ≥ {float(jnp.sqrt(Cov[2,2])):.3e}\")"
+  },
+  {
+   "cell_type": "markdown",
+   "id": "cell-14",
+   "metadata": {},
+   "source": [
+    "## 6.6  Performance Summary\n",
+    "\n",
+    "Let's benchmark the different execution modes to quantify the JAX advantage."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "cell-15",
+   "metadata": {},
+   "outputs": [],
+   "source": "import timeit\n\n_ = insp(p0=12.0, e0=0.4, a=0.7, M=1e6, mu=10.0, T=0.5)[1].block_until_ready()\n\ndef run_single():\n    return insp(p0=12.0, e0=0.4, a=0.7, M=1e6, mu=10.0, T=0.5)[1].block_until_ready()\n\nn_reps = 20\nt_single = timeit.timeit(run_single, number=n_reps) / n_reps * 1e3\n\np0_b = jnp.linspace(10.0, 16.0, 16)\ne0_b = jnp.full(16, 0.4)\nbatch16 = eqx.filter_jit(jax.vmap(lambda p0, e0: insp(p0=p0, e0=e0, a=0.7, M=1e6, mu=10.0, T=0.5)[1]))\n_ = batch16(p0_b, e0_b).block_until_ready()\n\ndef run_batch16():\n    return batch16(p0_b, e0_b).block_until_ready()\n\nt_batch16 = timeit.timeit(run_batch16, number=n_reps) / n_reps * 1e3\n\nprint(f\"Single trajectory       : {t_single:.2f} ms\")\nprint(f\"Batch of 16 (vmapped)   : {t_batch16:.2f} ms\")\nprint(f\"Per-traj in batch       : {t_batch16/16:.2f} ms\")\nprint(f\"Batch speedup vs serial : {t_single * 16 / t_batch16:.1f}×\")\n\nlabels = [\"Single (JIT)\", \"Batch/16 (vmap)\"]\ntimes  = [t_single, t_batch16 / 16]\n\nfig, ax = plt.subplots(figsize=(6, 3))\nbars = ax.bar(labels, times, color=[\"C0\", \"C2\"])\nax.bar_label(bars, labels=[f\"{t:.2f} ms\" for t in times])\nax.set_ylabel(\"Time per trajectory [ms]\")\nax.set_title(\"Trajectory timing: JIT vs vmap\")\nplt.tight_layout()\nplt.show()"
+  },
+  {
+   "cell_type": "markdown",
+   "id": "cell-16",
+   "metadata": {},
+   "source": [
+    "## 6.7  Outlook: HMC/NUTS Sampling\n",
+    "\n",
+    "The combination of `jax.grad` through the trajectory and `jax.vmap` for parallel chains makes `fewtrax` directly compatible with gradient-based MCMC samplers.\n",
+    "\n",
+    "### With `blackjax`\n",
+    "\n",
+    "```python\n",
+    "import blackjax\n",
+    "\n",
+    "# Log-posterior: log p(θ | d) ∝ -½ (h(θ) - d | h(θ) - d) / Sn\n",
+    "def log_posterior(params):\n",
+    "    p0, e0 = params[\"p0\"], params[\"e0\"]\n",
+    "    hp, hx = wf(M=1e6, mu=10.0, a=0.7, p0=p0, e0=e0, ...)\n",
+    "    residual = hp - data_hp\n",
+    "    return -0.5 * jnp.sum(residual**2 / noise_psd)\n",
+    "\n",
+    "# NUTS sampler — requires ∇ log p(θ | d) automatically via JAX\n",
+    "nuts = blackjax.nuts(log_posterior, step_size=0.01, inverse_mass_matrix=...)\n",
+    "\n",
+    "# Run N chains in parallel with vmap\n",
+    "vmap_nuts_step = jax.vmap(nuts.step)\n",
+    "```\n",
+    "\n",
+    "### Key performance bottleneck\n",
+    "\n",
+    "Currently, `AmplitudeInterpolator.evaluate` uses `scipy.bisplev` in a Python loop — this breaks the JAX computation graph and prevents:\n",
+    "- Differentiating through the amplitude interpolation\n",
+    "- vmapping over parameters that affect amplitude evaluation\n",
+    "- GPU execution of the full pipeline\n",
+    "\n",
+    "Replacing `bisplev` with JAX-native tricubic B-spline interpolation (using `jnp.interp` + coefficient arrays as static data) would unlock full end-to-end differentiability and GPU parallelism."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "cell-17",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Summary of JAX transformation support in fewtrax\n",
+    "print(\"JAX transformation support in fewtrax:\")\n",
+    "print()\n",
+    "print(f\"{'Component':<35} {'jit':>6} {'vmap':>6} {'grad':>6} {'GPU':>6}\")\n",
+    "print(\"-\" * 60)\n",
+    "rows = [\n",
+    "    (\"Geodesic functions\",            \"✓\", \"✓\", \"✓\", \"✓\"),\n",
+    "    (\"Separatrix (bisection)\",         \"✓\", \"✓\", \"✓\", \"✓\"),\n",
+    "    (\"Fundamental frequencies\",        \"✓\", \"✓\", \"✓\", \"✓\"),\n",
+    "    (\"EMRIInspiral (diffrax ODE)\",     \"✓\", \"✓\", \"✓\", \"✓\"),\n",
+    "    (\"AmplitudeInterpolator.evaluate\", \"✗\", \"✗\", \"✗\", \"✗\"),\n",
+    "    (\"get_ylms_for_modes\",             \"✓\", \"✓\", \"✓\", \"✓\"),\n",
+    "    (\"direct_mode_sum\",                \"✓\", \"✓\", \"✓\", \"✓\"),\n",
+    "    (\"interpolated_mode_sum\",          \"✓\", \"✓\", \"~\", \"✓\"),\n",
+    "]\n",
+    "for name, jit, vmap, grad, gpu in rows:\n",
+    "    print(f\"{name:<35} {jit:>6} {vmap:>6} {grad:>6} {gpu:>6}\")\n",
+    "print()\n",
+    "print(\"~ = partial support (gradient through spline interpolation, not amplitude)\")\n",
+    "print(\"✗ = not supported (scipy bisplev CPU call)\")"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "cell-18",
+   "metadata": {},
+   "source": [
+    "## Summary\n",
+    "\n",
+    "| JAX feature | fewtrax use case | Status |\n",
+    "|---|---|---|\n",
+    "| `eqx.filter_jit` | Inspiral ODE, mode summation | ✓ Fully supported |\n",
+    "| `jax.vmap` | Batch trajectory + phase evaluation | ✓ Trajectory fully vmapped |\n",
+    "| `jax.grad` | Phase gradients for Fisher matrix | ✓ Through ODE |\n",
+    "| `jax.jacobian` | Multi-output parameter sensitivity | ✓ Through ODE |\n",
+    "| End-to-end `grad` | Full waveform likelihood gradient | ✗ Blocked by `bisplev` |\n",
+    "| GPU execution | Full pipeline | ✗ Blocked by `bisplev` |\n",
+    "\n",
+    "**The key next step** for full JAX-native operation is replacing `scipy.bisplev` in `AmplitudeInterpolator` with a JAX implementation of bicubic B-spline evaluation.  Once complete, the entire waveform — from physical parameters to $h_+, h_\\times$ — will be JIT-compiled, vmappable, and differentiable end-to-end.\n",
+    "\n",
+    "---\n",
+    "\n",
+    "**End of tutorial series.**\n",
+    "\n",
+    "| Notebook | Topic |\n",
+    "|---|---|\n",
+    "| [01](01_kerr_geodesics.ipynb) | Kerr geodesics: $E$, $L_z$, separatrix, frequencies |\n",
+    "| [02](02_emri_trajectory.ipynb) | EMRI inspiral ODE with diffrax |\n",
+    "| [03](03_amplitude_interpolation.ipynb) | Teukolsky amplitude interpolation |\n",
+    "| [04](04_mode_summation.ipynb) | Mode summation and spin-weighted harmonics |\n",
+    "| [05](05_full_waveform.ipynb) | Full `KerrEccentricEquatorialWaveform` API |\n",
+    "| **[06](06_jax_features.ipynb)** | **JIT, vmap, autodiff, Fisher matrix** |"
+   ]
+  }
+ ],
+ "metadata": {
+  "kernelspec": {
+   "display_name": "Python 3 (ipykernel)",
+   "language": "python",
+   "name": "python3"
+  },
+  "language_info": {
+   "codemirror_mode": {
+    "name": "ipython",
+    "version": 3
+   },
+   "file_extension": ".py",
+   "mimetype": "text/x-python",
+   "name": "python",
+   "nbconvert_exporter": "python",
+   "pygments_lexer": "ipython3",
+   "version": "3.13.9"
+  }
+ },
+ "nbformat": 4,
+ "nbformat_minor": 5
+}

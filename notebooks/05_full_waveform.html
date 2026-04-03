@@ -1,0 +1,628 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>05 — Full EMRI Waveform Generation &mdash; fewtrax 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
+      <link rel="stylesheet" type="text/css" href="../_static/nbsphinx-code-cells.css?v=2aa19091" />
+
+  
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+      <script>window.MathJax = {"tex": {"inlineMath": [["$", "$"], ["\\(", "\\)"]], "processEscapes": true}, "options": {"ignoreHtmlClass": "tex2jax_ignore|mathjax_ignore|document", "processHtmlClass": "tex2jax_process|mathjax_process|math|output_area"}}</script>
+      <script defer="defer" src="https://cdn.jsdelivr.net/npm/mathjax@4/tex-mml-chtml.js"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="06 — JAX Features: JIT, vmap, and Autodiff" href="06_jax_features.html" />
+    <link rel="prev" title="04 — Mode Summation and Harmonic Decomposition" href="04_mode_summation.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            fewtrax
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Getting started</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../quickstart.html">Quickstart</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Background</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../math_background.html">Mathematical Background</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Tutorials</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="reference internal" href="../examples.html">Tutorials</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="01_kerr_geodesics.html">01 — Kerr Geodesics</a></li>
+<li class="toctree-l2"><a class="reference internal" href="02_emri_trajectory.html">02 — EMRI Trajectory Integration</a></li>
+<li class="toctree-l2"><a class="reference internal" href="03_amplitude_interpolation.html">03 — Teukolsky Amplitude Interpolation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="04_mode_summation.html">04 — Mode Summation and Harmonic Decomposition</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">05 — Full EMRI Waveform Generation</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#Pipeline-Overview">Pipeline Overview</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#5.1-Generating-a-Waveform">5.1 Generating a Waveform</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#5.2-Harmonic-Frequency-Tracks">5.2 Harmonic Frequency Tracks</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#5.3-Parameter-Variation">5.3 Parameter Variation</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#Effect-of-Spin-a">Effect of Spin <span class="math notranslate nohighlight">\(a\)</span></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#Effect-of-Initial-Eccentricity-e_0">Effect of Initial Eccentricity <span class="math notranslate nohighlight">\(e_0\)</span></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#5.4-Inspecting-the-Sparse-method">5.4 Inspecting the Sparse method</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#5.5-Sky-Angle-Dependence">5.5 Sky-Angle Dependence</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#Summary">Summary</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="06_jax_features.html">06 — JAX Features: JIT, vmap, and Autodiff</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../examples.html#notebook-descriptions">Notebook descriptions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../examples.html#running-locally">Running locally</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../examples.html#pre-executing-notebooks-for-the-docs">Pre-executing notebooks for the docs</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../examples.html#standalone-quickstart-script">Standalone quickstart script</a></li>
+</ul>
+</li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../api.html">API Reference</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">fewtrax</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../examples.html">Tutorials</a></li>
+      <li class="breadcrumb-item active">05 — Full EMRI Waveform Generation</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/notebooks/05_full_waveform.ipynb.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="05-—-Full-EMRI-Waveform-Generation">
+<h1>05 — Full EMRI Waveform Generation<a class="headerlink" href="#05-—-Full-EMRI-Waveform-Generation" title="Link to this heading"></a></h1>
+<p>This notebook demonstrates the top-level <code class="docutils literal notranslate"><span class="pre">KerrEccentricEquatorialWaveform</span></code> API.</p>
+<p><strong>Topics:</strong></p>
+<ul class="simple">
+<li><p>Generating <span class="math notranslate nohighlight">\(h_+\)</span> and <span class="math notranslate nohighlight">\(h_\times\)</span> with a single API call</p></li>
+<li><p>The five-stage pipeline (data → trajectory → mode selection → amplitudes → summation)</p></li>
+<li><p>Harmonic frequency tracks in the time–frequency plane</p></li>
+<li><p>Parameter variation: spin, mass ratio, eccentricity</p></li>
+</ul>
+<hr class="docutils" />
+<section id="Pipeline-Overview">
+<h2>Pipeline Overview<a class="headerlink" href="#Pipeline-Overview" title="Link to this heading"></a></h2>
+<p>Waveforms are constucted using the exact same method as FEW. only difference is the implementation, which is now in JAX instead of cupy.</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>KerrEccentricEquatorialWaveform
+  │
+  ├─ [init] load_flux_data:  coefficients loaded from multispline, JAX TriCubicSpline3D interpolators for Edot, Ldot
+  ├─ [init] load_amplitude_data:  raw HDF5 B-spline coefficients (6993 modes)
+  │
+  └─ __call__(m1, m2, a, p0, e0, **kwargs)
+       ├─ EMRIInspiral:  (t, p, e, $\Phi_{\phi}$, $\Phi_{\theta}$, $\Phi_r$)  [JAX; JIT]
+       ├─ select_modes:  mode indices above power threshold
+       ├─ AmplitudeInterpolator.evaluate:  A[t, mode]  [scipy/CPU]
+       ├─ get_ylms_for_modes:  Y[mode]  [numpy]
+       └─ ModeSum:  h(t) = Σ Y·A·e^{-iΦ}  [JAX; JIT]
+</pre></div>
+</div>
+<div class="nbinput docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[1]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">matplotlib.pyplot</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">plt</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">jax</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">jax.numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">jnp</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">time</span>
+
+<span class="n">jax</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="s2">&quot;jax_enable_x64&quot;</span><span class="p">,</span> <span class="kc">True</span><span class="p">)</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">dotenv</span><span class="w"> </span><span class="kn">import</span> <span class="n">load_dotenv</span>
+<span class="n">load_dotenv</span><span class="p">()</span>
+<span class="n">DATA_DIR</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">getenv</span><span class="p">(</span><span class="s2">&quot;FEW_DATA_DIR&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;FEW_DATA_DIR = </span><span class="si">{</span><span class="n">DATA_DIR</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">fewtrax</span><span class="w"> </span><span class="kn">import</span> <span class="n">KerrEccentricEquatorialWaveform</span>
+
+<span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Building waveform generator…&quot;</span><span class="p">)</span>
+<span class="n">t0</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">perf_counter</span><span class="p">()</span>
+<span class="n">wf</span> <span class="o">=</span> <span class="n">KerrEccentricEquatorialWaveform</span><span class="p">(</span>
+    <span class="n">data_dir</span><span class="o">=</span><span class="n">DATA_DIR</span><span class="p">,</span>
+    <span class="n">mode_selection_threshold</span><span class="o">=</span><span class="mf">1e-5</span><span class="p">,</span>
+    <span class="n">dense_steps</span><span class="o">=</span><span class="mi">150</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Loaded in </span><span class="si">{</span><span class="n">time</span><span class="o">.</span><span class="n">perf_counter</span><span class="p">()</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">t0</span><span class="si">:</span><span class="s2">.1f</span><span class="si">}</span><span class="s2"> s&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<div class="nboutput nblast docutils container">
+<div class="prompt empty docutils container">
+</div>
+<div class="output_area docutils container">
+<div class="highlight"><pre>
+FEW_DATA_DIR = /Users/bertd/Documents/PhD/LISA/Codes/FastEMRIWaveforms/src/few/data
+Building waveform generator…
+Loaded in 36.8 s
+</pre></div></div>
+</div>
+</section>
+<section id="5.1-Generating-a-Waveform">
+<h2>5.1 Generating a Waveform<a class="headerlink" href="#5.1-Generating-a-Waveform" title="Link to this heading"></a></h2>
+<p>The <code class="docutils literal notranslate"><span class="pre">__call__</span></code> method accepts the same parameter set as FEW’s <code class="docutils literal notranslate"><span class="pre">FastKerrEccentricEquatorialFlux</span></code>.</p>
+<div class="nbinput docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[2]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="c1"># Reference parameter set</span>
+<span class="n">params</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span>
+    <span class="n">M</span>       <span class="o">=</span> <span class="mf">1e6</span><span class="p">,</span>   <span class="c1"># primary BH mass       [M_sun]</span>
+    <span class="n">mu</span>      <span class="o">=</span> <span class="mf">10.0</span><span class="p">,</span>  <span class="c1"># secondary mass        [M_sun]</span>
+    <span class="n">a</span>       <span class="o">=</span> <span class="mf">0.7</span><span class="p">,</span>   <span class="c1"># dimensionless spin</span>
+    <span class="n">p0</span>      <span class="o">=</span> <span class="mf">7.0</span><span class="p">,</span>  <span class="c1"># initial semi-latus    [M]</span>
+    <span class="n">e0</span>      <span class="o">=</span> <span class="mf">0.4</span><span class="p">,</span>   <span class="c1"># initial eccentricity</span>
+    <span class="n">x0</span>      <span class="o">=</span> <span class="mf">1.0</span><span class="p">,</span>   <span class="c1"># prograde</span>
+    <span class="n">dist</span>    <span class="o">=</span> <span class="mf">1.0</span><span class="p">,</span>   <span class="c1"># luminosity distance   [Gpc]</span>
+    <span class="n">qS</span>      <span class="o">=</span> <span class="mf">0.3</span><span class="p">,</span>   <span class="c1"># source sky colatitude [rad]</span>
+    <span class="n">phiS</span>    <span class="o">=</span> <span class="mf">1.0</span><span class="p">,</span>   <span class="c1"># source sky longitude  [rad]</span>
+    <span class="n">qK</span>      <span class="o">=</span> <span class="mf">0.8</span><span class="p">,</span>   <span class="c1"># spin colatitude       [rad]</span>
+    <span class="n">phiK</span>    <span class="o">=</span> <span class="mf">0.5</span><span class="p">,</span>   <span class="c1"># spin longitude        [rad]</span>
+    <span class="n">Phi_phi0</span>   <span class="o">=</span> <span class="mf">1.0</span><span class="p">,</span>
+    <span class="n">Phi_theta0</span> <span class="o">=</span> <span class="mf">2.0</span><span class="p">,</span>
+    <span class="n">Phi_r0</span>     <span class="o">=</span> <span class="mf">3.0</span><span class="p">,</span>
+    <span class="n">T</span>       <span class="o">=</span> <span class="mf">0.5</span><span class="p">,</span>   <span class="c1"># observation time      [years]</span>
+    <span class="n">dt</span>      <span class="o">=</span> <span class="mf">10.0</span><span class="p">,</span>  <span class="c1"># sampling interval     [s]</span>
+<span class="p">)</span>
+
+<span class="n">t0</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">perf_counter</span><span class="p">()</span>
+<span class="n">hp</span><span class="p">,</span> <span class="n">hx</span> <span class="o">=</span> <span class="n">wf</span><span class="p">(</span><span class="o">**</span><span class="n">params</span><span class="p">)</span>
+<span class="n">elapsed</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">perf_counter</span><span class="p">()</span> <span class="o">-</span> <span class="n">t0</span>
+
+<span class="n">N</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">hp</span><span class="p">)</span>
+<span class="n">t_arr</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">N</span><span class="p">)</span> <span class="o">*</span> <span class="n">params</span><span class="p">[</span><span class="s2">&quot;dt&quot;</span><span class="p">]</span>
+
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Waveform generated in </span><span class="si">{</span><span class="n">elapsed</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2"> s&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Samples: N = </span><span class="si">{</span><span class="n">N</span><span class="si">}</span><span class="s2">  (</span><span class="si">{</span><span class="n">N</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">params</span><span class="p">[</span><span class="s1">&#39;dt&#39;</span><span class="p">]</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="mi">3600</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2"> hours)&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;|h+|_max = </span><span class="si">{</span><span class="nb">float</span><span class="p">(</span><span class="n">jnp</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">jnp</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">hp</span><span class="p">)))</span><span class="si">:</span><span class="s2">.3e</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;|h×|_max = </span><span class="si">{</span><span class="nb">float</span><span class="p">(</span><span class="n">jnp</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">jnp</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">hx</span><span class="p">)))</span><span class="si">:</span><span class="s2">.3e</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<div class="nboutput nblast docutils container">
+<div class="prompt empty docutils container">
+</div>
+<div class="output_area docutils container">
+<div class="highlight"><pre>
+Waveform generated in 25.25 s
+Samples: N = 1577908  (4383.08 hours)
+|h+|_max = 4.260e-22
+|h×|_max = 4.425e-22
+</pre></div></div>
+</div>
+<div class="nbinput docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[3]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">fewtrax.summation.modes</span><span class="w"> </span><span class="kn">import</span> <span class="n">to_frequency_domain</span>
+
+<span class="n">freqs</span><span class="p">,</span> <span class="n">h_tilde</span> <span class="o">=</span> <span class="n">to_frequency_domain</span><span class="p">(</span><span class="n">hp</span> <span class="o">+</span> <span class="mi">1</span><span class="n">j</span> <span class="o">*</span> <span class="n">hx</span><span class="p">,</span> <span class="n">dt</span><span class="o">=</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;dt&quot;</span><span class="p">])</span>
+
+<span class="n">fig</span><span class="p">,</span> <span class="n">axes</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplots</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">11</span><span class="p">,</span> <span class="mi">9</span><span class="p">))</span>
+
+<span class="n">t_days</span> <span class="o">=</span> <span class="n">t_arr</span> <span class="o">/</span> <span class="mf">86400.0</span>
+<span class="n">scale</span>  <span class="o">=</span> <span class="mf">1e20</span>
+
+<span class="n">axes</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">t_days</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">hp</span><span class="p">)</span> <span class="o">*</span> <span class="n">scale</span><span class="p">,</span> <span class="n">lw</span><span class="o">=</span><span class="mf">0.5</span><span class="p">,</span> <span class="n">label</span><span class="o">=</span><span class="s2">&quot;$h_+$&quot;</span><span class="p">,</span> <span class="n">color</span><span class="o">=</span><span class="s2">&quot;C0&quot;</span><span class="p">)</span>
+<span class="n">axes</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">t_days</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">hx</span><span class="p">)</span> <span class="o">*</span> <span class="n">scale</span><span class="p">,</span> <span class="n">lw</span><span class="o">=</span><span class="mf">0.5</span><span class="p">,</span> <span class="n">label</span><span class="o">=</span><span class="s2">&quot;$h_</span><span class="se">\\</span><span class="s2">times$&quot;</span><span class="p">,</span> <span class="n">color</span><span class="o">=</span><span class="s2">&quot;C1&quot;</span><span class="p">,</span> <span class="n">alpha</span><span class="o">=</span><span class="mf">0.7</span><span class="p">)</span>
+<span class="n">axes</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">set_xlabel</span><span class="p">(</span><span class="s2">&quot;Time [days]&quot;</span><span class="p">)</span>
+<span class="n">axes</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">set_ylabel</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;$h </span><span class="se">\\</span><span class="s2">times 10^</span><span class="se">{{</span><span class="si">{</span><span class="nb">int</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">log10</span><span class="p">(</span><span class="n">scale</span><span class="p">))</span><span class="si">}</span><span class="se">}}</span><span class="s2">$&quot;</span><span class="p">)</span>
+<span class="n">axes</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">set_title</span><span class="p">(</span>
+    <span class="sa">fr</span><span class="s2">&quot;EMRI waveform: $M=10^6\,M_\odot$, $\mu=10\,M_\odot$, $a=</span><span class="si">{</span><span class="n">params</span><span class="p">[</span><span class="s1">&#39;a&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">$, &quot;</span>
+    <span class="sa">fr</span><span class="s2">&quot;$p_0=</span><span class="si">{</span><span class="n">params</span><span class="p">[</span><span class="s1">&#39;p0&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">\,M$, $e_0=</span><span class="si">{</span><span class="n">params</span><span class="p">[</span><span class="s1">&#39;e0&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">$, $T=0.5$ yr&quot;</span>
+<span class="p">)</span>
+<span class="n">axes</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">legend</span><span class="p">()</span>
+
+<span class="c1"># Zoom into first 3 days to see individual oscillations</span>
+<span class="n">mask_zoom</span> <span class="o">=</span> <span class="n">t_days</span> <span class="o">&lt;</span> <span class="mi">3</span>
+<span class="n">axes</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">t_days</span><span class="p">[</span><span class="n">mask_zoom</span><span class="p">],</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">hp</span><span class="p">)[</span><span class="n">mask_zoom</span><span class="p">]</span> <span class="o">*</span> <span class="n">scale</span><span class="p">,</span> <span class="n">lw</span><span class="o">=</span><span class="mf">0.7</span><span class="p">)</span>
+<span class="n">axes</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">set_xlabel</span><span class="p">(</span><span class="s2">&quot;Time [days]&quot;</span><span class="p">)</span>
+<span class="n">axes</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">set_ylabel</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;$h_+ </span><span class="se">\\</span><span class="s2">times 10^</span><span class="se">{{</span><span class="si">{</span><span class="nb">int</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">log10</span><span class="p">(</span><span class="n">scale</span><span class="p">))</span><span class="si">}</span><span class="se">}}</span><span class="s2">$&quot;</span><span class="p">)</span>
+<span class="n">axes</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">set_title</span><span class="p">(</span><span class="s2">&quot;First 3 days (zoom)&quot;</span><span class="p">)</span>
+
+<span class="n">f_Hz</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">freqs</span><span class="p">)</span>
+<span class="n">axes</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span><span class="o">.</span><span class="n">loglog</span><span class="p">(</span><span class="n">f_Hz</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">jnp</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">h_tilde</span><span class="p">)),</span> <span class="n">lw</span><span class="o">=</span><span class="mf">0.6</span><span class="p">)</span>
+<span class="n">axes</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span><span class="o">.</span><span class="n">set_xlabel</span><span class="p">(</span><span class="s2">&quot;Frequency [mHz]&quot;</span><span class="p">)</span>
+<span class="n">axes</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span><span class="o">.</span><span class="n">set_ylabel</span><span class="p">(</span><span class="sa">r</span><span class="s2">&quot;$|\tilde</span><span class="si">{h}</span><span class="s2">|$&quot;</span><span class="p">)</span>
+<span class="n">axes</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span><span class="o">.</span><span class="n">set_title</span><span class="p">(</span><span class="s2">&quot;Frequency-domain strain&quot;</span><span class="p">)</span>
+<span class="c1"># axes[2].set_xlim([0, 30])</span>
+
+<span class="n">plt</span><span class="o">.</span><span class="n">tight_layout</span><span class="p">()</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+</pre></div>
+</div>
+</div>
+<div class="nboutput nblast docutils container">
+<div class="prompt empty docutils container">
+</div>
+<div class="output_area docutils container">
+<img alt="../_images/notebooks_05_full_waveform_4_0.png" src="../_images/notebooks_05_full_waveform_4_0.png" />
+</div>
+</div>
+<div class="nbinput docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[4]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="nb">type</span><span class="p">(</span><span class="n">h_tilde</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<div class="nboutput nblast docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[4]:
+</pre></div>
+</div>
+<div class="output_area docutils container">
+<div class="highlight"><pre>
+jaxlib._jax.ArrayImpl
+</pre></div></div>
+</div>
+<div class="nbinput docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[5]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">h_tilde</span><span class="o">.</span><span class="n">dtype</span>
+</pre></div>
+</div>
+</div>
+<div class="nboutput nblast docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[5]:
+</pre></div>
+</div>
+<div class="output_area docutils container">
+<div class="highlight"><pre>
+dtype(&#39;complex128&#39;)
+</pre></div></div>
+</div>
+</section>
+<section id="5.2-Harmonic-Frequency-Tracks">
+<h2>5.2 Harmonic Frequency Tracks<a class="headerlink" href="#5.2-Harmonic-Frequency-Tracks" title="Link to this heading"></a></h2>
+<p>Each mode <span class="math notranslate nohighlight">\((\ell, m, k, n)\)</span> contributes a spectral line at the instantaneous frequency</p>
+<div class="math notranslate nohighlight">
+\[f_{mkn}(t) = \frac{m\,\Omega_\phi(t) + k\,\Omega_\theta(t) + n\,\Omega_r(t)}{2\pi}\]</div>
+<p>As the orbit inspirals these frequencies <em>chirp</em> upward, producing the characteristic EMRI frequency track. These tracks are the key observable for the EMRI search.</p>
+<div class="nbinput docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[13]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">track_modes</span> <span class="o">=</span> <span class="p">[</span>
+    <span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">2</span><span class="p">),</span> <span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">3</span><span class="p">),</span>
+    <span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span>
+<span class="p">]</span>
+
+<span class="n">fig</span><span class="p">,</span> <span class="n">ax</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplots</span><span class="p">(</span><span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">10</span><span class="p">,</span> <span class="mi">5</span><span class="p">))</span>
+
+<span class="k">for</span> <span class="p">(</span><span class="n">l</span><span class="p">,</span> <span class="n">m</span><span class="p">,</span> <span class="n">k</span><span class="p">,</span> <span class="n">n</span><span class="p">)</span> <span class="ow">in</span> <span class="n">track_modes</span><span class="p">:</span>
+    <span class="n">t_tr</span><span class="p">,</span> <span class="n">f_tr</span> <span class="o">=</span> <span class="n">wf</span><span class="o">.</span><span class="n">get_harmonic_track</span><span class="p">(</span>
+        <span class="n">l</span><span class="o">=</span><span class="n">l</span><span class="p">,</span> <span class="n">m</span><span class="o">=</span><span class="n">m</span><span class="p">,</span> <span class="n">k</span><span class="o">=</span><span class="n">k</span><span class="p">,</span> <span class="n">n</span><span class="o">=</span><span class="n">n</span><span class="p">,</span>
+        <span class="n">M</span><span class="o">=</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;M&quot;</span><span class="p">],</span> <span class="n">mu</span><span class="o">=</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;mu&quot;</span><span class="p">],</span> <span class="n">a</span><span class="o">=</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;a&quot;</span><span class="p">],</span>
+        <span class="n">p0</span><span class="o">=</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;p0&quot;</span><span class="p">],</span> <span class="n">e0</span><span class="o">=</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;e0&quot;</span><span class="p">],</span> <span class="n">T</span><span class="o">=</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;T&quot;</span><span class="p">],</span>
+    <span class="p">)</span>
+    <span class="n">t_days_tr</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">t_tr</span><span class="p">)</span> <span class="o">/</span> <span class="mf">86400.0</span>
+    <span class="n">f_Hz_tr</span>  <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">f_tr</span><span class="p">)</span>
+    <span class="n">valid_tr</span>  <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">isfinite</span><span class="p">(</span><span class="n">f_Hz_tr</span><span class="p">)</span> <span class="o">&amp;</span> <span class="p">(</span><span class="n">f_Hz_tr</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">)</span>
+    <span class="n">ax</span><span class="o">.</span><span class="n">semilogy</span><span class="p">(</span><span class="n">t_days_tr</span><span class="p">[</span><span class="n">valid_tr</span><span class="p">],</span> <span class="n">f_Hz_tr</span><span class="p">[</span><span class="n">valid_tr</span><span class="p">],</span>
+            <span class="n">label</span><span class="o">=</span><span class="sa">fr</span><span class="s2">&quot;$(</span><span class="si">{</span><span class="n">l</span><span class="si">}</span><span class="s2">,</span><span class="si">{</span><span class="n">m</span><span class="si">}</span><span class="s2">,</span><span class="si">{</span><span class="n">k</span><span class="si">}</span><span class="s2">,</span><span class="si">{</span><span class="n">n</span><span class="si">}</span><span class="s2">)$&quot;</span><span class="p">,</span> <span class="n">lw</span><span class="o">=</span><span class="mf">1.5</span><span class="p">)</span>
+
+<span class="n">ax</span><span class="o">.</span><span class="n">set_xlabel</span><span class="p">(</span><span class="s2">&quot;Time [days]&quot;</span><span class="p">)</span>
+<span class="n">ax</span><span class="o">.</span><span class="n">set_ylabel</span><span class="p">(</span><span class="s2">&quot;Instantaneous frequency [mHz]&quot;</span><span class="p">)</span>
+<span class="n">ax</span><span class="o">.</span><span class="n">set_title</span><span class="p">(</span><span class="s2">&quot;EMRI harmonic frequency tracks&quot;</span><span class="p">)</span>
+<span class="n">ax</span><span class="o">.</span><span class="n">legend</span><span class="p">(</span><span class="n">ncol</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
+<span class="n">ax</span><span class="o">.</span><span class="n">grid</span><span class="p">(</span><span class="kc">True</span><span class="p">,</span> <span class="n">which</span><span class="o">=</span><span class="s1">&#39;both&#39;</span><span class="p">,</span> <span class="n">alpha</span><span class="o">=</span><span class="mf">0.7</span><span class="p">,</span> <span class="n">color</span><span class="o">=</span><span class="s1">&#39;grey&#39;</span><span class="p">)</span>
+<span class="n">ax</span><span class="o">.</span><span class="n">set_xlim</span><span class="p">([</span><span class="mi">0</span><span class="p">,</span> <span class="n">t_days</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]])</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">tight_layout</span><span class="p">()</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+</pre></div>
+</div>
+</div>
+<div class="nboutput nblast docutils container">
+<div class="prompt empty docutils container">
+</div>
+<div class="output_area docutils container">
+<img alt="../_images/notebooks_05_full_waveform_8_0.png" src="../_images/notebooks_05_full_waveform_8_0.png" />
+</div>
+</div>
+</section>
+<section id="5.3-Parameter-Variation">
+<h2>5.3 Parameter Variation<a class="headerlink" href="#5.3-Parameter-Variation" title="Link to this heading"></a></h2>
+<section id="Effect-of-Spin-a">
+<h3>Effect of Spin <span class="math notranslate nohighlight">\(a\)</span><a class="headerlink" href="#Effect-of-Spin-a" title="Link to this heading"></a></h3>
+<div class="nbinput docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[15]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">fig</span><span class="p">,</span> <span class="n">axes</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplots</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">12</span><span class="p">,</span> <span class="mi">4</span><span class="p">))</span>
+
+<span class="k">for</span> <span class="n">a_val</span> <span class="ow">in</span> <span class="p">[</span><span class="mf">0.0</span><span class="p">,</span> <span class="mf">0.3</span><span class="p">,</span> <span class="mf">0.7</span><span class="p">,</span> <span class="mf">0.95</span><span class="p">]:</span>
+    <span class="n">hp_a</span><span class="p">,</span> <span class="n">hx_a</span> <span class="o">=</span> <span class="n">wf</span><span class="p">(</span><span class="o">**</span><span class="p">{</span><span class="o">**</span><span class="n">params</span><span class="p">,</span> <span class="s2">&quot;a&quot;</span><span class="p">:</span> <span class="n">a_val</span><span class="p">})</span>
+    <span class="n">freqs_a</span><span class="p">,</span> <span class="n">ht_a</span> <span class="o">=</span> <span class="n">to_frequency_domain</span><span class="p">(</span><span class="n">hp_a</span> <span class="o">+</span> <span class="mi">1</span><span class="n">j</span> <span class="o">*</span> <span class="n">hx_a</span><span class="p">,</span> <span class="n">dt</span><span class="o">=</span><span class="mf">10.0</span><span class="p">)</span>
+
+    <span class="n">axes</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">loglog</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">freqs_a</span><span class="p">),</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">jnp</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">ht_a</span><span class="p">)),</span>
+                     <span class="n">lw</span><span class="o">=</span><span class="mf">0.7</span><span class="p">,</span> <span class="n">label</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;$a=</span><span class="si">{</span><span class="n">a_val</span><span class="si">}</span><span class="s2">$&quot;</span><span class="p">)</span>
+
+    <span class="n">t_tr</span><span class="p">,</span> <span class="n">f_tr</span> <span class="o">=</span> <span class="n">wf</span><span class="o">.</span><span class="n">get_harmonic_track</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="n">M</span><span class="o">=</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;M&quot;</span><span class="p">],</span> <span class="n">mu</span><span class="o">=</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;mu&quot;</span><span class="p">],</span>
+                                         <span class="n">a</span><span class="o">=</span><span class="n">a_val</span><span class="p">,</span> <span class="n">p0</span><span class="o">=</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;p0&quot;</span><span class="p">],</span> <span class="n">e0</span><span class="o">=</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;e0&quot;</span><span class="p">],</span> <span class="n">T</span><span class="o">=</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;T&quot;</span><span class="p">])</span>
+    <span class="n">t_d</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">t_tr</span><span class="p">)</span> <span class="o">/</span> <span class="mi">86400</span>
+    <span class="n">f_m</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">f_tr</span><span class="p">)</span>
+    <span class="n">ok</span>  <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">isfinite</span><span class="p">(</span><span class="n">f_m</span><span class="p">)</span> <span class="o">&amp;</span> <span class="p">(</span><span class="n">f_m</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">)</span>
+    <span class="n">axes</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">semilogy</span><span class="p">(</span><span class="n">t_d</span><span class="p">[</span><span class="n">ok</span><span class="p">],</span> <span class="n">f_m</span><span class="p">[</span><span class="n">ok</span><span class="p">],</span> <span class="n">label</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;$a=</span><span class="si">{</span><span class="n">a_val</span><span class="si">}</span><span class="s2">$&quot;</span><span class="p">)</span>
+
+<span class="n">axes</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">set_xlim</span><span class="p">([</span><span class="mf">1e-6</span><span class="p">,</span> <span class="mf">1e-1</span><span class="p">])</span>
+<span class="n">axes</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">set_xlabel</span><span class="p">(</span><span class="s2">&quot;Frequency [mHz]&quot;</span><span class="p">)</span>
+<span class="n">axes</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">set_ylabel</span><span class="p">(</span><span class="sa">r</span><span class="s2">&quot;$|\tilde</span><span class="si">{h}</span><span class="s2">|$&quot;</span><span class="p">)</span>
+<span class="n">axes</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">set_title</span><span class="p">(</span><span class="s2">&quot;Frequency domain vs spin&quot;</span><span class="p">)</span>
+<span class="n">axes</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">legend</span><span class="p">(</span><span class="n">fontsize</span><span class="o">=</span><span class="mi">8</span><span class="p">)</span>
+
+<span class="n">axes</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">set_xlabel</span><span class="p">(</span><span class="s2">&quot;Time [days]&quot;</span><span class="p">)</span>
+<span class="n">axes</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">set_ylabel</span><span class="p">(</span><span class="s2">&quot;$f_</span><span class="si">{2201}</span><span class="s2">$ [mHz]&quot;</span><span class="p">)</span>
+<span class="n">axes</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">set_title</span><span class="p">(</span><span class="s2">&quot;(2,2,0,1) frequency track vs spin&quot;</span><span class="p">)</span>
+<span class="n">axes</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">legend</span><span class="p">(</span><span class="n">fontsize</span><span class="o">=</span><span class="mi">8</span><span class="p">)</span>
+
+<span class="n">plt</span><span class="o">.</span><span class="n">tight_layout</span><span class="p">()</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+</pre></div>
+</div>
+</div>
+<div class="nboutput docutils container">
+<div class="prompt empty docutils container">
+</div>
+<div class="output_area docutils container">
+<div class="highlight"><pre>
+<span class="ansi-red-fg">---------------------------------------------------------------------------</span>
+<span class="ansi-red-fg">KeyboardInterrupt</span>                         Traceback (most recent call last)
+<span class="ansi-cyan-fg">Cell</span><span class="ansi-cyan-fg"> </span><span class="ansi-green-fg">In[15]</span><span class="ansi-green-fg">, line 4</span>
+<span class="ansi-green-fg">      1</span> fig, axes = plt.subplots(<span class="ansi-green-fg">1</span>, <span class="ansi-green-fg">2</span>, figsize=(<span class="ansi-green-fg">12</span>, <span class="ansi-green-fg">4</span>))
+<span class="ansi-green-fg">      3</span> <span class="ansi-bold" style="color: rgb(0,135,0)">for</span> a_val <span class="ansi-bold" style="color: rgb(175,0,255)">in</span> [<span class="ansi-green-fg">0.0</span>, <span class="ansi-green-fg">0.3</span>, <span class="ansi-green-fg">0.7</span>, <span class="ansi-green-fg">0.95</span>]:
+<span class="ansi-green-fg">----&gt; </span><span class="ansi-green-fg">4</span>     hp_a, hx_a = <span class="ansi-yellow-bg">wf</span><span class="ansi-yellow-bg">(</span><span class="ansi-yellow-bg">*</span><span class="ansi-yellow-bg">*</span><span class="ansi-yellow-bg">{</span><span class="ansi-yellow-bg">*</span><span class="ansi-yellow-bg">*</span><span class="ansi-yellow-bg">params</span><span class="ansi-yellow-bg">,</span><span class="ansi-yellow-bg"> </span><span class="ansi-yellow-fg ansi-yellow-bg">&#34;</span><span class="ansi-yellow-fg ansi-yellow-bg">a</span><span class="ansi-yellow-fg ansi-yellow-bg">&#34;</span><span class="ansi-yellow-bg">:</span><span class="ansi-yellow-bg"> </span><span class="ansi-yellow-bg">a_val</span><span class="ansi-yellow-bg">}</span><span class="ansi-yellow-bg">)</span>
+<span class="ansi-green-fg">      5</span>     freqs_a, ht_a = to_frequency_domain(hp_a + <span class="ansi-green-fg">1</span>j * hx_a, dt=<span class="ansi-green-fg">10.0</span>)
+<span class="ansi-green-fg">      7</span>     axes[<span class="ansi-green-fg">0</span>].loglog(np.asarray(freqs_a), np.asarray(jnp.abs(ht_a)),
+<span class="ansi-green-fg">      8</span>                      lw=<span class="ansi-green-fg">0.7</span>, label=<span class="ansi-yellow-fg">f</span><span class="ansi-yellow-fg">&#34;</span><span class="ansi-yellow-fg">$a=</span><span class="ansi-bold" style="color: rgb(175,95,135)">{</span>a_val<span class="ansi-bold" style="color: rgb(175,95,135)">}</span><span class="ansi-yellow-fg">$</span><span class="ansi-yellow-fg">&#34;</span>)
+
+<span class="ansi-cyan-fg">File </span><span class="ansi-green-fg">~/Documents/PhD/LISA/Projects/JAX-waveform/fewtrax/src/fewtrax/waveform/kerr.py:425</span>, in <span class="ansi-cyan-fg">KerrEccentricEquatorialWaveform.__call__</span><span class="ansi-blue-fg">(self, M, mu, a, p0, e0, x0, dist, qS, phiS, qK, phiK, Phi_phi0, Phi_theta0, Phi_r0, T, dt, mode_selection_threshold, return_sparse, return_complex, **kwargs)</span>
+<span class="ansi-green-fg">    415</span> ylms_pos, ylms_neg = get_ylms_for_modes(
+<span class="ansi-green-fg">    416</span>     l_arr, m_arr, theta_obs, phi_obs
+<span class="ansi-green-fg">    417</span> )
+<span class="ansi-green-fg">    419</span> summer = ModeSum(
+<span class="ansi-green-fg">    420</span>     l_arr, m_arr, k_arr, n_arr,
+<span class="ansi-green-fg">    421</span>     ylms_pos, ylms_neg,
+<span class="ansi-green-fg">    422</span>     dist=dist, M=M, mu=mu,
+<span class="ansi-green-fg">    423</span> )
+<span class="ansi-green-fg">--&gt; </span><span class="ansi-green-fg">425</span> t_out, h = <span class="ansi-yellow-bg">summer</span><span class="ansi-yellow-bg">(</span>
+<span class="ansi-green-fg">    426</span> <span class="ansi-yellow-bg">    </span><span class="ansi-yellow-bg">sparse</span><span class="ansi-yellow-bg">[</span><span class="ansi-yellow-fg ansi-yellow-bg">&#34;</span><span class="ansi-yellow-fg ansi-yellow-bg">t</span><span class="ansi-yellow-fg ansi-yellow-bg">&#34;</span><span class="ansi-yellow-bg">]</span><span class="ansi-yellow-bg">,</span>
+<span class="ansi-green-fg">    427</span> <span class="ansi-yellow-bg">    </span><span class="ansi-yellow-bg">sparse</span><span class="ansi-yellow-bg">[</span><span class="ansi-yellow-fg ansi-yellow-bg">&#34;</span><span class="ansi-yellow-fg ansi-yellow-bg">teuk_modes</span><span class="ansi-yellow-fg ansi-yellow-bg">&#34;</span><span class="ansi-yellow-bg">]</span><span class="ansi-yellow-bg">,</span>
+<span class="ansi-green-fg">    428</span> <span class="ansi-yellow-bg">    </span><span class="ansi-yellow-bg">sparse</span><span class="ansi-yellow-bg">[</span><span class="ansi-yellow-fg ansi-yellow-bg">&#34;</span><span class="ansi-yellow-fg ansi-yellow-bg">Phi_phi</span><span class="ansi-yellow-fg ansi-yellow-bg">&#34;</span><span class="ansi-yellow-bg">]</span><span class="ansi-yellow-bg">,</span>
+<span class="ansi-green-fg">    429</span> <span class="ansi-yellow-bg">    </span><span class="ansi-yellow-bg">sparse</span><span class="ansi-yellow-bg">[</span><span class="ansi-yellow-fg ansi-yellow-bg">&#34;</span><span class="ansi-yellow-fg ansi-yellow-bg">Phi_theta</span><span class="ansi-yellow-fg ansi-yellow-bg">&#34;</span><span class="ansi-yellow-bg">]</span><span class="ansi-yellow-bg">,</span>
+<span class="ansi-green-fg">    430</span> <span class="ansi-yellow-bg">    </span><span class="ansi-yellow-bg">sparse</span><span class="ansi-yellow-bg">[</span><span class="ansi-yellow-fg ansi-yellow-bg">&#34;</span><span class="ansi-yellow-fg ansi-yellow-bg">Phi_r</span><span class="ansi-yellow-fg ansi-yellow-bg">&#34;</span><span class="ansi-yellow-bg">]</span><span class="ansi-yellow-bg">,</span>
+<span class="ansi-green-fg">    431</span> <span class="ansi-yellow-bg">    </span><span class="ansi-yellow-bg">dt</span><span class="ansi-yellow-bg">=</span><span class="ansi-yellow-bg">dt</span><span class="ansi-yellow-bg">,</span>
+<span class="ansi-green-fg">    432</span> <span class="ansi-yellow-bg">)</span>
+<span class="ansi-green-fg">    434</span> <span style="color: rgb(95,135,135)"># Source-frame sign convention (FEW rotates by π after summation)</span>
+<span class="ansi-green-fg">    435</span> h = h * (-<span class="ansi-green-fg">1.0</span>)
+
+<span class="ansi-cyan-fg">File </span><span class="ansi-green-fg">~/Documents/PhD/LISA/Projects/JAX-waveform/fewtrax/src/fewtrax/summation/modes.py:366</span>, in <span class="ansi-cyan-fg">ModeSum.__call__</span><span class="ansi-blue-fg">(self, t_traj, teuk_modes, Phi_phi, Phi_theta, Phi_r, dt, dense)</span>
+<span class="ansi-green-fg">    358</span>     h = direct_mode_sum(
+<span class="ansi-green-fg">    359</span>         jnp.asarray(teuk_modes),
+<span class="ansi-green-fg">    360</span>         <span style="color: rgb(0,135,0)">self</span>.ylms_pos, <span style="color: rgb(0,135,0)">self</span>.ylms_neg,
+<span class="ansi-green-fg">    361</span>         Phi_phi, Phi_theta, Phi_r,
+<span class="ansi-green-fg">    362</span>         <span style="color: rgb(0,135,0)">self</span>.l_arr, <span style="color: rgb(0,135,0)">self</span>.m_arr, <span style="color: rgb(0,135,0)">self</span>.k_arr, <span style="color: rgb(0,135,0)">self</span>.n_arr,
+<span class="ansi-green-fg">    363</span>     )
+<span class="ansi-green-fg">    364</span>     t_out = t_traj
+<span class="ansi-green-fg">--&gt; </span><span class="ansi-green-fg">366</span> <span class="ansi-bold" style="color: rgb(0,135,0)">return</span> t_out, <span class="ansi-yellow-bg">h</span><span class="ansi-yellow-bg"> </span><span class="ansi-yellow-bg">*</span><span class="ansi-yellow-bg"> </span><span class="ansi-yellow-bg" style="color: rgb(0,135,0)">self</span><span class="ansi-yellow-bg">.</span><span class="ansi-yellow-bg">_amp</span>
+
+<span class="ansi-cyan-fg">File </span><span class="ansi-green-fg">~/Documents/PhD/LISA/Projects/JAX-waveform/fewtrax/.venv/lib/python3.13/site-packages/jax/_src/numpy/array_methods.py:604</span>, in <span class="ansi-cyan-fg">_defer_to_unrecognized_arg.&lt;locals&gt;.deferring_binary_op</span><span class="ansi-blue-fg">(self, other)</span>
+<span class="ansi-green-fg">    602</span> <span class="ansi-bold" style="color: rgb(0,135,0)">def</span><span style="color: rgb(188,188,188)"> </span><span class="ansi-blue-fg">_defer_to_unrecognized_arg</span>(opchar, binary_op, swap=<span class="ansi-bold" style="color: rgb(0,135,0)">False</span>):
+<span class="ansi-green-fg">    603</span>   <span style="color: rgb(95,135,135)"># Ensure that other array types have the chance to override arithmetic.</span>
+<span class="ansi-green-fg">--&gt; </span><span class="ansi-green-fg">604</span>   <span class="ansi-bold" style="color: rgb(0,135,0)">def</span><span style="color: rgb(188,188,188)"> </span><span class="ansi-blue-fg">deferring_binary_op</span>(<span style="color: rgb(0,135,0)">self</span>, other):
+<span class="ansi-green-fg">    605</span>     <span class="ansi-bold" style="color: rgb(0,135,0)">if</span> <span style="color: rgb(0,135,0)">hasattr</span>(other, <span class="ansi-yellow-fg">&#39;</span><span class="ansi-yellow-fg">__jax_array__</span><span class="ansi-yellow-fg">&#39;</span>):
+<span class="ansi-green-fg">    606</span>       other = other.__jax_array__()
+
+<span class="ansi-red-fg">KeyboardInterrupt</span>:
+</pre></div></div>
+</div>
+<div class="nboutput nblast docutils container">
+<div class="prompt empty docutils container">
+</div>
+<div class="output_area docutils container">
+<img alt="../_images/notebooks_05_full_waveform_10_1.png" src="../_images/notebooks_05_full_waveform_10_1.png" />
+</div>
+</div>
+</section>
+<section id="Effect-of-Initial-Eccentricity-e_0">
+<h3>Effect of Initial Eccentricity <span class="math notranslate nohighlight">\(e_0\)</span><a class="headerlink" href="#Effect-of-Initial-Eccentricity-e_0" title="Link to this heading"></a></h3>
+<div class="nbinput nblast docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[ ]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">fig</span><span class="p">,</span> <span class="n">ax</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplots</span><span class="p">(</span><span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">10</span><span class="p">,</span> <span class="mi">5</span><span class="p">))</span>
+
+<span class="k">for</span> <span class="n">e0_val</span> <span class="ow">in</span> <span class="p">[</span><span class="mf">0.0</span><span class="p">,</span> <span class="mf">0.2</span><span class="p">,</span> <span class="mf">0.4</span><span class="p">,</span> <span class="mf">0.6</span><span class="p">]:</span>
+    <span class="n">t_tr</span><span class="p">,</span> <span class="n">f_tr</span> <span class="o">=</span> <span class="n">wf</span><span class="o">.</span><span class="n">get_harmonic_track</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="n">M</span><span class="o">=</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;M&quot;</span><span class="p">],</span> <span class="n">mu</span><span class="o">=</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;mu&quot;</span><span class="p">],</span>
+                                         <span class="n">a</span><span class="o">=</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;a&quot;</span><span class="p">],</span> <span class="n">p0</span><span class="o">=</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;p0&quot;</span><span class="p">],</span>
+                                         <span class="n">e0</span><span class="o">=</span><span class="n">e0_val</span><span class="p">,</span> <span class="n">T</span><span class="o">=</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;T&quot;</span><span class="p">])</span>
+    <span class="n">t_d</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">t_tr</span><span class="p">)</span> <span class="o">/</span> <span class="mi">86400</span>
+    <span class="n">f</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">f_tr</span><span class="p">)</span>
+    <span class="n">ok</span>  <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">isfinite</span><span class="p">(</span><span class="n">f</span><span class="p">)</span> <span class="o">&amp;</span> <span class="p">(</span><span class="n">f_m</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">)</span>
+    <span class="n">ax</span><span class="o">.</span><span class="n">semilogy</span><span class="p">(</span><span class="n">t_d</span><span class="p">[</span><span class="n">ok</span><span class="p">],</span> <span class="n">f</span><span class="p">[</span><span class="n">ok</span><span class="p">],</span> <span class="n">label</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;$e_0=</span><span class="si">{</span><span class="n">e0_val</span><span class="si">}</span><span class="s2">$&quot;</span><span class="p">)</span>
+
+<span class="n">ax</span><span class="o">.</span><span class="n">set_xlabel</span><span class="p">(</span><span class="s2">&quot;Time [days]&quot;</span><span class="p">)</span>
+<span class="n">ax</span><span class="o">.</span><span class="n">set_ylabel</span><span class="p">(</span><span class="s2">&quot;$f_</span><span class="si">{2201}</span><span class="s2">$ [Hz]&quot;</span><span class="p">)</span>
+<span class="n">ax</span><span class="o">.</span><span class="n">set_title</span><span class="p">(</span><span class="s2">&quot;(2,2,0,1) frequency track vs eccentricity ($a=0.7$)&quot;</span><span class="p">)</span>
+<span class="n">ax</span><span class="o">.</span><span class="n">legend</span><span class="p">()</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">tight_layout</span><span class="p">()</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+</pre></div>
+</div>
+</div>
+</section>
+</section>
+<section id="5.4-Inspecting-the-Sparse-method">
+<h2>5.4 Inspecting the Sparse method<a class="headerlink" href="#5.4-Inspecting-the-Sparse-method" title="Link to this heading"></a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">generate_sparse</span></code> exposes the intermediate trajectory and amplitude arrays, useful for debugging or building custom summation schemes.</p>
+<div class="nbinput docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[9]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">sparse</span> <span class="o">=</span> <span class="n">wf</span><span class="o">.</span><span class="n">generate_sparse</span><span class="p">(</span><span class="o">**</span><span class="p">{</span><span class="n">k</span><span class="p">:</span> <span class="n">v</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">params</span><span class="o">.</span><span class="n">items</span><span class="p">()</span>
+                               <span class="k">if</span> <span class="n">k</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">&quot;dist&quot;</span><span class="p">,</span> <span class="s2">&quot;qS&quot;</span><span class="p">,</span> <span class="s2">&quot;phiS&quot;</span><span class="p">,</span> <span class="s2">&quot;qK&quot;</span><span class="p">,</span> <span class="s2">&quot;phiK&quot;</span><span class="p">,</span>
+                                            <span class="s2">&quot;Phi_phi0&quot;</span><span class="p">,</span> <span class="s2">&quot;Phi_theta0&quot;</span><span class="p">,</span> <span class="s2">&quot;Phi_r0&quot;</span><span class="p">)})</span>
+
+<span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Sparse output keys:&quot;</span><span class="p">,</span> <span class="nb">list</span><span class="p">(</span><span class="n">sparse</span><span class="o">.</span><span class="n">keys</span><span class="p">()))</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Trajectory length   : </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">sparse</span><span class="p">[</span><span class="s1">&#39;p&#39;</span><span class="p">])</span><span class="si">}</span><span class="s2"> points&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Selected modes      : </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">sparse</span><span class="p">[</span><span class="s1">&#39;mode_inds&#39;</span><span class="p">])</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;teuk_modes shape    : </span><span class="si">{</span><span class="n">sparse</span><span class="p">[</span><span class="s1">&#39;teuk_modes&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">  (N_traj × N_modes)&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<div class="nboutput nblast docutils container">
+<div class="prompt empty docutils container">
+</div>
+<div class="output_area docutils container">
+<div class="highlight"><pre>
+Sparse output keys: [&#39;t&#39;, &#39;p&#39;, &#39;e&#39;, &#39;Phi_phi&#39;, &#39;Phi_theta&#39;, &#39;Phi_r&#39;, &#39;teuk_modes&#39;, &#39;l_arr&#39;, &#39;m_arr&#39;, &#39;k_arr&#39;, &#39;n_arr&#39;, &#39;mode_inds&#39;]
+Trajectory length   : 150 points
+Selected modes      : 117
+teuk_modes shape    : (150, 117)  (N_traj × N_modes)
+</pre></div></div>
+</div>
+</section>
+<section id="5.5-Sky-Angle-Dependence">
+<h2>5.5 Sky-Angle Dependence<a class="headerlink" href="#5.5-Sky-Angle-Dependence" title="Link to this heading"></a></h2>
+<p>The observed strain <span class="math notranslate nohighlight">\(h_+\)</span> depends on sky angles <span class="math notranslate nohighlight">\((\theta_S, \phi_S)\)</span> and spin orientation <span class="math notranslate nohighlight">\((\theta_K, \phi_K)\)</span> through the pattern functions.</p>
+<div class="nbinput docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[10]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">fewtrax.utils.harmonics</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_ylms_for_modes</span>
+
+<span class="n">theta_vals</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linspace</span><span class="p">(</span><span class="mf">0.05</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">pi</span> <span class="o">-</span> <span class="mf">0.05</span><span class="p">,</span> <span class="mi">20</span><span class="p">)</span>
+<span class="n">snr_proxy</span>  <span class="o">=</span> <span class="p">[]</span>
+
+<span class="n">l_sel</span> <span class="o">=</span> <span class="n">sparse</span><span class="p">[</span><span class="s2">&quot;l_arr&quot;</span><span class="p">]</span>
+<span class="n">m_sel</span> <span class="o">=</span> <span class="n">sparse</span><span class="p">[</span><span class="s2">&quot;m_arr&quot;</span><span class="p">]</span>
+
+<span class="k">for</span> <span class="n">th</span> <span class="ow">in</span> <span class="n">theta_vals</span><span class="p">:</span>
+    <span class="n">ylms_p</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">get_ylms_for_modes</span><span class="p">(</span><span class="n">l_sel</span><span class="p">,</span> <span class="n">m_sel</span><span class="p">,</span> <span class="nb">float</span><span class="p">(</span><span class="n">th</span><span class="p">),</span> <span class="mf">0.5</span><span class="p">)</span>
+    <span class="c1"># SNR proxy: sum |Y * A|^2 over modes and trajectory</span>
+    <span class="n">power</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">jnp</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">jnp</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">ylms_p</span><span class="p">)</span><span class="o">**</span><span class="mi">2</span> <span class="o">*</span> <span class="n">jnp</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">jnp</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">jnp</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">sparse</span><span class="p">[</span><span class="s2">&quot;teuk_modes&quot;</span><span class="p">]))</span><span class="o">**</span><span class="mi">2</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)))</span>
+    <span class="n">snr_proxy</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">power</span><span class="p">)</span>
+
+<span class="n">fig</span><span class="p">,</span> <span class="n">ax</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplots</span><span class="p">(</span><span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">8</span><span class="p">,</span> <span class="mi">4</span><span class="p">))</span>
+<span class="n">ax</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">degrees</span><span class="p">(</span><span class="n">theta_vals</span><span class="p">),</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">snr_proxy</span><span class="p">)</span> <span class="o">/</span> <span class="nb">max</span><span class="p">(</span><span class="n">snr_proxy</span><span class="p">))</span>
+<span class="n">ax</span><span class="o">.</span><span class="n">set_xlabel</span><span class="p">(</span><span class="sa">r</span><span class="s2">&quot;$\theta_S$ [deg]&quot;</span><span class="p">)</span>
+<span class="n">ax</span><span class="o">.</span><span class="n">set_ylabel</span><span class="p">(</span><span class="s2">&quot;Normalised SNR proxy&quot;</span><span class="p">)</span>
+<span class="n">ax</span><span class="o">.</span><span class="n">set_title</span><span class="p">(</span><span class="s2">&quot;SNR variation with sky polar angle&quot;</span><span class="p">)</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">tight_layout</span><span class="p">()</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+</pre></div>
+</div>
+</div>
+<div class="nboutput nblast docutils container">
+<div class="prompt empty docutils container">
+</div>
+<div class="output_area docutils container">
+<img alt="../_images/notebooks_05_full_waveform_16_0.png" src="../_images/notebooks_05_full_waveform_16_0.png" />
+</div>
+</div>
+</section>
+<section id="Summary">
+<h2>Summary<a class="headerlink" href="#Summary" title="Link to this heading"></a></h2>
+<p>The <code class="docutils literal notranslate"><span class="pre">KerrEccentricEquatorialWaveform</span></code> class:</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Method</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">__init__(data_dir,</span> <span class="pre">...)</span></code></p></td>
+<td><p>Loads flux and amplitude data; builds trajectory + summation objects</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">__call__(M,</span> <span class="pre">μ,</span> <span class="pre">a,</span> <span class="pre">p₀,</span> <span class="pre">e₀,</span> <span class="pre">...)</span></code></p></td>
+<td><p>Returns <code class="docutils literal notranslate"><span class="pre">(hp,</span> <span class="pre">hx)</span></code> with full FEW-compatible API</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">generate_sparse(...)</span></code></p></td>
+<td><p>Returns trajectory dict with amplitudes; useful for custom pipelines</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">get_harmonic_track(l,</span> <span class="pre">m,</span> <span class="pre">k,</span> <span class="pre">n,</span> <span class="pre">...)</span></code></p></td>
+<td><p>Computes instantaneous frequency track for a single mode</p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Next:</strong> <a class="reference internal" href="06_jax_features.html"><span class="doc">06_jax_features.ipynb</span></a> — JIT compilation, vmap batching, and automatic differentiation for parameter estimation.</p>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="04_mode_summation.html" class="btn btn-neutral float-left" title="04 — Mode Summation and Harmonic Decomposition" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="06_jax_features.html" class="btn btn-neutral float-right" title="06 — JAX Features: JIT, vmap, and Autodiff" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2026, Bert Depoorter.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

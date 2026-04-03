@@ -1,0 +1,768 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>06 — JAX Features: JIT, vmap, and Autodiff &mdash; fewtrax 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
+      <link rel="stylesheet" type="text/css" href="../_static/nbsphinx-code-cells.css?v=2aa19091" />
+
+  
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+      <script>window.MathJax = {"tex": {"inlineMath": [["$", "$"], ["\\(", "\\)"]], "processEscapes": true}, "options": {"ignoreHtmlClass": "tex2jax_ignore|mathjax_ignore|document", "processHtmlClass": "tex2jax_process|mathjax_process|math|output_area"}}</script>
+      <script defer="defer" src="https://cdn.jsdelivr.net/npm/mathjax@4/tex-mml-chtml.js"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="API Reference" href="../api.html" />
+    <link rel="prev" title="05 — Full EMRI Waveform Generation" href="05_full_waveform.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            fewtrax
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Getting started</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../quickstart.html">Quickstart</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Background</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../math_background.html">Mathematical Background</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Tutorials</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="reference internal" href="../examples.html">Tutorials</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="01_kerr_geodesics.html">01 — Kerr Geodesics</a></li>
+<li class="toctree-l2"><a class="reference internal" href="02_emri_trajectory.html">02 — EMRI Trajectory Integration</a></li>
+<li class="toctree-l2"><a class="reference internal" href="03_amplitude_interpolation.html">03 — Teukolsky Amplitude Interpolation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="04_mode_summation.html">04 — Mode Summation and Harmonic Decomposition</a></li>
+<li class="toctree-l2"><a class="reference internal" href="05_full_waveform.html">05 — Full EMRI Waveform Generation</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">06 — JAX Features: JIT, vmap, and Autodiff</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#Why-JAX?">Why JAX?</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#6.1-JIT-Compilation">6.1 JIT Compilation</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#6.2-vmap:-Batching-Over-Parameter-Space">6.2 vmap: Batching Over Parameter Space</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#How-vmap-works">How vmap works</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#6.3-Automatic-Differentiation-Through-the-Trajectory">6.3 Automatic Differentiation Through the Trajectory</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#Application:-Sensitivity-of-orbital-phase-to-initial-conditions">Application: Sensitivity of orbital phase to initial conditions</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#6.4-Gradient-as-a-Function-of-Parameters">6.4 Gradient as a Function of Parameters</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#6.5-Fisher-Matrix-(Trajectory-Phase)">6.5 Fisher Matrix (Trajectory Phase)</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#6.6-Performance-Summary">6.6 Performance Summary</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#6.7-Outlook:-HMC/NUTS-Sampling">6.7 Outlook: HMC/NUTS Sampling</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#With-blackjax">With <code class="docutils literal notranslate"><span class="pre">blackjax</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#Key-performance-bottleneck">Key performance bottleneck</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#Summary">Summary</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../examples.html#notebook-descriptions">Notebook descriptions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../examples.html#running-locally">Running locally</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../examples.html#pre-executing-notebooks-for-the-docs">Pre-executing notebooks for the docs</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../examples.html#standalone-quickstart-script">Standalone quickstart script</a></li>
+</ul>
+</li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../api.html">API Reference</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">fewtrax</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../examples.html">Tutorials</a></li>
+      <li class="breadcrumb-item active">06 — JAX Features: JIT, vmap, and Autodiff</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/notebooks/06_jax_features.ipynb.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="06-—-JAX-Features:-JIT,-vmap,-and-Autodiff">
+<h1>06 — JAX Features: JIT, vmap, and Autodiff<a class="headerlink" href="#06-—-JAX-Features:-JIT,-vmap,-and-Autodiff" title="Link to this heading"></a></h1>
+<p>This notebook explores the JAX-specific capabilities of <code class="docutils literal notranslate"><span class="pre">fewtrax</span></code> that distinguish it from a standard NumPy/SciPy EMRI implementation.</p>
+<p><strong>Topics:</strong></p>
+<ul class="simple">
+<li><p>JIT compilation with <code class="docutils literal notranslate"><span class="pre">eqx.filter_jit</span></code> — first-call overhead vs. subsequent speed</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">jax.vmap</span></code> — batching waveform generation over parameter arrays</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">jax.grad</span></code> and <code class="docutils literal notranslate"><span class="pre">jax.jacobian</span></code> — differentiating through the trajectory ODE</p></li>
+<li><p>Fisher matrix computation for parameter estimation</p></li>
+<li><p>Brief outlook: HMC/NUTS sampling with <code class="docutils literal notranslate"><span class="pre">blackjax</span></code></p></li>
+</ul>
+<hr class="docutils" />
+<section id="Why-JAX?">
+<h2>Why JAX?<a class="headerlink" href="#Why-JAX?" title="Link to this heading"></a></h2>
+<p>The EMRI waveform pipeline has three computationally intensive stages:</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Stage</p></th>
+<th class="head"><p>fewtrax implementation</p></th>
+<th class="head"><p>JAX benefit</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Inspiral trajectory ODE</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">diffrax</span></code> + <code class="docutils literal notranslate"><span class="pre">eqx.filter_jit</span></code></p></td>
+<td><p>JIT + GPU</p></td>
+</tr>
+<tr class="row-odd"><td><p>Amplitude interpolation</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">scipy.bisplev</span></code> (CPU loop)</p></td>
+<td><p><em>(currently CPU-only)</em></p></td>
+</tr>
+<tr class="row-even"><td><p>Mode summation</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">jax.numpy</span></code> matrix ops</p></td>
+<td><p>JIT + GPU + vmap</p></td>
+</tr>
+</tbody>
+</table>
+<p>The trajectory and summation stages are fully JAX-native and benefit from all four JAX function transformations: <code class="docutils literal notranslate"><span class="pre">jit</span></code>, <code class="docutils literal notranslate"><span class="pre">vmap</span></code>, <code class="docutils literal notranslate"><span class="pre">grad</span></code>, and <code class="docutils literal notranslate"><span class="pre">pmap</span></code>.</p>
+<div class="nbinput docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[1]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">matplotlib.pyplot</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">plt</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">jax</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">jax.numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">jnp</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">equinox</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">eqx</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">time</span>
+
+<span class="n">jax</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="s2">&quot;jax_enable_x64&quot;</span><span class="p">,</span> <span class="kc">True</span><span class="p">)</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">dotenv</span><span class="w"> </span><span class="kn">import</span> <span class="n">load_dotenv</span>
+<span class="n">load_dotenv</span><span class="p">()</span>
+<span class="n">DATA_DIR</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">getenv</span><span class="p">(</span><span class="s2">&quot;FEW_DATA_DIR&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;FEW_DATA_DIR = </span><span class="si">{</span><span class="n">DATA_DIR</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">fewtrax.data</span><span class="w"> </span><span class="kn">import</span> <span class="n">load_flux_data</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">fewtrax.trajectory</span><span class="w"> </span><span class="kn">import</span> <span class="n">EMRIInspiral</span>
+
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;JAX version : </span><span class="si">{</span><span class="n">jax</span><span class="o">.</span><span class="n">__version__</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Default backend: </span><span class="si">{</span><span class="n">jax</span><span class="o">.</span><span class="n">default_backend</span><span class="p">()</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Devices: </span><span class="si">{</span><span class="n">jax</span><span class="o">.</span><span class="n">devices</span><span class="p">()</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<div class="nboutput nblast docutils container">
+<div class="prompt empty docutils container">
+</div>
+<div class="output_area docutils container">
+<div class="highlight"><pre>
+FEW_DATA_DIR = /Users/bertd/Documents/PhD/LISA/Codes/FastEMRIWaveforms/src/few/data
+JAX version : 0.8.3
+Default backend: cpu
+Devices: [CpuDevice(id=0)]
+</pre></div></div>
+</div>
+</section>
+<section id="6.1-JIT-Compilation">
+<h2>6.1 JIT Compilation<a class="headerlink" href="#6.1-JIT-Compilation" title="Link to this heading"></a></h2>
+<p>JAX’s JIT compiler traces Python functions into XLA computations on the first call (“tracing overhead”), then executes the compiled graph on all subsequent calls.</p>
+<p>For <code class="docutils literal notranslate"><span class="pre">fewtrax</span></code>, the inspiral ODE is wrapped with <code class="docutils literal notranslate"><span class="pre">eqx.filter_jit</span></code> — an Equinox-aware JIT that handles <code class="docutils literal notranslate"><span class="pre">eqx.Module</span></code> pytrees (like <code class="docutils literal notranslate"><span class="pre">EMRIInspiral</span></code>) without re-tracing when only numeric values change.</p>
+<p>The key distinction:</p>
+<ul class="simple">
+<li><p><strong>Static arguments</strong> (array shapes, control flow structure) trigger recompilation if changed</p></li>
+<li><p><strong>Dynamic arguments</strong> (numeric parameter values like <code class="docutils literal notranslate"><span class="pre">p0</span></code>, <code class="docutils literal notranslate"><span class="pre">e0</span></code>, <code class="docutils literal notranslate"><span class="pre">a</span></code>) never trigger recompilation</p></li>
+</ul>
+<div class="nbinput nblast docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[ ]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">flux_data</span> <span class="o">=</span> <span class="n">load_flux_data</span><span class="p">(</span><span class="n">DATA_DIR</span><span class="p">)</span>
+
+<span class="n">inspiral</span> <span class="o">=</span> <span class="n">EMRIInspiral</span><span class="p">(</span><span class="n">flux_data</span><span class="p">)</span>
+
+<span class="c1"># --- First call: traces + compiles + executes ---</span>
+<span class="n">t0</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">perf_counter</span><span class="p">()</span>
+<span class="n">t1</span><span class="p">,</span> <span class="n">p1</span><span class="p">,</span> <span class="n">e1</span><span class="p">,</span> <span class="n">Pphi1</span><span class="p">,</span> <span class="n">Pth1</span><span class="p">,</span> <span class="n">Pr1</span> <span class="o">=</span> <span class="n">inspiral</span><span class="p">(</span><span class="n">p0</span><span class="o">=</span><span class="mf">12.0</span><span class="p">,</span> <span class="n">e0</span><span class="o">=</span><span class="mf">0.4</span><span class="p">,</span> <span class="n">a</span><span class="o">=</span><span class="mf">0.7</span><span class="p">,</span> <span class="n">M</span><span class="o">=</span><span class="mf">1e6</span><span class="p">,</span> <span class="n">mu</span><span class="o">=</span><span class="mf">10.0</span><span class="p">,</span> <span class="n">T</span><span class="o">=</span><span class="mf">0.5</span><span class="p">,</span> <span class="n">dense_steps</span><span class="o">=</span><span class="mi">150</span><span class="p">)</span>
+<span class="c1"># Block until computation is complete</span>
+<span class="n">_</span> <span class="o">=</span> <span class="n">p1</span><span class="o">.</span><span class="n">block_until_ready</span><span class="p">()</span>
+<span class="n">first_call</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">perf_counter</span><span class="p">()</span> <span class="o">-</span> <span class="n">t0</span>
+
+<span class="c1"># --- Second call: runs compiled code, different parameters ---</span>
+<span class="n">t0</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">perf_counter</span><span class="p">()</span>
+<span class="n">t2</span><span class="p">,</span> <span class="n">p2</span><span class="p">,</span> <span class="n">e2</span><span class="p">,</span> <span class="n">Pphi2</span><span class="p">,</span> <span class="n">Pth2</span><span class="p">,</span> <span class="n">Pr2</span> <span class="o">=</span> <span class="n">inspiral</span><span class="p">(</span><span class="n">p0</span><span class="o">=</span><span class="mf">10.0</span><span class="p">,</span> <span class="n">e0</span><span class="o">=</span><span class="mf">0.3</span><span class="p">,</span> <span class="n">a</span><span class="o">=</span><span class="mf">0.7</span><span class="p">,</span> <span class="n">M</span><span class="o">=</span><span class="mf">1e6</span><span class="p">,</span> <span class="n">mu</span><span class="o">=</span><span class="mf">10.0</span><span class="p">,</span> <span class="n">T</span><span class="o">=</span><span class="mf">0.5</span><span class="p">,</span> <span class="n">dense_steps</span><span class="o">=</span><span class="mi">150</span><span class="p">)</span>
+<span class="n">_</span> <span class="o">=</span> <span class="n">p2</span><span class="o">.</span><span class="n">block_until_ready</span><span class="p">()</span>
+<span class="n">second_call</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">perf_counter</span><span class="p">()</span> <span class="o">-</span> <span class="n">t0</span>
+
+<span class="c1"># --- Third call ---</span>
+<span class="n">t0</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">perf_counter</span><span class="p">()</span>
+<span class="n">t3</span><span class="p">,</span> <span class="n">p3</span><span class="p">,</span> <span class="n">e3</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">inspiral</span><span class="p">(</span><span class="n">p0</span><span class="o">=</span><span class="mf">14.0</span><span class="p">,</span> <span class="n">e0</span><span class="o">=</span><span class="mf">0.5</span><span class="p">,</span> <span class="n">a</span><span class="o">=</span><span class="mf">0.7</span><span class="p">,</span> <span class="n">M</span><span class="o">=</span><span class="mf">1e6</span><span class="p">,</span> <span class="n">mu</span><span class="o">=</span><span class="mf">10.0</span><span class="p">,</span> <span class="n">T</span><span class="o">=</span><span class="mf">0.5</span><span class="p">,</span> <span class="n">dense_steps</span><span class="o">=</span><span class="mi">150</span><span class="p">)</span>
+<span class="n">_</span> <span class="o">=</span> <span class="n">p3</span><span class="o">.</span><span class="n">block_until_ready</span><span class="p">()</span>
+<span class="n">third_call</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">perf_counter</span><span class="p">()</span> <span class="o">-</span> <span class="n">t0</span>
+
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;First  call (trace + compile): </span><span class="si">{</span><span class="n">first_call</span><span class="o">*</span><span class="mf">1e3</span><span class="si">:</span><span class="s2">.0f</span><span class="si">}</span><span class="s2"> ms&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Second call (compiled)       : </span><span class="si">{</span><span class="n">second_call</span><span class="o">*</span><span class="mf">1e3</span><span class="si">:</span><span class="s2">.1f</span><span class="si">}</span><span class="s2"> ms&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Third  call (compiled)       : </span><span class="si">{</span><span class="n">third_call</span><span class="o">*</span><span class="mf">1e3</span><span class="si">:</span><span class="s2">.1f</span><span class="si">}</span><span class="s2"> ms&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Speedup (1st → 2nd): </span><span class="si">{</span><span class="n">first_call</span><span class="o">/</span><span class="n">second_call</span><span class="si">:</span><span class="s2">.0f</span><span class="si">}</span><span class="s2">×&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<div class="nbinput nblast docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[ ]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="c1"># Visualise the three trajectories</span>
+<span class="n">fig</span><span class="p">,</span> <span class="n">axes</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplots</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">12</span><span class="p">,</span> <span class="mi">4</span><span class="p">))</span>
+
+<span class="k">for</span> <span class="p">(</span><span class="n">t_arr</span><span class="p">,</span> <span class="n">p_arr</span><span class="p">,</span> <span class="n">e_arr</span><span class="p">,</span> <span class="n">lab</span><span class="p">)</span> <span class="ow">in</span> <span class="p">[</span>
+    <span class="p">(</span><span class="n">t1</span><span class="p">,</span> <span class="n">p1</span><span class="p">,</span> <span class="n">e1</span><span class="p">,</span> <span class="s2">&quot;$p_0=12,\,e_0=0.4$&quot;</span><span class="p">),</span>
+    <span class="p">(</span><span class="n">t2</span><span class="p">,</span> <span class="n">p2</span><span class="p">,</span> <span class="n">e2</span><span class="p">,</span> <span class="s2">&quot;$p_0=10,\,e_0=0.3$&quot;</span><span class="p">),</span>
+    <span class="p">(</span><span class="n">t3</span><span class="p">,</span> <span class="n">p3</span><span class="p">,</span> <span class="n">e3</span><span class="p">,</span> <span class="s2">&quot;$p_0=14,\,e_0=0.5$&quot;</span><span class="p">),</span>
+<span class="p">]:</span>
+    <span class="n">valid</span> <span class="o">=</span> <span class="o">~</span><span class="n">jnp</span><span class="o">.</span><span class="n">isnan</span><span class="p">(</span><span class="n">p_arr</span><span class="p">)</span>
+    <span class="n">t_yr</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">t_arr</span><span class="p">)[</span><span class="n">valid</span><span class="p">]</span> <span class="o">/</span> <span class="p">(</span><span class="mf">365.25</span> <span class="o">*</span> <span class="mi">86400</span><span class="p">)</span>
+    <span class="n">axes</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">t_yr</span><span class="p">,</span> <span class="n">jnp</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">p_arr</span><span class="p">)[</span><span class="n">valid</span><span class="p">],</span> <span class="n">label</span><span class="o">=</span><span class="n">lab</span><span class="p">)</span>
+    <span class="n">axes</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">t_yr</span><span class="p">,</span> <span class="n">jnp</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">e_arr</span><span class="p">)[</span><span class="n">valid</span><span class="p">],</span> <span class="n">label</span><span class="o">=</span><span class="n">lab</span><span class="p">)</span>
+
+<span class="n">axes</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">set_xlabel</span><span class="p">(</span><span class="s2">&quot;Time [yr]&quot;</span><span class="p">)</span>
+<span class="n">axes</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">set_ylabel</span><span class="p">(</span><span class="s2">&quot;$p$ [$M$]&quot;</span><span class="p">)</span>
+<span class="n">axes</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">set_title</span><span class="p">(</span><span class="s2">&quot;Semi-latus rectum&quot;</span><span class="p">)</span>
+<span class="n">axes</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">legend</span><span class="p">(</span><span class="n">fontsize</span><span class="o">=</span><span class="mi">9</span><span class="p">)</span>
+
+<span class="n">axes</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">set_xlabel</span><span class="p">(</span><span class="s2">&quot;Time [yr]&quot;</span><span class="p">)</span>
+<span class="n">axes</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">set_ylabel</span><span class="p">(</span><span class="s2">&quot;$e$&quot;</span><span class="p">)</span>
+<span class="n">axes</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">set_title</span><span class="p">(</span><span class="s2">&quot;Eccentricity&quot;</span><span class="p">)</span>
+<span class="n">axes</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">legend</span><span class="p">(</span><span class="n">fontsize</span><span class="o">=</span><span class="mi">9</span><span class="p">)</span>
+
+<span class="n">plt</span><span class="o">.</span><span class="n">suptitle</span><span class="p">(</span><span class="s2">&quot;Three trajectories — all run with same compiled code&quot;</span><span class="p">)</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">tight_layout</span><span class="p">()</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+</pre></div>
+</div>
+</div>
+</section>
+<section id="6.2-vmap:-Batching-Over-Parameter-Space">
+<h2>6.2 vmap: Batching Over Parameter Space<a class="headerlink" href="#6.2-vmap:-Batching-Over-Parameter-Space" title="Link to this heading"></a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">jax.vmap</span></code> vectorises a function along a batch axis without writing explicit loops. For EMRI parameter estimation, the key use cases are:</p>
+<ol class="arabic simple">
+<li><p><strong>Evaluating waveforms at a grid of parameter points</strong> (for likelihood surfaces)</p></li>
+<li><p><strong>Batching Fisher matrix columns</strong> (computing all ∂h/∂θᵢ in one pass)</p></li>
+<li><p><strong>Parallel MCMC chains</strong> (each chain evaluates the waveform at a different point)</p></li>
+</ol>
+<section id="How-vmap-works">
+<h3>How vmap works<a class="headerlink" href="#How-vmap-works" title="Link to this heading"></a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># Scalar function: scalar input → scalar output</span>
+<span class="n">f</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>  <span class="c1"># x is a float</span>
+
+<span class="c1"># Batched version: vector input → vector output</span>
+<span class="n">jax</span><span class="o">.</span><span class="n">vmap</span><span class="p">(</span><span class="n">f</span><span class="p">)(</span><span class="n">xs</span><span class="p">)</span>  <span class="c1"># xs has shape (N,)</span>
+</pre></div>
+</div>
+<p>Under the hood, vmap vectorises the XLA computation — it does NOT loop over the batch dimension. On GPU this gives near-linear speedup with batch size.</p>
+<div class="nbinput nblast docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[ ]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="c1"># Define a scalar function: (p0, e0) → final (p_end, e_end) after T=0.5 yr</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">run_and_get_endpoint</span><span class="p">(</span><span class="n">p0</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">e0</span><span class="p">:</span> <span class="nb">float</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">jnp</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Returns (p_end, e_end) at the end of the inspiral.&quot;&quot;&quot;</span>
+    <span class="n">t_arr</span><span class="p">,</span> <span class="n">p_arr</span><span class="p">,</span> <span class="n">e_arr</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">inspiral</span><span class="p">(</span><span class="n">p0</span><span class="o">=</span><span class="n">p0</span><span class="p">,</span> <span class="n">e0</span><span class="o">=</span><span class="n">e0</span><span class="p">,</span> <span class="n">a</span><span class="o">=</span><span class="mf">0.7</span><span class="p">,</span> <span class="n">M</span><span class="o">=</span><span class="mf">1e6</span><span class="p">,</span> <span class="n">mu</span><span class="o">=</span><span class="mf">10.0</span><span class="p">,</span> <span class="n">T</span><span class="o">=</span><span class="mf">0.5</span><span class="p">)</span>
+    <span class="n">valid_mask</span> <span class="o">=</span> <span class="o">~</span><span class="n">jnp</span><span class="o">.</span><span class="n">isnan</span><span class="p">(</span><span class="n">p_arr</span><span class="p">)</span>
+    <span class="n">n_valid</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">valid_mask</span><span class="p">)</span>
+    <span class="n">p_end</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">valid_mask</span><span class="p">,</span> <span class="n">p_arr</span><span class="p">,</span> <span class="n">jnp</span><span class="o">.</span><span class="n">nan</span><span class="p">)</span>
+    <span class="n">e_end</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">valid_mask</span><span class="p">,</span> <span class="n">e_arr</span><span class="p">,</span> <span class="n">jnp</span><span class="o">.</span><span class="n">nan</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">jnp</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="n">jnp</span><span class="o">.</span><span class="n">nanmin</span><span class="p">(</span><span class="n">p_end</span><span class="p">),</span> <span class="n">e_end</span><span class="p">[</span><span class="n">n_valid</span> <span class="o">-</span> <span class="mi">1</span><span class="p">]])</span>
+
+<span class="c1"># Batch over a grid of initial p0 values</span>
+<span class="n">p0_batch</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">linspace</span><span class="p">(</span><span class="mf">10.0</span><span class="p">,</span> <span class="mf">16.0</span><span class="p">,</span> <span class="mi">8</span><span class="p">)</span>
+<span class="n">e0_fixed</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">full</span><span class="p">(</span><span class="mi">8</span><span class="p">,</span> <span class="mf">0.4</span><span class="p">)</span>
+
+<span class="n">batched_run</span> <span class="o">=</span> <span class="n">eqx</span><span class="o">.</span><span class="n">filter_jit</span><span class="p">(</span><span class="n">jax</span><span class="o">.</span><span class="n">vmap</span><span class="p">(</span><span class="n">run_and_get_endpoint</span><span class="p">))</span>
+
+<span class="n">t0</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">perf_counter</span><span class="p">()</span>
+<span class="n">endpoints</span> <span class="o">=</span> <span class="n">batched_run</span><span class="p">(</span><span class="n">p0_batch</span><span class="p">,</span> <span class="n">e0_fixed</span><span class="p">)</span>
+<span class="n">_</span> <span class="o">=</span> <span class="n">endpoints</span><span class="o">.</span><span class="n">block_until_ready</span><span class="p">()</span>
+<span class="n">batch_first</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">perf_counter</span><span class="p">()</span> <span class="o">-</span> <span class="n">t0</span>
+
+<span class="n">t0</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">perf_counter</span><span class="p">()</span>
+<span class="n">endpoints</span> <span class="o">=</span> <span class="n">batched_run</span><span class="p">(</span><span class="n">p0_batch</span><span class="p">,</span> <span class="n">e0_fixed</span><span class="p">)</span>
+<span class="n">_</span> <span class="o">=</span> <span class="n">endpoints</span><span class="o">.</span><span class="n">block_until_ready</span><span class="p">()</span>
+<span class="n">batch_second</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">perf_counter</span><span class="p">()</span> <span class="o">-</span> <span class="n">t0</span>
+
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Batch size: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">p0_batch</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Batch first  call: </span><span class="si">{</span><span class="n">batch_first</span><span class="o">*</span><span class="mf">1e3</span><span class="si">:</span><span class="s2">.0f</span><span class="si">}</span><span class="s2"> ms&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Batch second call: </span><span class="si">{</span><span class="n">batch_second</span><span class="o">*</span><span class="mf">1e3</span><span class="si">:</span><span class="s2">.1f</span><span class="si">}</span><span class="s2"> ms&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Per-trajectory (compiled): </span><span class="si">{</span><span class="n">batch_second</span><span class="o">/</span><span class="nb">len</span><span class="p">(</span><span class="n">p0_batch</span><span class="p">)</span><span class="o">*</span><span class="mf">1e3</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2"> ms&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Endpoints (p_end, e_end):&quot;</span><span class="p">)</span>
+<span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">p0</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">p0_batch</span><span class="p">):</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  p0=</span><span class="si">{</span><span class="nb">float</span><span class="p">(</span><span class="n">p0</span><span class="p">)</span><span class="si">:</span><span class="s2">.1f</span><span class="si">}</span><span class="s2"> → p_end=</span><span class="si">{</span><span class="nb">float</span><span class="p">(</span><span class="n">endpoints</span><span class="p">[</span><span class="n">i</span><span class="p">,</span><span class="mi">0</span><span class="p">])</span><span class="si">:</span><span class="s2">.3f</span><span class="si">}</span><span class="s2">, e_end=</span><span class="si">{</span><span class="nb">float</span><span class="p">(</span><span class="n">endpoints</span><span class="p">[</span><span class="n">i</span><span class="p">,</span><span class="mi">1</span><span class="p">])</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<div class="nbinput nblast docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[ ]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">get_inspiral_duration</span><span class="p">(</span><span class="n">p0</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">e0</span><span class="p">:</span> <span class="nb">float</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Returns inspiral time in years.&quot;&quot;&quot;</span>
+    <span class="n">t_arr</span><span class="p">,</span> <span class="n">p_arr</span><span class="p">,</span> <span class="n">e_arr</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">inspiral</span><span class="p">(</span><span class="n">p0</span><span class="o">=</span><span class="n">p0</span><span class="p">,</span> <span class="n">e0</span><span class="o">=</span><span class="n">e0</span><span class="p">,</span> <span class="n">a</span><span class="o">=</span><span class="mf">0.7</span><span class="p">,</span> <span class="n">M</span><span class="o">=</span><span class="mf">1e6</span><span class="p">,</span> <span class="n">mu</span><span class="o">=</span><span class="mf">10.0</span><span class="p">,</span> <span class="n">T</span><span class="o">=</span><span class="mf">2.0</span><span class="p">)</span>
+    <span class="n">valid_mask</span> <span class="o">=</span> <span class="o">~</span><span class="n">jnp</span><span class="o">.</span><span class="n">isnan</span><span class="p">(</span><span class="n">p_arr</span><span class="p">)</span>
+    <span class="n">n_valid</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">valid_mask</span><span class="p">)</span>
+    <span class="n">t_end</span> <span class="o">=</span> <span class="n">t_arr</span><span class="p">[</span><span class="n">n_valid</span> <span class="o">-</span> <span class="mi">1</span><span class="p">]</span>
+    <span class="k">return</span> <span class="n">t_end</span> <span class="o">/</span> <span class="p">(</span><span class="mf">365.25</span> <span class="o">*</span> <span class="mi">86400</span><span class="p">)</span>
+
+<span class="n">p0_grid</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">linspace</span><span class="p">(</span><span class="mf">10.0</span><span class="p">,</span> <span class="mf">18.0</span><span class="p">,</span> <span class="mi">10</span><span class="p">)</span>
+<span class="n">e0_grid</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">linspace</span><span class="p">(</span><span class="mf">0.05</span><span class="p">,</span> <span class="mf">0.6</span><span class="p">,</span> <span class="mi">10</span><span class="p">)</span>
+
+<span class="n">P0</span><span class="p">,</span> <span class="n">E0</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">meshgrid</span><span class="p">(</span><span class="n">p0_grid</span><span class="p">,</span> <span class="n">e0_grid</span><span class="p">,</span> <span class="n">indexing</span><span class="o">=</span><span class="s2">&quot;ij&quot;</span><span class="p">)</span>
+<span class="n">p0_flat</span> <span class="o">=</span> <span class="n">P0</span><span class="o">.</span><span class="n">ravel</span><span class="p">()</span>
+<span class="n">e0_flat</span> <span class="o">=</span> <span class="n">E0</span><span class="o">.</span><span class="n">ravel</span><span class="p">()</span>
+
+<span class="n">batched_duration</span> <span class="o">=</span> <span class="n">eqx</span><span class="o">.</span><span class="n">filter_jit</span><span class="p">(</span><span class="n">jax</span><span class="o">.</span><span class="n">vmap</span><span class="p">(</span><span class="n">get_inspiral_duration</span><span class="p">))</span>
+
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Computing </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">p0_flat</span><span class="p">)</span><span class="si">}</span><span class="s2"> trajectories on a </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">p0_grid</span><span class="p">)</span><span class="si">}</span><span class="s2">×</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">e0_grid</span><span class="p">)</span><span class="si">}</span><span class="s2"> grid…&quot;</span><span class="p">)</span>
+<span class="n">t0</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">perf_counter</span><span class="p">()</span>
+<span class="n">durations_flat</span> <span class="o">=</span> <span class="n">batched_duration</span><span class="p">(</span><span class="n">p0_flat</span><span class="p">,</span> <span class="n">e0_flat</span><span class="p">)</span>
+<span class="n">_</span> <span class="o">=</span> <span class="n">durations_flat</span><span class="o">.</span><span class="n">block_until_ready</span><span class="p">()</span>
+<span class="n">elapsed</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">perf_counter</span><span class="p">()</span> <span class="o">-</span> <span class="n">t0</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Wall time (incl. JIT): </span><span class="si">{</span><span class="n">elapsed</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2"> s (</span><span class="si">{</span><span class="n">elapsed</span><span class="o">/</span><span class="nb">len</span><span class="p">(</span><span class="n">p0_flat</span><span class="p">)</span><span class="o">*</span><span class="mf">1e3</span><span class="si">:</span><span class="s2">.0f</span><span class="si">}</span><span class="s2"> ms per trajectory)&quot;</span><span class="p">)</span>
+
+<span class="n">t0</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">perf_counter</span><span class="p">()</span>
+<span class="n">durations_flat</span> <span class="o">=</span> <span class="n">batched_duration</span><span class="p">(</span><span class="n">p0_flat</span><span class="p">,</span> <span class="n">e0_flat</span><span class="p">)</span>
+<span class="n">_</span> <span class="o">=</span> <span class="n">durations_flat</span><span class="o">.</span><span class="n">block_until_ready</span><span class="p">()</span>
+<span class="n">elapsed2</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">perf_counter</span><span class="p">()</span> <span class="o">-</span> <span class="n">t0</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Wall time (compiled) : </span><span class="si">{</span><span class="n">elapsed2</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2"> s (</span><span class="si">{</span><span class="n">elapsed2</span><span class="o">/</span><span class="nb">len</span><span class="p">(</span><span class="n">p0_flat</span><span class="p">)</span><span class="o">*</span><span class="mf">1e3</span><span class="si">:</span><span class="s2">.1f</span><span class="si">}</span><span class="s2"> ms per trajectory)&quot;</span><span class="p">)</span>
+
+<span class="n">durations_2d</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">durations_flat</span><span class="p">)</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">p0_grid</span><span class="p">),</span> <span class="nb">len</span><span class="p">(</span><span class="n">e0_grid</span><span class="p">))</span>
+
+<span class="n">fig</span><span class="p">,</span> <span class="n">ax</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplots</span><span class="p">(</span><span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">8</span><span class="p">,</span> <span class="mi">6</span><span class="p">))</span>
+<span class="n">im</span> <span class="o">=</span> <span class="n">ax</span><span class="o">.</span><span class="n">pcolormesh</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">e0_grid</span><span class="p">),</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">p0_grid</span><span class="p">),</span> <span class="n">durations_2d</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s2">&quot;viridis&quot;</span><span class="p">)</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">colorbar</span><span class="p">(</span><span class="n">im</span><span class="p">,</span> <span class="n">ax</span><span class="o">=</span><span class="n">ax</span><span class="p">,</span> <span class="n">label</span><span class="o">=</span><span class="s2">&quot;Inspiral duration [yr]&quot;</span><span class="p">)</span>
+<span class="n">ax</span><span class="o">.</span><span class="n">set_xlabel</span><span class="p">(</span><span class="s2">&quot;Initial eccentricity $e_0$&quot;</span><span class="p">)</span>
+<span class="n">ax</span><span class="o">.</span><span class="n">set_ylabel</span><span class="p">(</span><span class="s2">&quot;Initial semi-latus rectum $p_0$ [$M$]&quot;</span><span class="p">)</span>
+<span class="n">ax</span><span class="o">.</span><span class="n">set_title</span><span class="p">(</span><span class="s2">&quot;EMRI inspiral duration ($M=10^6 M_</span><span class="se">\\</span><span class="s2">odot$, $</span><span class="se">\\</span><span class="s2">mu=10 M_</span><span class="se">\\</span><span class="s2">odot$, $a=0.7$)&quot;</span><span class="p">)</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">tight_layout</span><span class="p">()</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+</pre></div>
+</div>
+</div>
+</section>
+</section>
+<section id="6.3-Automatic-Differentiation-Through-the-Trajectory">
+<h2>6.3 Automatic Differentiation Through the Trajectory<a class="headerlink" href="#6.3-Automatic-Differentiation-Through-the-Trajectory" title="Link to this heading"></a></h2>
+<p>JAX’s autodiff (<code class="docutils literal notranslate"><span class="pre">jax.grad</span></code>, <code class="docutils literal notranslate"><span class="pre">jax.jacfwd</span></code>, <code class="docutils literal notranslate"><span class="pre">jax.jacrev</span></code>) can differentiate through the entire <code class="docutils literal notranslate"><span class="pre">diffrax</span></code> ODE solver. This is possible because:</p>
+<ol class="arabic simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">diffrax</span></code> implements adjoint-method backpropagation through ODE solutions</p></li>
+<li><p>All geodesic functions (<code class="docutils literal notranslate"><span class="pre">kerr_geo_energy_equatorial</span></code>, <code class="docutils literal notranslate"><span class="pre">get_separatrix</span></code>, etc.) use <code class="docutils literal notranslate"><span class="pre">jax.lax.fori_loop</span></code> with static loop bounds — the only AD-compatible loop primitive in JAX</p></li>
+<li><p>All JAX operations (<code class="docutils literal notranslate"><span class="pre">jnp.where</span></code>, <code class="docutils literal notranslate"><span class="pre">jnp.linalg.solve</span></code>, etc.) are differentiable</p></li>
+</ol>
+<section id="Application:-Sensitivity-of-orbital-phase-to-initial-conditions">
+<h3>Application: Sensitivity of orbital phase to initial conditions<a class="headerlink" href="#Application:-Sensitivity-of-orbital-phase-to-initial-conditions" title="Link to this heading"></a></h3>
+<p>The quantity <span class="math notranslate nohighlight">\(\partial \Phi_\phi / \partial \theta_i\)</span> (gradient of accumulated orbital phase w.r.t. source parameters) is the central object in:</p>
+<ul class="simple">
+<li><p><strong>Fisher matrix</strong> computations: <span class="math notranslate nohighlight">\(\Gamma_{ij} = (\partial_i h | \partial_j h) / S_n\)</span></p></li>
+<li><p><strong>Matched filtering</strong>: detecting parameter offsets that cause phase mismatch</p></li>
+<li><p><strong>Gradient-based samplers</strong>: HMC/NUTS requires <span class="math notranslate nohighlight">\(\nabla \log p(\theta | d)\)</span></p></li>
+</ul>
+<div class="nbinput nblast docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[ ]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">total_phase_phi</span><span class="p">(</span><span class="n">p0</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">e0</span><span class="p">:</span> <span class="nb">float</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Total accumulated azimuthal phase Φφ at end of inspiral.&quot;&quot;&quot;</span>
+    <span class="n">t_arr</span><span class="p">,</span> <span class="n">p_arr</span><span class="p">,</span> <span class="n">e_arr</span><span class="p">,</span> <span class="n">Phi_phi</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">inspiral</span><span class="p">(</span><span class="n">p0</span><span class="o">=</span><span class="n">p0</span><span class="p">,</span> <span class="n">e0</span><span class="o">=</span><span class="n">e0</span><span class="p">,</span> <span class="n">a</span><span class="o">=</span><span class="mf">0.7</span><span class="p">,</span> <span class="n">M</span><span class="o">=</span><span class="mf">1e6</span><span class="p">,</span> <span class="n">mu</span><span class="o">=</span><span class="mf">10.0</span><span class="p">,</span> <span class="n">T</span><span class="o">=</span><span class="mf">0.5</span><span class="p">)</span>
+    <span class="n">valid_mask</span> <span class="o">=</span> <span class="o">~</span><span class="n">jnp</span><span class="o">.</span><span class="n">isnan</span><span class="p">(</span><span class="n">p_arr</span><span class="p">)</span>
+    <span class="n">n_valid</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">valid_mask</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">Phi_phi</span><span class="p">[</span><span class="n">n_valid</span> <span class="o">-</span> <span class="mi">1</span><span class="p">]</span>
+
+<span class="n">grad_fn</span> <span class="o">=</span> <span class="n">eqx</span><span class="o">.</span><span class="n">filter_jit</span><span class="p">(</span><span class="n">jax</span><span class="o">.</span><span class="n">grad</span><span class="p">(</span><span class="n">total_phase_phi</span><span class="p">,</span> <span class="n">argnums</span><span class="o">=</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">)))</span>
+
+<span class="n">p0_ref</span><span class="p">,</span> <span class="n">e0_ref</span> <span class="o">=</span> <span class="mf">12.0</span><span class="p">,</span> <span class="mf">0.4</span>
+
+<span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Computing gradient of total phase Φφ w.r.t. initial conditions…&quot;</span><span class="p">)</span>
+<span class="n">t0</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">perf_counter</span><span class="p">()</span>
+<span class="n">dPhi_dp0</span><span class="p">,</span> <span class="n">dPhi_de0</span> <span class="o">=</span> <span class="n">grad_fn</span><span class="p">(</span><span class="n">jnp</span><span class="o">.</span><span class="n">float64</span><span class="p">(</span><span class="n">p0_ref</span><span class="p">),</span> <span class="n">jnp</span><span class="o">.</span><span class="n">float64</span><span class="p">(</span><span class="n">e0_ref</span><span class="p">))</span>
+<span class="n">_</span> <span class="o">=</span> <span class="n">dPhi_dp0</span><span class="o">.</span><span class="n">block_until_ready</span><span class="p">()</span>
+<span class="n">elapsed</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">perf_counter</span><span class="p">()</span> <span class="o">-</span> <span class="n">t0</span>
+
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">∂Φφ/∂p0 = </span><span class="si">{</span><span class="nb">float</span><span class="p">(</span><span class="n">dPhi_dp0</span><span class="p">)</span><span class="si">:</span><span class="s2">.4e</span><span class="si">}</span><span class="s2">  (rad / M)&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;∂Φφ/∂e0 = </span><span class="si">{</span><span class="nb">float</span><span class="p">(</span><span class="n">dPhi_de0</span><span class="p">)</span><span class="si">:</span><span class="s2">.4e</span><span class="si">}</span><span class="s2">  (rad / unit-e)&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Gradient computed in: </span><span class="si">{</span><span class="n">elapsed</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2"> s (first call includes JIT)&quot;</span><span class="p">)</span>
+
+<span class="n">dp</span> <span class="o">=</span> <span class="mf">0.01</span>
+<span class="n">de</span> <span class="o">=</span> <span class="mf">0.001</span>
+
+<span class="n">phi_ref</span> <span class="o">=</span> <span class="n">total_phase_phi</span><span class="p">(</span><span class="n">jnp</span><span class="o">.</span><span class="n">float64</span><span class="p">(</span><span class="n">p0_ref</span><span class="p">),</span> <span class="n">jnp</span><span class="o">.</span><span class="n">float64</span><span class="p">(</span><span class="n">e0_ref</span><span class="p">))</span>
+<span class="n">phi_p</span>   <span class="o">=</span> <span class="n">total_phase_phi</span><span class="p">(</span><span class="n">jnp</span><span class="o">.</span><span class="n">float64</span><span class="p">(</span><span class="n">p0_ref</span> <span class="o">+</span> <span class="n">dp</span><span class="p">),</span> <span class="n">jnp</span><span class="o">.</span><span class="n">float64</span><span class="p">(</span><span class="n">e0_ref</span><span class="p">))</span>
+<span class="n">phi_m</span>   <span class="o">=</span> <span class="n">total_phase_phi</span><span class="p">(</span><span class="n">jnp</span><span class="o">.</span><span class="n">float64</span><span class="p">(</span><span class="n">p0_ref</span> <span class="o">-</span> <span class="n">dp</span><span class="p">),</span> <span class="n">jnp</span><span class="o">.</span><span class="n">float64</span><span class="p">(</span><span class="n">e0_ref</span><span class="p">))</span>
+<span class="n">phi_ep</span>  <span class="o">=</span> <span class="n">total_phase_phi</span><span class="p">(</span><span class="n">jnp</span><span class="o">.</span><span class="n">float64</span><span class="p">(</span><span class="n">p0_ref</span><span class="p">),</span> <span class="n">jnp</span><span class="o">.</span><span class="n">float64</span><span class="p">(</span><span class="n">e0_ref</span> <span class="o">+</span> <span class="n">de</span><span class="p">))</span>
+<span class="n">phi_em</span>  <span class="o">=</span> <span class="n">total_phase_phi</span><span class="p">(</span><span class="n">jnp</span><span class="o">.</span><span class="n">float64</span><span class="p">(</span><span class="n">p0_ref</span><span class="p">),</span> <span class="n">jnp</span><span class="o">.</span><span class="n">float64</span><span class="p">(</span><span class="n">e0_ref</span> <span class="o">-</span> <span class="n">de</span><span class="p">))</span>
+
+<span class="n">dPhi_dp0_fd</span> <span class="o">=</span> <span class="nb">float</span><span class="p">((</span><span class="n">phi_p</span> <span class="o">-</span> <span class="n">phi_m</span><span class="p">)</span> <span class="o">/</span> <span class="p">(</span><span class="mi">2</span> <span class="o">*</span> <span class="n">dp</span><span class="p">))</span>
+<span class="n">dPhi_de0_fd</span> <span class="o">=</span> <span class="nb">float</span><span class="p">((</span><span class="n">phi_ep</span> <span class="o">-</span> <span class="n">phi_em</span><span class="p">)</span> <span class="o">/</span> <span class="p">(</span><span class="mi">2</span> <span class="o">*</span> <span class="n">de</span><span class="p">))</span>
+
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Finite-difference cross-check:&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  ∂Φφ/∂p0: AD = </span><span class="si">{</span><span class="nb">float</span><span class="p">(</span><span class="n">dPhi_dp0</span><span class="p">)</span><span class="si">:</span><span class="s2">.4e</span><span class="si">}</span><span class="s2">, FD = </span><span class="si">{</span><span class="n">dPhi_dp0_fd</span><span class="si">:</span><span class="s2">.4e</span><span class="si">}</span><span class="s2">, &quot;</span>
+      <span class="sa">f</span><span class="s2">&quot;err = </span><span class="si">{</span><span class="nb">abs</span><span class="p">(</span><span class="nb">float</span><span class="p">(</span><span class="n">dPhi_dp0</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">dPhi_dp0_fd</span><span class="p">)</span><span class="o">/</span><span class="nb">abs</span><span class="p">(</span><span class="n">dPhi_dp0_fd</span><span class="p">)</span><span class="si">:</span><span class="s2">.2e</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  ∂Φφ/∂e0: AD = </span><span class="si">{</span><span class="nb">float</span><span class="p">(</span><span class="n">dPhi_de0</span><span class="p">)</span><span class="si">:</span><span class="s2">.4e</span><span class="si">}</span><span class="s2">, FD = </span><span class="si">{</span><span class="n">dPhi_de0_fd</span><span class="si">:</span><span class="s2">.4e</span><span class="si">}</span><span class="s2">, &quot;</span>
+      <span class="sa">f</span><span class="s2">&quot;err = </span><span class="si">{</span><span class="nb">abs</span><span class="p">(</span><span class="nb">float</span><span class="p">(</span><span class="n">dPhi_de0</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">dPhi_de0_fd</span><span class="p">)</span><span class="o">/</span><span class="nb">abs</span><span class="p">(</span><span class="n">dPhi_de0_fd</span><span class="p">)</span><span class="si">:</span><span class="s2">.2e</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+</section>
+</section>
+<section id="6.4-Gradient-as-a-Function-of-Parameters">
+<h2>6.4 Gradient as a Function of Parameters<a class="headerlink" href="#6.4-Gradient-as-a-Function-of-Parameters" title="Link to this heading"></a></h2>
+<p>The gradient <span class="math notranslate nohighlight">\(\partial \Phi_\phi / \partial p_0\)</span> measures how sensitively the final phase depends on the initial separation. In gravitational-wave data analysis this directly sets the parameter estimation uncertainty:</p>
+<div class="math notranslate nohighlight">
+\[\sigma_{p_0} \sim \left( \frac{1}{S_n} \left| \frac{\partial h}{\partial p_0} \right|^2 \right)^{-1/2}
+\approx \left( \frac{(\mu/d_L)^2}{S_n} \left| \frac{\partial \Phi_\phi}{\partial p_0} \right|^2 \right)^{-1/2}\]</div>
+<p>Let’s map out how this gradient varies across parameter space.</p>
+<div class="nbinput nblast docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[ ]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">grad_p0_fn</span> <span class="o">=</span> <span class="n">eqx</span><span class="o">.</span><span class="n">filter_jit</span><span class="p">(</span><span class="n">jax</span><span class="o">.</span><span class="n">grad</span><span class="p">(</span><span class="n">total_phase_phi</span><span class="p">,</span> <span class="n">argnums</span><span class="o">=</span><span class="mi">0</span><span class="p">))</span>
+<span class="n">grad_e0_fn</span> <span class="o">=</span> <span class="n">eqx</span><span class="o">.</span><span class="n">filter_jit</span><span class="p">(</span><span class="n">jax</span><span class="o">.</span><span class="n">grad</span><span class="p">(</span><span class="n">total_phase_phi</span><span class="p">,</span> <span class="n">argnums</span><span class="o">=</span><span class="mi">1</span><span class="p">))</span>
+
+<span class="n">p0_vals</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">linspace</span><span class="p">(</span><span class="mf">10.0</span><span class="p">,</span> <span class="mf">16.0</span><span class="p">,</span> <span class="mi">12</span><span class="p">)</span>
+<span class="n">e0_vals</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="mf">0.1</span><span class="p">,</span> <span class="mf">0.3</span><span class="p">,</span> <span class="mf">0.5</span><span class="p">])</span>
+
+<span class="n">fig</span><span class="p">,</span> <span class="n">axes</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplots</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">12</span><span class="p">,</span> <span class="mi">4</span><span class="p">))</span>
+
+<span class="k">for</span> <span class="n">e0_v</span> <span class="ow">in</span> <span class="n">e0_vals</span><span class="p">:</span>
+    <span class="n">dp_grads</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">de_grads</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">p0_v</span> <span class="ow">in</span> <span class="n">p0_vals</span><span class="p">:</span>
+        <span class="n">g_p</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">grad_p0_fn</span><span class="p">(</span><span class="n">jnp</span><span class="o">.</span><span class="n">float64</span><span class="p">(</span><span class="n">p0_v</span><span class="p">),</span> <span class="n">jnp</span><span class="o">.</span><span class="n">float64</span><span class="p">(</span><span class="n">e0_v</span><span class="p">)))</span>
+        <span class="n">g_e</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">grad_e0_fn</span><span class="p">(</span><span class="n">jnp</span><span class="o">.</span><span class="n">float64</span><span class="p">(</span><span class="n">p0_v</span><span class="p">),</span> <span class="n">jnp</span><span class="o">.</span><span class="n">float64</span><span class="p">(</span><span class="n">e0_v</span><span class="p">)))</span>
+        <span class="n">dp_grads</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="nb">abs</span><span class="p">(</span><span class="n">g_p</span><span class="p">))</span>
+        <span class="n">de_grads</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="nb">abs</span><span class="p">(</span><span class="n">g_e</span><span class="p">))</span>
+
+    <span class="n">axes</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">semilogy</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">p0_vals</span><span class="p">),</span> <span class="n">dp_grads</span><span class="p">,</span> <span class="s2">&quot;o-&quot;</span><span class="p">,</span> <span class="n">label</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;$e_0=</span><span class="si">{</span><span class="nb">float</span><span class="p">(</span><span class="n">e0_v</span><span class="p">)</span><span class="si">:</span><span class="s2">.1f</span><span class="si">}</span><span class="s2">$&quot;</span><span class="p">)</span>
+    <span class="n">axes</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">semilogy</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">p0_vals</span><span class="p">),</span> <span class="n">de_grads</span><span class="p">,</span> <span class="s2">&quot;o-&quot;</span><span class="p">,</span> <span class="n">label</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;$e_0=</span><span class="si">{</span><span class="nb">float</span><span class="p">(</span><span class="n">e0_v</span><span class="p">)</span><span class="si">:</span><span class="s2">.1f</span><span class="si">}</span><span class="s2">$&quot;</span><span class="p">)</span>
+
+<span class="n">axes</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">set_xlabel</span><span class="p">(</span><span class="s2">&quot;$p_0$ [$M$]&quot;</span><span class="p">)</span>
+<span class="n">axes</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">set_ylabel</span><span class="p">(</span><span class="sa">r</span><span class="s2">&quot;$|\partial \Phi_\phi / \partial p_0|$ [rad / $M$]&quot;</span><span class="p">)</span>
+<span class="n">axes</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">set_title</span><span class="p">(</span><span class="s2">&quot;Phase sensitivity to initial separation&quot;</span><span class="p">)</span>
+<span class="n">axes</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">legend</span><span class="p">()</span>
+
+<span class="n">axes</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">set_xlabel</span><span class="p">(</span><span class="s2">&quot;$p_0$ [$M$]&quot;</span><span class="p">)</span>
+<span class="n">axes</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">set_ylabel</span><span class="p">(</span><span class="sa">r</span><span class="s2">&quot;$|\partial \Phi_\phi / \partial e_0|$ [rad]&quot;</span><span class="p">)</span>
+<span class="n">axes</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">set_title</span><span class="p">(</span><span class="s2">&quot;Phase sensitivity to initial eccentricity&quot;</span><span class="p">)</span>
+<span class="n">axes</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">legend</span><span class="p">()</span>
+
+<span class="n">plt</span><span class="o">.</span><span class="n">suptitle</span><span class="p">(</span><span class="s2">&quot;JAX autodiff through inspiral ODE ($M=10^6$, $</span><span class="se">\\</span><span class="s2">mu=10$, $a=0.7$, $T=0.5$ yr)&quot;</span><span class="p">)</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">tight_layout</span><span class="p">()</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+</pre></div>
+</div>
+</div>
+</section>
+<section id="6.5-Fisher-Matrix-(Trajectory-Phase)">
+<h2>6.5 Fisher Matrix (Trajectory Phase)<a class="headerlink" href="#6.5-Fisher-Matrix-(Trajectory-Phase)" title="Link to this heading"></a></h2>
+<p>The <strong>Fisher information matrix</strong> sets the Cramér–Rao lower bound on parameter estimation uncertainty. In the large-SNR limit:</p>
+<div class="math notranslate nohighlight">
+\[\Gamma_{ij} = \left( \frac{\partial h}{\partial \theta_i} \,\middle|\, \frac{\partial h}{\partial \theta_j} \right)
+= \int_0^\infty \frac{\tilde{h}_i^*(f)\, \tilde{h}_j(f)}{S_n(f)} \, df\]</div>
+<p>For a phase-dominated signal (the EMRI case), the dominant contribution comes from the phase gradient:</p>
+<div class="math notranslate nohighlight">
+\[\Gamma_{ij} \approx \text{SNR}^2 \times \left\langle \frac{\partial \Phi}{\partial \theta_i} \frac{\partial \Phi}{\partial \theta_j} \right\rangle_t\]</div>
+<p>Here we compute the Jacobian <span class="math notranslate nohighlight">\(\partial(\Phi_\phi, \Phi_r)_{\rm end} / \partial(p_0, e_0, a)\)</span> using <code class="docutils literal notranslate"><span class="pre">jax.jacobian</span></code>.</p>
+<div class="nbinput nblast docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[ ]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">fewtrax.data</span><span class="w"> </span><span class="kn">import</span> <span class="n">load_flux_data</span>
+
+<span class="n">insp</span> <span class="o">=</span> <span class="n">EMRIInspiral</span><span class="p">(</span><span class="n">flux_data</span><span class="p">)</span>
+
+<span class="c1"># Three-parameter function: (p0, e0, a) → (Φφ_end, Φr_end)</span>
+<span class="c1"># With a as a call-time argument, we can now differentiate w.r.t. all three.</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">phases_at_end</span><span class="p">(</span><span class="n">params</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Returns (Φφ_end, Φr_end) as a function of [p0, e0, a].&quot;&quot;&quot;</span>
+    <span class="n">p0</span><span class="p">,</span> <span class="n">e0</span><span class="p">,</span> <span class="n">a</span> <span class="o">=</span> <span class="n">params</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">params</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">params</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span>
+    <span class="n">_</span><span class="p">,</span> <span class="n">p_arr</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">Phi_phi</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">Phi_r</span> <span class="o">=</span> <span class="n">insp</span><span class="p">(</span><span class="n">p0</span><span class="o">=</span><span class="n">p0</span><span class="p">,</span> <span class="n">e0</span><span class="o">=</span><span class="n">e0</span><span class="p">,</span> <span class="n">a</span><span class="o">=</span><span class="n">a</span><span class="p">,</span> <span class="n">M</span><span class="o">=</span><span class="mf">1e6</span><span class="p">,</span> <span class="n">mu</span><span class="o">=</span><span class="mf">10.0</span><span class="p">,</span> <span class="n">T</span><span class="o">=</span><span class="mf">0.5</span><span class="p">,</span> <span class="n">dense_steps</span><span class="o">=</span><span class="mi">150</span><span class="p">)</span>
+    <span class="n">valid_mask</span> <span class="o">=</span> <span class="o">~</span><span class="n">jnp</span><span class="o">.</span><span class="n">isnan</span><span class="p">(</span><span class="n">p_arr</span><span class="p">)</span>
+    <span class="n">n_valid</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">valid_mask</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">jnp</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="n">Phi_phi</span><span class="p">[</span><span class="n">n_valid</span> <span class="o">-</span> <span class="mi">1</span><span class="p">],</span> <span class="n">Phi_r</span><span class="p">[</span><span class="n">n_valid</span> <span class="o">-</span> <span class="mi">1</span><span class="p">]])</span>
+
+<span class="n">jac_fn</span> <span class="o">=</span> <span class="n">eqx</span><span class="o">.</span><span class="n">filter_jit</span><span class="p">(</span><span class="n">jax</span><span class="o">.</span><span class="n">jacobian</span><span class="p">(</span><span class="n">phases_at_end</span><span class="p">))</span>
+
+<span class="n">params_ref</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="mf">12.0</span><span class="p">,</span> <span class="mf">0.4</span><span class="p">,</span> <span class="mf">0.7</span><span class="p">])</span>
+
+<span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Computing Jacobian ∂(Φφ, Φr)/∂(p0, e0, a)…&quot;</span><span class="p">)</span>
+<span class="n">t0</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">perf_counter</span><span class="p">()</span>
+<span class="n">J</span> <span class="o">=</span> <span class="n">jac_fn</span><span class="p">(</span><span class="n">params_ref</span><span class="p">)</span>
+<span class="n">_</span> <span class="o">=</span> <span class="n">J</span><span class="o">.</span><span class="n">block_until_ready</span><span class="p">()</span>
+<span class="n">elapsed</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">perf_counter</span><span class="p">()</span> <span class="o">-</span> <span class="n">t0</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Computed in </span><span class="si">{</span><span class="n">elapsed</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2"> s&quot;</span><span class="p">)</span>
+
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Jacobian matrix:&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  ∂Φφ/∂p0 = </span><span class="si">{</span><span class="nb">float</span><span class="p">(</span><span class="n">J</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">])</span><span class="si">:</span><span class="s2">.4e</span><span class="si">}</span><span class="s2"> rad/M&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  ∂Φφ/∂e0 = </span><span class="si">{</span><span class="nb">float</span><span class="p">(</span><span class="n">J</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span><span class="mi">1</span><span class="p">])</span><span class="si">:</span><span class="s2">.4e</span><span class="si">}</span><span class="s2"> rad&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  ∂Φφ/∂a  = </span><span class="si">{</span><span class="nb">float</span><span class="p">(</span><span class="n">J</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span><span class="mi">2</span><span class="p">])</span><span class="si">:</span><span class="s2">.4e</span><span class="si">}</span><span class="s2"> rad&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  ∂Φr/∂p0 = </span><span class="si">{</span><span class="nb">float</span><span class="p">(</span><span class="n">J</span><span class="p">[</span><span class="mi">1</span><span class="p">,</span><span class="mi">0</span><span class="p">])</span><span class="si">:</span><span class="s2">.4e</span><span class="si">}</span><span class="s2"> rad/M&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  ∂Φr/∂e0 = </span><span class="si">{</span><span class="nb">float</span><span class="p">(</span><span class="n">J</span><span class="p">[</span><span class="mi">1</span><span class="p">,</span><span class="mi">1</span><span class="p">])</span><span class="si">:</span><span class="s2">.4e</span><span class="si">}</span><span class="s2"> rad&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  ∂Φr/∂a  = </span><span class="si">{</span><span class="nb">float</span><span class="p">(</span><span class="n">J</span><span class="p">[</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">])</span><span class="si">:</span><span class="s2">.4e</span><span class="si">}</span><span class="s2"> rad&quot;</span><span class="p">)</span>
+
+<span class="c1"># Fisher matrix (phase-only approximation, p0/e0/a subspace)</span>
+<span class="c1"># Γ ≈ J^T J (for unit noise)</span>
+<span class="n">Fisher</span> <span class="o">=</span> <span class="n">J</span><span class="o">.</span><span class="n">T</span> <span class="o">@</span> <span class="n">J</span>
+<span class="n">Cov</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">inv</span><span class="p">(</span><span class="n">Fisher</span><span class="p">)</span>
+
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Fisher matrix (phase-only, unit noise):&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Γ(p0,p0) = </span><span class="si">{</span><span class="nb">float</span><span class="p">(</span><span class="n">Fisher</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">])</span><span class="si">:</span><span class="s2">.3e</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Γ(e0,e0) = </span><span class="si">{</span><span class="nb">float</span><span class="p">(</span><span class="n">Fisher</span><span class="p">[</span><span class="mi">1</span><span class="p">,</span><span class="mi">1</span><span class="p">])</span><span class="si">:</span><span class="s2">.3e</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Γ(a,a)   = </span><span class="si">{</span><span class="nb">float</span><span class="p">(</span><span class="n">Fisher</span><span class="p">[</span><span class="mi">2</span><span class="p">,</span><span class="mi">2</span><span class="p">])</span><span class="si">:</span><span class="s2">.3e</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Cramer-Rao lower bounds (1σ, phase-only):&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  σ(p0) ≥ </span><span class="si">{</span><span class="nb">float</span><span class="p">(</span><span class="n">jnp</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">Cov</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">]))</span><span class="si">:</span><span class="s2">.3e</span><span class="si">}</span><span class="s2"> M&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  σ(e0) ≥ </span><span class="si">{</span><span class="nb">float</span><span class="p">(</span><span class="n">jnp</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">Cov</span><span class="p">[</span><span class="mi">1</span><span class="p">,</span><span class="mi">1</span><span class="p">]))</span><span class="si">:</span><span class="s2">.3e</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  σ(a)  ≥ </span><span class="si">{</span><span class="nb">float</span><span class="p">(</span><span class="n">jnp</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">Cov</span><span class="p">[</span><span class="mi">2</span><span class="p">,</span><span class="mi">2</span><span class="p">]))</span><span class="si">:</span><span class="s2">.3e</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+</section>
+<section id="6.6-Performance-Summary">
+<h2>6.6 Performance Summary<a class="headerlink" href="#6.6-Performance-Summary" title="Link to this heading"></a></h2>
+<p>Let’s benchmark the different execution modes to quantify the JAX advantage.</p>
+<div class="nbinput nblast docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[ ]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">timeit</span>
+
+<span class="n">_</span> <span class="o">=</span> <span class="n">insp</span><span class="p">(</span><span class="n">p0</span><span class="o">=</span><span class="mf">12.0</span><span class="p">,</span> <span class="n">e0</span><span class="o">=</span><span class="mf">0.4</span><span class="p">,</span> <span class="n">a</span><span class="o">=</span><span class="mf">0.7</span><span class="p">,</span> <span class="n">M</span><span class="o">=</span><span class="mf">1e6</span><span class="p">,</span> <span class="n">mu</span><span class="o">=</span><span class="mf">10.0</span><span class="p">,</span> <span class="n">T</span><span class="o">=</span><span class="mf">0.5</span><span class="p">)[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">block_until_ready</span><span class="p">()</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">run_single</span><span class="p">():</span>
+    <span class="k">return</span> <span class="n">insp</span><span class="p">(</span><span class="n">p0</span><span class="o">=</span><span class="mf">12.0</span><span class="p">,</span> <span class="n">e0</span><span class="o">=</span><span class="mf">0.4</span><span class="p">,</span> <span class="n">a</span><span class="o">=</span><span class="mf">0.7</span><span class="p">,</span> <span class="n">M</span><span class="o">=</span><span class="mf">1e6</span><span class="p">,</span> <span class="n">mu</span><span class="o">=</span><span class="mf">10.0</span><span class="p">,</span> <span class="n">T</span><span class="o">=</span><span class="mf">0.5</span><span class="p">)[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">block_until_ready</span><span class="p">()</span>
+
+<span class="n">n_reps</span> <span class="o">=</span> <span class="mi">20</span>
+<span class="n">t_single</span> <span class="o">=</span> <span class="n">timeit</span><span class="o">.</span><span class="n">timeit</span><span class="p">(</span><span class="n">run_single</span><span class="p">,</span> <span class="n">number</span><span class="o">=</span><span class="n">n_reps</span><span class="p">)</span> <span class="o">/</span> <span class="n">n_reps</span> <span class="o">*</span> <span class="mf">1e3</span>
+
+<span class="n">p0_b</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">linspace</span><span class="p">(</span><span class="mf">10.0</span><span class="p">,</span> <span class="mf">16.0</span><span class="p">,</span> <span class="mi">16</span><span class="p">)</span>
+<span class="n">e0_b</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">full</span><span class="p">(</span><span class="mi">16</span><span class="p">,</span> <span class="mf">0.4</span><span class="p">)</span>
+<span class="n">batch16</span> <span class="o">=</span> <span class="n">eqx</span><span class="o">.</span><span class="n">filter_jit</span><span class="p">(</span><span class="n">jax</span><span class="o">.</span><span class="n">vmap</span><span class="p">(</span><span class="k">lambda</span> <span class="n">p0</span><span class="p">,</span> <span class="n">e0</span><span class="p">:</span> <span class="n">insp</span><span class="p">(</span><span class="n">p0</span><span class="o">=</span><span class="n">p0</span><span class="p">,</span> <span class="n">e0</span><span class="o">=</span><span class="n">e0</span><span class="p">,</span> <span class="n">a</span><span class="o">=</span><span class="mf">0.7</span><span class="p">,</span> <span class="n">M</span><span class="o">=</span><span class="mf">1e6</span><span class="p">,</span> <span class="n">mu</span><span class="o">=</span><span class="mf">10.0</span><span class="p">,</span> <span class="n">T</span><span class="o">=</span><span class="mf">0.5</span><span class="p">)[</span><span class="mi">1</span><span class="p">]))</span>
+<span class="n">_</span> <span class="o">=</span> <span class="n">batch16</span><span class="p">(</span><span class="n">p0_b</span><span class="p">,</span> <span class="n">e0_b</span><span class="p">)</span><span class="o">.</span><span class="n">block_until_ready</span><span class="p">()</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">run_batch16</span><span class="p">():</span>
+    <span class="k">return</span> <span class="n">batch16</span><span class="p">(</span><span class="n">p0_b</span><span class="p">,</span> <span class="n">e0_b</span><span class="p">)</span><span class="o">.</span><span class="n">block_until_ready</span><span class="p">()</span>
+
+<span class="n">t_batch16</span> <span class="o">=</span> <span class="n">timeit</span><span class="o">.</span><span class="n">timeit</span><span class="p">(</span><span class="n">run_batch16</span><span class="p">,</span> <span class="n">number</span><span class="o">=</span><span class="n">n_reps</span><span class="p">)</span> <span class="o">/</span> <span class="n">n_reps</span> <span class="o">*</span> <span class="mf">1e3</span>
+
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Single trajectory       : </span><span class="si">{</span><span class="n">t_single</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2"> ms&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Batch of 16 (vmapped)   : </span><span class="si">{</span><span class="n">t_batch16</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2"> ms&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Per-traj in batch       : </span><span class="si">{</span><span class="n">t_batch16</span><span class="o">/</span><span class="mi">16</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2"> ms&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Batch speedup vs serial : </span><span class="si">{</span><span class="n">t_single</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="mi">16</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="n">t_batch16</span><span class="si">:</span><span class="s2">.1f</span><span class="si">}</span><span class="s2">×&quot;</span><span class="p">)</span>
+
+<span class="n">labels</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;Single (JIT)&quot;</span><span class="p">,</span> <span class="s2">&quot;Batch/16 (vmap)&quot;</span><span class="p">]</span>
+<span class="n">times</span>  <span class="o">=</span> <span class="p">[</span><span class="n">t_single</span><span class="p">,</span> <span class="n">t_batch16</span> <span class="o">/</span> <span class="mi">16</span><span class="p">]</span>
+
+<span class="n">fig</span><span class="p">,</span> <span class="n">ax</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplots</span><span class="p">(</span><span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">6</span><span class="p">,</span> <span class="mi">3</span><span class="p">))</span>
+<span class="n">bars</span> <span class="o">=</span> <span class="n">ax</span><span class="o">.</span><span class="n">bar</span><span class="p">(</span><span class="n">labels</span><span class="p">,</span> <span class="n">times</span><span class="p">,</span> <span class="n">color</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;C0&quot;</span><span class="p">,</span> <span class="s2">&quot;C2&quot;</span><span class="p">])</span>
+<span class="n">ax</span><span class="o">.</span><span class="n">bar_label</span><span class="p">(</span><span class="n">bars</span><span class="p">,</span> <span class="n">labels</span><span class="o">=</span><span class="p">[</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">t</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2"> ms&quot;</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">times</span><span class="p">])</span>
+<span class="n">ax</span><span class="o">.</span><span class="n">set_ylabel</span><span class="p">(</span><span class="s2">&quot;Time per trajectory [ms]&quot;</span><span class="p">)</span>
+<span class="n">ax</span><span class="o">.</span><span class="n">set_title</span><span class="p">(</span><span class="s2">&quot;Trajectory timing: JIT vs vmap&quot;</span><span class="p">)</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">tight_layout</span><span class="p">()</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+</pre></div>
+</div>
+</div>
+</section>
+<section id="6.7-Outlook:-HMC/NUTS-Sampling">
+<h2>6.7 Outlook: HMC/NUTS Sampling<a class="headerlink" href="#6.7-Outlook:-HMC/NUTS-Sampling" title="Link to this heading"></a></h2>
+<p>The combination of <code class="docutils literal notranslate"><span class="pre">jax.grad</span></code> through the trajectory and <code class="docutils literal notranslate"><span class="pre">jax.vmap</span></code> for parallel chains makes <code class="docutils literal notranslate"><span class="pre">fewtrax</span></code> directly compatible with gradient-based MCMC samplers.</p>
+<section id="With-blackjax">
+<h3>With <code class="docutils literal notranslate"><span class="pre">blackjax</span></code><a class="headerlink" href="#With-blackjax" title="Link to this heading"></a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">blackjax</span>
+
+<span class="c1"># Log-posterior: log p(θ | d) ∝ -½ (h(θ) - d | h(θ) - d) / Sn</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">log_posterior</span><span class="p">(</span><span class="n">params</span><span class="p">):</span>
+    <span class="n">p0</span><span class="p">,</span> <span class="n">e0</span> <span class="o">=</span> <span class="n">params</span><span class="p">[</span><span class="s2">&quot;p0&quot;</span><span class="p">],</span> <span class="n">params</span><span class="p">[</span><span class="s2">&quot;e0&quot;</span><span class="p">]</span>
+    <span class="n">hp</span><span class="p">,</span> <span class="n">hx</span> <span class="o">=</span> <span class="n">wf</span><span class="p">(</span><span class="n">M</span><span class="o">=</span><span class="mf">1e6</span><span class="p">,</span> <span class="n">mu</span><span class="o">=</span><span class="mf">10.0</span><span class="p">,</span> <span class="n">a</span><span class="o">=</span><span class="mf">0.7</span><span class="p">,</span> <span class="n">p0</span><span class="o">=</span><span class="n">p0</span><span class="p">,</span> <span class="n">e0</span><span class="o">=</span><span class="n">e0</span><span class="p">,</span> <span class="o">...</span><span class="p">)</span>
+    <span class="n">residual</span> <span class="o">=</span> <span class="n">hp</span> <span class="o">-</span> <span class="n">data_hp</span>
+    <span class="k">return</span> <span class="o">-</span><span class="mf">0.5</span> <span class="o">*</span> <span class="n">jnp</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">residual</span><span class="o">**</span><span class="mi">2</span> <span class="o">/</span> <span class="n">noise_psd</span><span class="p">)</span>
+
+<span class="c1"># NUTS sampler — requires ∇ log p(θ | d) automatically via JAX</span>
+<span class="n">nuts</span> <span class="o">=</span> <span class="n">blackjax</span><span class="o">.</span><span class="n">nuts</span><span class="p">(</span><span class="n">log_posterior</span><span class="p">,</span> <span class="n">step_size</span><span class="o">=</span><span class="mf">0.01</span><span class="p">,</span> <span class="n">inverse_mass_matrix</span><span class="o">=...</span><span class="p">)</span>
+
+<span class="c1"># Run N chains in parallel with vmap</span>
+<span class="n">vmap_nuts_step</span> <span class="o">=</span> <span class="n">jax</span><span class="o">.</span><span class="n">vmap</span><span class="p">(</span><span class="n">nuts</span><span class="o">.</span><span class="n">step</span><span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="Key-performance-bottleneck">
+<h3>Key performance bottleneck<a class="headerlink" href="#Key-performance-bottleneck" title="Link to this heading"></a></h3>
+<p>Currently, <code class="docutils literal notranslate"><span class="pre">AmplitudeInterpolator.evaluate</span></code> uses <code class="docutils literal notranslate"><span class="pre">scipy.bisplev</span></code> in a Python loop — this breaks the JAX computation graph and prevents:</p>
+<ul class="simple">
+<li><p>Differentiating through the amplitude interpolation</p></li>
+<li><p>vmapping over parameters that affect amplitude evaluation</p></li>
+<li><p>GPU execution of the full pipeline</p></li>
+</ul>
+<p>Replacing <code class="docutils literal notranslate"><span class="pre">bisplev</span></code> with JAX-native tricubic B-spline interpolation (using <code class="docutils literal notranslate"><span class="pre">jnp.interp</span></code> + coefficient arrays as static data) would unlock full end-to-end differentiability and GPU parallelism.</p>
+<div class="nbinput nblast docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[ ]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="c1"># Summary of JAX transformation support in fewtrax</span>
+<span class="nb">print</span><span class="p">(</span><span class="s2">&quot;JAX transformation support in fewtrax:&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">()</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="s1">&#39;Component&#39;</span><span class="si">:</span><span class="s2">&lt;35</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="s1">&#39;jit&#39;</span><span class="si">:</span><span class="s2">&gt;6</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="s1">&#39;vmap&#39;</span><span class="si">:</span><span class="s2">&gt;6</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="s1">&#39;grad&#39;</span><span class="si">:</span><span class="s2">&gt;6</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="s1">&#39;GPU&#39;</span><span class="si">:</span><span class="s2">&gt;6</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="s2">&quot;-&quot;</span> <span class="o">*</span> <span class="mi">60</span><span class="p">)</span>
+<span class="n">rows</span> <span class="o">=</span> <span class="p">[</span>
+    <span class="p">(</span><span class="s2">&quot;Geodesic functions&quot;</span><span class="p">,</span>            <span class="s2">&quot;✓&quot;</span><span class="p">,</span> <span class="s2">&quot;✓&quot;</span><span class="p">,</span> <span class="s2">&quot;✓&quot;</span><span class="p">,</span> <span class="s2">&quot;✓&quot;</span><span class="p">),</span>
+    <span class="p">(</span><span class="s2">&quot;Separatrix (bisection)&quot;</span><span class="p">,</span>         <span class="s2">&quot;✓&quot;</span><span class="p">,</span> <span class="s2">&quot;✓&quot;</span><span class="p">,</span> <span class="s2">&quot;✓&quot;</span><span class="p">,</span> <span class="s2">&quot;✓&quot;</span><span class="p">),</span>
+    <span class="p">(</span><span class="s2">&quot;Fundamental frequencies&quot;</span><span class="p">,</span>        <span class="s2">&quot;✓&quot;</span><span class="p">,</span> <span class="s2">&quot;✓&quot;</span><span class="p">,</span> <span class="s2">&quot;✓&quot;</span><span class="p">,</span> <span class="s2">&quot;✓&quot;</span><span class="p">),</span>
+    <span class="p">(</span><span class="s2">&quot;EMRIInspiral (diffrax ODE)&quot;</span><span class="p">,</span>     <span class="s2">&quot;✓&quot;</span><span class="p">,</span> <span class="s2">&quot;✓&quot;</span><span class="p">,</span> <span class="s2">&quot;✓&quot;</span><span class="p">,</span> <span class="s2">&quot;✓&quot;</span><span class="p">),</span>
+    <span class="p">(</span><span class="s2">&quot;AmplitudeInterpolator.evaluate&quot;</span><span class="p">,</span> <span class="s2">&quot;✗&quot;</span><span class="p">,</span> <span class="s2">&quot;✗&quot;</span><span class="p">,</span> <span class="s2">&quot;✗&quot;</span><span class="p">,</span> <span class="s2">&quot;✗&quot;</span><span class="p">),</span>
+    <span class="p">(</span><span class="s2">&quot;get_ylms_for_modes&quot;</span><span class="p">,</span>             <span class="s2">&quot;✓&quot;</span><span class="p">,</span> <span class="s2">&quot;✓&quot;</span><span class="p">,</span> <span class="s2">&quot;✓&quot;</span><span class="p">,</span> <span class="s2">&quot;✓&quot;</span><span class="p">),</span>
+    <span class="p">(</span><span class="s2">&quot;direct_mode_sum&quot;</span><span class="p">,</span>                <span class="s2">&quot;✓&quot;</span><span class="p">,</span> <span class="s2">&quot;✓&quot;</span><span class="p">,</span> <span class="s2">&quot;✓&quot;</span><span class="p">,</span> <span class="s2">&quot;✓&quot;</span><span class="p">),</span>
+    <span class="p">(</span><span class="s2">&quot;interpolated_mode_sum&quot;</span><span class="p">,</span>          <span class="s2">&quot;✓&quot;</span><span class="p">,</span> <span class="s2">&quot;✓&quot;</span><span class="p">,</span> <span class="s2">&quot;~&quot;</span><span class="p">,</span> <span class="s2">&quot;✓&quot;</span><span class="p">),</span>
+<span class="p">]</span>
+<span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">jit</span><span class="p">,</span> <span class="n">vmap</span><span class="p">,</span> <span class="n">grad</span><span class="p">,</span> <span class="n">gpu</span> <span class="ow">in</span> <span class="n">rows</span><span class="p">:</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">name</span><span class="si">:</span><span class="s2">&lt;35</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">jit</span><span class="si">:</span><span class="s2">&gt;6</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">vmap</span><span class="si">:</span><span class="s2">&gt;6</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">grad</span><span class="si">:</span><span class="s2">&gt;6</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">gpu</span><span class="si">:</span><span class="s2">&gt;6</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">()</span>
+<span class="nb">print</span><span class="p">(</span><span class="s2">&quot;~ = partial support (gradient through spline interpolation, not amplitude)&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="s2">&quot;✗ = not supported (scipy bisplev CPU call)&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+</section>
+</section>
+<section id="Summary">
+<h2>Summary<a class="headerlink" href="#Summary" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>JAX feature</p></th>
+<th class="head"><p>fewtrax use case</p></th>
+<th class="head"><p>Status</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">eqx.filter_jit</span></code></p></td>
+<td><p>Inspiral ODE, mode summation</p></td>
+<td><p>✓ Fully supported</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">jax.vmap</span></code></p></td>
+<td><p>Batch trajectory + phase evaluation</p></td>
+<td><p>✓ Trajectory fully vmapped</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">jax.grad</span></code></p></td>
+<td><p>Phase gradients for Fisher matrix</p></td>
+<td><p>✓ Through ODE</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">jax.jacobian</span></code></p></td>
+<td><p>Multi-output parameter sensitivity</p></td>
+<td><p>✓ Through ODE</p></td>
+</tr>
+<tr class="row-even"><td><p>End-to-end <code class="docutils literal notranslate"><span class="pre">grad</span></code></p></td>
+<td><p>Full waveform likelihood gradient</p></td>
+<td><p>✗ Blocked by <code class="docutils literal notranslate"><span class="pre">bisplev</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>GPU execution</p></td>
+<td><p>Full pipeline</p></td>
+<td><p>✗ Blocked by <code class="docutils literal notranslate"><span class="pre">bisplev</span></code></p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>The key next step</strong> for full JAX-native operation is replacing <code class="docutils literal notranslate"><span class="pre">scipy.bisplev</span></code> in <code class="docutils literal notranslate"><span class="pre">AmplitudeInterpolator</span></code> with a JAX implementation of bicubic B-spline evaluation. Once complete, the entire waveform — from physical parameters to <span class="math notranslate nohighlight">\(h_+, h_\times\)</span> — will be JIT-compiled, vmappable, and differentiable end-to-end.</p>
+<hr class="docutils" />
+<p><strong>End of tutorial series.</strong></p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Notebook</p></th>
+<th class="head"><p>Topic</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><a class="reference internal" href="01_kerr_geodesics.html"><span class="doc">01</span></a></p></td>
+<td><p>Kerr geodesics: <span class="math notranslate nohighlight">\(E\)</span>, <span class="math notranslate nohighlight">\(L_z\)</span>, separatrix, frequencies</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="02_emri_trajectory.html"><span class="doc">02</span></a></p></td>
+<td><p>EMRI inspiral ODE with diffrax</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="03_amplitude_interpolation.html"><span class="doc">03</span></a></p></td>
+<td><p>Teukolsky amplitude interpolation</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="04_mode_summation.html"><span class="doc">04</span></a></p></td>
+<td><p>Mode summation and spin-weighted harmonics</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="05_full_waveform.html"><span class="doc">05</span></a></p></td>
+<td><p>Full <code class="docutils literal notranslate"><span class="pre">KerrEccentricEquatorialWaveform</span></code> API</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#"><span class="doc">06</span></a></p></td>
+<td><p><strong>JIT, vmap, autodiff, Fisher matrix</strong></p></td>
+</tr>
+</tbody>
+</table>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="05_full_waveform.html" class="btn btn-neutral float-left" title="05 — Full EMRI Waveform Generation" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="../api.html" class="btn btn-neutral float-right" title="API Reference" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2026, Bert Depoorter.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>
