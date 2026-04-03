@@ -300,7 +300,12 @@ class TricubicSplineE3(eqx.Module):
             np.asarray(z, dtype=np.float64),
             np.asarray(values, dtype=np.float64),
         )
-        coeffs = np.asarray(ms.c)  # shape (Nu-1, Nw-1, Nz-1, 4, 4, 4)
+        # ms.coefficients has shape (Nu-1, Nw-1, 64*(Nz-1)) with the last dim
+        # encoding [z_cell, mx, my, mz] in C order (mx slowest, mz fastest).
+        raw = np.asarray(ms.coefficients)  # (Nu-1, Nw-1, 64*(Nz-1))
+        Nu_m1, Nw_m1 = raw.shape[0], raw.shape[1]
+        Nz_m1 = raw.shape[2] // 64
+        coeffs = raw.reshape(Nu_m1, Nw_m1, Nz_m1, 4, 4, 4)
         return cls(u, w, z, coeffs)
 
     def __call__(self, u: float, w: float, z: float) -> float:
@@ -332,10 +337,11 @@ class TricubicSplineE3(eqx.Module):
             0, self._Nz_m1 - 1,
         )
 
-        # --- local coordinates (physical distance from cell origin) ---
-        tu = u - (self._u0 + iu * self._du)
-        tw = w - (self._w0 + iw * self._dw)
-        tz = z - (self._z0 + iz * self._dz)
+        # --- local coordinates normalised to [0,1] within each cell ---
+        # multispline stores coefficients in the normalised frame t=(x-x_i)/dx
+        tu = (u - (self._u0 + iu * self._du)) / self._du
+        tw = (w - (self._w0 + iw * self._dw)) / self._dw
+        tz = (z - (self._z0 + iz * self._dz)) / self._dz
 
         # --- retrieve the 4×4×4 coefficient block for this cell ---
         c = self.coeffs[iu, iw, iz]  # (4, 4, 4)
