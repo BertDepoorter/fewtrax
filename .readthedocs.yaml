@@ -1,0 +1,27 @@
+# .readthedocs.yaml
+# ReadTheDocs build configuration.  See:
+# https://docs.readthedocs.io/en/stable/config-file/v2.html
+
+version: 2
+
+build:
+  os: ubuntu-24.04
+  tools:
+    python: "3.12"
+
+# Build HTML docs only (PDF/epub are not needed for this project).
+formats: []
+
+sphinx:
+  configuration: docs/source/conf.py
+  fail_on_warning: false
+
+python:
+  install:
+    # Install fewtrax with the [docs] extras (sphinx, nbsphinx, myst-parser …).
+    # The core package and its runtime dependencies are also installed so that
+    # autodoc can import and introspect the modules without errors.
+    - method: pip
+      path: .
+      extra_requirements:
+        - docs

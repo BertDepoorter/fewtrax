@@ -45,8 +45,17 @@ compare = [
 wavelet = [
     "pywavelet>=0.1.0",
 ]
+docs = [
+    "sphinx>=7.0.0",
+    "sphinx-rtd-theme>=2.0.0",
+    "sphinx-autodoc-typehints>=1.25.0",
+    "myst-parser>=3.0.0",
+    "nbsphinx>=0.9.0",
+    "pandoc>=2.3",          # required by nbsphinx for .ipynb → .rst conversion
+    "ipykernel>=6.0.0",     # kernel metadata in notebooks
+]
 dev = [
-    "fewtrax[test,compare,wavelet,gpu]",
+    "fewtrax[test,compare,wavelet,docs]",
     "jupyter>=1.0.0",
 ]
 

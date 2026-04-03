@@ -15,12 +15,10 @@ jobs:
 
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: "3.12"
 
       - name: Install package and doc dependencies
-        run: |
-          pip install -e .
-          pip install sphinx sphinx-autodoc-typehints sphinx-rtd-theme myst-parser
+        run: pip install -e ".[docs]"
 
       - name: Build HTML docs
         run: |
