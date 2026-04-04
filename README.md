@@ -39,13 +39,27 @@ pip install -e ".[dev]"
 
 ## Data setup
 
-fewtrax reads the FEW HDF5 data files. Point to them in one of three ways (checked in this order):
+fewtrax reads the FEW KerrEccentricEquatorial data files. Point to them in one of three ways (checked in this order):
 
 1. Pass `data_dir=` to `KerrEccentricEquatorialWaveform`
-2. Set the environment variable `FEW_DATA_DIR`
-3. Place the files in `~/.fewtrax/data/`
+2. Set the environment variable `FEW_DATA_DIR` in a .env folder
+3. Place the files in `~/.fewtrax/data/`. 
 
-If `FastEMRIWaveforms` is installed (default when you install with the `comparison` extra), fewtrax will also try its internal file-manager cache.
+If `FastEMRIWaveforms` is installed (default when you install with the `comparison` extra), fewtrax will also try its internal file-manager cache. It is highly adviced to install FEW as well to compare the results of both waveform models. 
+
+## Running tests
+
+```bash
+pytest                      # unit tests
+pytest --cov=fewtrax        # with coverage report
+```
+
+To run the comparison suite against FastEMRIWaveforms:
+
+```bash
+pip install "fewtrax[compare]"
+pytest tests/test_compare_few.py
+```
 
 ## Quickstart
 
@@ -95,21 +109,7 @@ freqs, h_tilde = to_frequency_domain(hp + 1j * hx, dt=params["dt"])
 f_peak = float(freqs[jnp.argmax(jnp.abs(h_tilde))])
 print(f"Peak frequency: {f_peak * 1e3:.3f} mHz")
 ```
-A more extensive introduction is available `[here](./TUTORIAL.md)` 
-
-## Running tests
-
-```bash
-pytest                      # unit tests
-pytest --cov=fewtrax        # with coverage report
-```
-
-To run the comparison suite against FastEMRIWaveforms:
-
-```bash
-pip install "fewtrax[compare]"
-pytest tests/test_compare_few.py
-```
+A more extensive introduction is available [here](./TUTORIAL.md). 
 
 ## Building documentation
 
@@ -120,12 +120,13 @@ If you install with the tag `[docs]`, these packages are included and the follow
 ```bash
 pip install sphinx sphinx-autodoc-typehints sphinx-rtd-theme myst-parser
 ```
-Now build the docs:
+Build the docs locally with:
 ```bash
 cd docs
 make html
 open build/html/index.html
 ```
+The HTML file can be opened in a web browser where you can view the docs. 
 
 
 ## Citation
