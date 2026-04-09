@@ -53,10 +53,16 @@ _GL24_W = jnp.asarray(_gl24_weights_np / 2.0 * np.pi / 2.0, dtype=jnp.float64)
 # 12 iterations gives ~2^{-50} ≈ 1e-15 relative error (quadratic convergence).
 _N_AGM: int = 12
 
-# Number of Newton-Raphson iterations for the fast separatrix.
-# The bracket for equatorial orbits is tight, so 10 Newton steps (quadratic
-# convergence) is far more than enough for double-precision.
-_N_NR: int = 10
+# Hybrid bisection+NR for the fast separatrix.
+# Phase 1: _N_BISECT_INIT bisection steps narrow the bracket to width
+#   ~(hi-lo)/2^20 ≈ 5e-6, giving a safe NR starting point even when the
+#   root sits near the bracket edge (e.g. high-spin prograde: root ≈ 1+e,
+#   bracket [1+e, 6+2e], midpoint far from root).
+# Phase 2: _N_NR Newton-Raphson steps from the tight midpoint.
+#   Starting within 2.5e-6 of the root, quadratic convergence reaches
+#   float64 precision in ≤3 steps; 5 is used for a generous safety margin.
+_N_BISECT_INIT: int = 20
+_N_NR: int = 5
 
 
 @jit
@@ -437,11 +443,21 @@ def get_separatrix(a: float, e: float, x: float) -> float:
 
 
 def _bisect_equat_fast(a: float, e: float, lo: float, hi: float) -> float:
-    """Newton-Raphson root of the separatrix polynomial.
+    """Hybrid bisection + Newton-Raphson root of the separatrix polynomial.
 
-    Replaces the 50-step bisection with ``_N_NR`` Newton-Raphson iterations.
-    Quadratic convergence from the bracket midpoint gives ~1e-15 accuracy in
-    under 10 steps for all physical (a, e) values.
+    Pure NR from the bracket midpoint is unreliable: for high-spin prograde
+    orbits the root sits near ``1+e`` while the bracket is ``[1+e, 6+2e]``,
+    so the midpoint is far from the root and NR can diverge or stall.
+
+    Strategy
+    --------
+    1. ``_N_BISECT_INIT`` bisection steps (globally convergent) tighten the
+       bracket to width ``(hi-lo)/2^20 < 5e-6``.
+    2. ``_N_NR`` Newton-Raphson steps from the bisected midpoint.
+       Starting within ~2.5e-6 of the root, quadratic convergence reaches
+       full float64 precision in ≤3 steps.
+
+    Both loops have static bounds: fully JIT / vmap / AD compatible.
     """
     # Separatrix polynomial in p (Glampedakis & Kennefick 2002):
     #   P(p) = a⁴(−3−2e+e²)² + p²(−6−2e+p)² − 2a²(1+e)p(14+2e²+3p−ep)
@@ -460,22 +476,38 @@ def _bisect_equat_fast(a: float, e: float, lo: float, hi: float) -> float:
         return (2.0 * p * (csep + p) * (csep + 2.0 * p)
                 - B_fac * (lin_c + 2.0 * quad_c * p))
 
+    # Phase 1: bisection — narrow bracket to < 5e-6 width
+    def bisect_step(_, state):
+        lo_, hi_ = state
+        mid = (lo_ + hi_) * 0.5
+        fl  = _poly(lo_)
+        fm  = _poly(mid)
+        same_sign = fl * fm > 0.0
+        return jnp.where(same_sign, mid, lo_), jnp.where(same_sign, hi_, mid)
+
+    lo_t, hi_t = jax.lax.fori_loop(
+        0, _N_BISECT_INIT, bisect_step, (jnp.float64(lo), jnp.float64(hi))
+    )
+
+    # Phase 2: NR refinement from the tight midpoint
     def newton_step(_, p):
         fp  = _poly(p)
         dfp = _dpoly(p)
         return p - fp / jnp.where(jnp.abs(dfp) > 1e-30, dfp, 1e-30)
 
-    p0 = (jnp.float64(lo) + jnp.float64(hi)) * 0.5
+    p0 = (lo_t + hi_t) * 0.5
     return jax.lax.fori_loop(0, _N_NR, newton_step, p0)
 
 
 @partial(jit, static_argnames=())
 def get_separatrix_fast(a: float, e: float, x: float) -> float:
-    r"""Fast separatrix via Newton-Raphson (replaces 50-step bisection).
+    r"""Fast separatrix via hybrid bisection + Newton-Raphson.
 
-    Identical interface to :func:`get_separatrix`; uses :data:`_N_NR`
-    Newton-Raphson iterations instead of binary search.  Roughly 4–5×
-    faster for typical EMRI parameter ranges.
+    Identical interface to :func:`get_separatrix`.  Uses
+    :data:`_N_BISECT_INIT` bisection steps to obtain a tight initial guess,
+    then :data:`_N_NR` Newton-Raphson steps to reach float64 precision.
+    Robust across the full physical parameter space including near-extremal
+    prograde orbits where pure NR from the bracket midpoint can diverge.
 
     Parameters
     ----------
