@@ -252,6 +252,50 @@ def kerrecceq_forward_map(
     return u, w, z, in_A
 
 
+def min_valid_p(a: float, e: float, x: float) -> float:
+    r"""Minimum :math:`p` within the flux interpolation grid for given (a, e, x).
+
+    Mirrors the logic in ``few.trajectory.ode.flux.KerrEccEqFlux._min_p``.
+    For high eccentricity the minimum valid :math:`p` exceeds
+    :math:`p_{\rm sep} + \Delta p_{\rm min}` because the :math:`w` coordinate
+    of the Region A grid exceeds 1 near the separatrix.
+
+    Parameters
+    ----------
+    a, e, x : float
+        Spin, eccentricity, and inclination cosine.
+
+    Returns
+    -------
+    float
+        Minimum valid :math:`p` [geometric units, M=1].
+    """
+    import math
+    a_abs = abs(a)
+    x_in = float(jnp.sign(jnp.asarray(a * x, dtype=jnp.float64)))
+    x_in = x_in if x_in != 0.0 else 1.0
+    p_sep = float(get_separatrix(jnp.asarray(a_abs), jnp.asarray(e), jnp.asarray(x_in)))
+
+    # z-coordinate for spin (Region A mapping)
+    chi_max = (1.0 - AMIN) ** (1.0 / 3.0)
+    chi_min = (1.0 - AMAX) ** (1.0 / 3.0)
+    z = ((1.0 - a_abs) ** (1.0 / 3.0) - chi_min) / (chi_max - chi_min)
+
+    # Secc at u=0 — if e <= Secc(0), the grid is valid all the way to the separatrix
+    secc_u0 = ESEP + (EMAX - ESEP) * math.sqrt(z)
+    if e <= secc_u0:
+        return p_sep + DELTAPMIN
+
+    # Find u_min where w(e, u_min, z) == 1, i.e. Secc(u_min, z) == e
+    # ESEP + (EMAX-ESEP)*sqrt(z + u^BETA*(1-z)) = e  =>  u^BETA = (rhs^2 - z)/(1-z)
+    rhs_sq = ((e - ESEP) / (EMAX - ESEP)) ** 2
+    u_min = ((rhs_sq - z) / (1.0 - z)) ** (1.0 / BETA_FLUX)
+    p_min = (p_sep + DELTAPMIN) + (DELTAPMAX - DELTAPMIN) * (
+        2.0 ** (u_min ** (1.0 / ALPHA_FLUX)) - 1.0
+    )
+    return max(p_min, p_sep + DELTAPMIN)
+
+
 @partial(jit, static_argnames=("kind",))
 def kerrecceq_forward_map_fast(
     a: float, p: float, e: float, pLSO: float, kind: str = "flux"

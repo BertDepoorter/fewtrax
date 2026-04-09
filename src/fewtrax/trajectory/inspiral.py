@@ -70,7 +70,7 @@ from fewtrax.utils.geodesic import (
     get_separatrix_fast, get_fundamental_frequencies_fast,
 )
 from fewtrax.utils.coordinates import (
-    kerrecceq_forward_map, kerrecceq_forward_map_fast, DELTAPMIN,
+    kerrecceq_forward_map, kerrecceq_forward_map_fast, DELTAPMIN, min_valid_p,
 )
 from fewtrax.data.loader import FluxData, _pdot_PN_jax, _edot_PN_jax
 
@@ -348,6 +348,12 @@ class EMRIInspiral(eqx.Module):
             )
             sol = self._solve_backward(y0, t_save, T_geo, ode_args, max_steps, atol, rtol)
         else:
+            p0_min = min_valid_p(float(a_), float(e0), float(x0))
+            if float(p0) < p0_min:
+                raise ValueError(
+                    f"p0={float(p0):.6g} is outside the flux interpolation grid. "
+                    f"Must be >= {p0_min:.6g} for a={float(a_):.4g}, e0={float(e0):.4g}, x0={float(x0):.4g}."
+                )
             y0 = jnp.array([p0, e0, Phi_phi0, Phi_theta0, Phi_r0], dtype=jnp.float64)
             sol = self._solve(y0, t_save, T_geo, ode_args, max_steps, atol, rtol)
 
@@ -834,6 +840,12 @@ class EMRIInspiralFast(EMRIInspiral):
                 y0, t_save, T_geo, ode_args, max_steps, atol, rtol
             )
         else:
+            p0_min = min_valid_p(float(a_), float(e0), float(x0))
+            if float(p0) < p0_min:
+                raise ValueError(
+                    f"p0={float(p0):.6g} is outside the flux interpolation grid. "
+                    f"Must be >= {p0_min:.6g} for a={float(a_):.4g}, e0={float(e0):.4g}, x0={float(x0):.4g}."
+                )
             y0 = jnp.array(
                 [p0, e0, Phi_phi0, Phi_theta0, Phi_r0], dtype=jnp.float64
             )
