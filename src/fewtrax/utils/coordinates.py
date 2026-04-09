@@ -100,9 +100,17 @@ def a_of_z(z: float) -> float:
 
 @jit
 def _Secc_of_uz(u: float, z: float, beta: float) -> float:
+    # Double-where trick: ``sgn * jnp.sqrt(sgn * check)`` is mathematically
+    # ``sign(check) * sqrt(|check|)`` but has a divergent gradient as
+    # ``check → 0`` because ``d/dx sqrt(x) = 1/(2 sqrt(x))`` is unbounded.
+    # ``jnp.where(cond, A, B)`` evaluates both branches under autodiff, so
+    # we must guard the sqrt argument with a second where to keep both
+    # tangents finite.
     check = z + u**beta * (1.0 - z)
-    sgn = jnp.sign(check)
-    return ESEP + (EMAX - ESEP) * sgn * jnp.sqrt(sgn * check)
+    safe = jnp.where(check >= 0, check, -check)
+    sqrt_safe = jnp.sqrt(safe)
+    signed_sqrt = jnp.where(check >= 0, sqrt_safe, -sqrt_safe)
+    return ESEP + (EMAX - ESEP) * signed_sqrt
 
 
 @jit

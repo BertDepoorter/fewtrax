@@ -293,14 +293,23 @@ def kerr_geo_energy_equatorial(a: float, p: float, e: float, x: float) -> float:
         + a**2 * (-4.0 * e**2 + (p - 2.0) ** 2) * p**2
         + 2.0 * a**4 * p * (-2.0 + p + e**2 * (2.0 + p))
     ) / p**3
-    # Use 1e-300 floor instead of 0 so that jax.jacfwd through sqrt is finite
-    # when a=0 (inner=0 exactly): the constant floor has zero tangent w.r.t. (p,e).
+    # Double-where on ``inner`` so that both the primal and tangent of
+    # ``sqrt(inner)`` are finite when ``inner → 0`` (e.g. the a=0 limit):
+    # ``jnp.maximum(inner, ε)`` still lets ``jnp.sqrt`` see the real value
+    # under forward-mode AD and produces a spurious 1/(2√ε) tangent.
+    safe_inner = jnp.where(inner > 0.0, inner, 1.0)
+    sqrt_inner = jnp.where(inner > 0.0, jnp.sqrt(safe_inner), 0.0)
     numer = (e**2 - 1.0) * (
         a**2 * (1.0 + 3.0 * e**2 + p)
-        + p * (-3.0 - e**2 + p - sgnax * 2.0 * jnp.sqrt(jnp.maximum(inner, 1e-300)))
+        + p * (-3.0 - e**2 + p - sgnax * 2.0 * sqrt_inner)
     )
     ratio = jnp.where(jnp.abs(denom) < 1.0e-14, 0.0, numer / denom)
-    return jnp.sqrt(1.0 - (1.0 - e**2) * (1.0 + ratio) / p)
+    # Guard the outer sqrt: at high-e edge cases numerical cancellation can
+    # push the argument slightly below zero, which would NaN out both the
+    # primal and the gradient.
+    outer = 1.0 - (1.0 - e**2) * (1.0 + ratio) / p
+    safe_outer = jnp.where(outer > 0.0, outer, 1.0)
+    return jnp.where(outer > 0.0, jnp.sqrt(safe_outer), 0.0)
 
 
 @jit

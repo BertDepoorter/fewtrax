@@ -112,16 +112,51 @@ class EMRIInspiral(eqx.Module):
     """
 
     flux_data: FluxData
+    t_obs: Optional[jnp.ndarray]
+    phases: bool = eqx.field(static=True)
 
-    def __init__(self, flux_data: FluxData):
+    def __init__(
+        self,
+        flux_data: FluxData,
+        t_obs: Optional[jnp.ndarray] = None,
+        phases: bool = True,
+    ):
+        """
+        Parameters
+        ----------
+        flux_data : FluxData
+            Pre-loaded flux interpolators.
+        t_obs : array-like, shape (N_obs,), optional
+            Physical observation times [s] at which to save the trajectory.
+            When provided, the ODE saves at exactly these times instead of a
+            uniform ``dense_steps`` grid, so no interpolation is needed when
+            comparing to STFT segment centres.  The shape is fixed at
+            construction time (required for JIT/vmap).
+        phases : bool
+            If ``True`` (default), integrate all five state variables
+            ``(p, e, Φ_φ, Φ_θ, Φ_r)`` and return the full trajectory.
+            If ``False``, integrate only ``(p, e)`` and return
+            ``(t, p, e)``; the adjoint and JVP cost are ~2.5× lower,
+            which benefits ``jax.grad`` / ``jax.jacfwd`` for frequency-track
+            loss functions that do not require the orbital phases.
+        """
         self.flux_data = flux_data
+        self.t_obs = (
+            jnp.asarray(t_obs, dtype=jnp.float64) if t_obs is not None else None
+        )
+        self.phases = phases
 
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
 
     def _flux_pex(
-        self, a: jnp.ndarray, x0: float, p: jnp.ndarray, e: jnp.ndarray
+        self,
+        a: jnp.ndarray,
+        x0: float,
+        r_isco: jnp.ndarray,
+        p: jnp.ndarray,
+        e: jnp.ndarray,
     ) -> tuple[jnp.ndarray, jnp.ndarray]:
         r"""Return physical :math:`(\dot{p}, \dot{e})` from the pex spline tables.
 
@@ -129,6 +164,10 @@ class EMRIInspiral(eqx.Module):
         and :math:`\dot{e}/\dot{e}_{\rm PN}`, then multiplies by the
         separatrix-dependent PN functions.  Returns **negative** values for
         :math:`\dot{p}` (inspiraling orbit loses semi-latus rectum).
+
+        ``r_isco = p_sep(a, e=0)`` is constant along a trajectory and is
+        supplied by the caller via ``ode_args`` so that it is not recomputed
+        at every ODE step.
         """
         a_abs = jnp.abs(a)
         x_in = _x_sign(a, x0)
@@ -142,8 +181,7 @@ class EMRIInspiral(eqx.Module):
         rp = jnp.where(in_A, rp_A, rp_B)
         re = jnp.where(in_A, re_A, re_B)
 
-        # Separatrix-dependent PN functions
-        r_isco = get_separatrix(a_abs, jnp.zeros_like(e), x_in)
+        # Eccentricity-dependent separatrix (still needed per-step)
         p_sep = get_separatrix(a_abs, e, x_in)
         pdot_pn = _pdot_PN_jax(p, e, r_isco, p_sep)
         edot_pn = _edot_PN_jax(p, e, r_isco, p_sep)
@@ -156,17 +194,18 @@ class EMRIInspiral(eqx.Module):
     def _ode_rhs(self, t: float, y: jnp.ndarray, args) -> jnp.ndarray:
         r"""ODE right-hand side: :math:`dy/dt` for :math:`y=(p,e,\Phi_\phi,\Phi_\theta,\Phi_r)`.
 
-        ``args`` is a 3-tuple ``(mu_over_M, a, x0)`` so that all physical
-        parameters flow through diffrax and remain differentiable.
-        The orbital phases evolve at the Boyer-Lindquist frequencies and are
-        *not* affected by the mass ratio.
+        ``args`` is a 4-tuple ``(mu_over_M, a, x0, r_isco)`` so that all
+        physical parameters flow through diffrax and remain differentiable.
+        ``r_isco`` is the spin-only separatrix ``p_sep(a, e=0)``, precomputed
+        once per solve.  The orbital phases evolve at the Boyer-Lindquist
+        frequencies and are *not* affected by the mass ratio.
         """
-        mu_over_M, a, x0 = args
+        mu_over_M, a, x0, r_isco = args
         p, e = y[0], y[1]
         a_abs = jnp.abs(a)
         x_in = _x_sign(a, x0)
 
-        pdot, edot = self._flux_pex(a, x0, p, e)
+        pdot, edot = self._flux_pex(a, x0, r_isco, p, e)
         Omega_phi, Omega_theta, Omega_r = get_fundamental_frequencies(a_abs, p, e, x_in)
         # pdot/edot come from flux tables normalised to μ=M=1; scale to physical ratio
         return jnp.array([pdot * mu_over_M, edot * mu_over_M,
@@ -189,7 +228,7 @@ class EMRIInspiral(eqx.Module):
     ):
         """JIT-compiled diffrax solve.  All shape-determining args are static."""
         def _event_cond(t, y, args, **kwargs):
-            _, a, x0 = args
+            _, a, x0, _r_isco = args
             p, e = y[0], y[1]
             p_sep = get_separatrix(jnp.abs(a), e, _x_sign(a, x0))
             return p < p_sep + SEPARATRIX_BUFFER
@@ -247,6 +286,50 @@ class EMRIInspiral(eqx.Module):
             args=ode_args,
         )
 
+    @eqx.filter_jit
+    def _solve_2d(
+        self,
+        y0: jnp.ndarray,
+        t_save: jnp.ndarray,
+        T_geo: jnp.ndarray,
+        ode_args: tuple,
+        max_steps: int,
+        atol: float = 1e-10,
+        rtol: float = 1e-10,
+    ):
+        """JIT-compiled 2D diffrax solve: integrates (p, e) only.
+
+        Used when ``phases=False``.  Adjoint and JVP cost are ~2.5× lower
+        than the 5D solve because the co-state / tangent vector has only
+        two components.
+        """
+        def _ode_rhs_2d(t, y, args):
+            mu_over_M, a, x0, r_isco = args
+            p, e = y[0], y[1]
+            pdot, edot = self._flux_pex(a, x0, r_isco, p, e)
+            return jnp.array([pdot * mu_over_M, edot * mu_over_M])
+
+        def _event_cond(t, y, args, **kwargs):
+            _, a, x0, _r_isco = args
+            p, e = y[0], y[1]
+            p_sep = get_separatrix(jnp.abs(a), e, _x_sign(a, x0))
+            return p < p_sep + SEPARATRIX_BUFFER
+
+        return diffrax.diffeqsolve(
+            diffrax.ODETerm(_ode_rhs_2d),
+            diffrax.Dopri8(),
+            t0=jnp.zeros((), dtype=jnp.float64),
+            t1=T_geo,
+            dt0=None,
+            y0=y0,
+            saveat=diffrax.SaveAt(ts=t_save),
+            stepsize_controller=diffrax.PIDController(rtol=rtol, atol=atol),
+            max_steps=max_steps,
+            event=diffrax.Event(_event_cond),
+            args=ode_args,
+            throw=False,
+        )
+
     # ------------------------------------------------------------------
     # Public interface
     # ------------------------------------------------------------------
@@ -266,7 +349,7 @@ class EMRIInspiral(eqx.Module):
         Phi_r0: float = 0.0,
         atol: float = 1e-9,
         rtol: float = 1e-9,
-        max_steps: int = 4096,
+        max_steps: int = 256,
         dense_steps: int = 100,
         backward: bool = False,
         e_f: Optional[float] = None,
@@ -298,10 +381,12 @@ class EMRIInspiral(eqx.Module):
             Adaptive solver tolerances.
         max_steps : int
             Maximum number of ODE internal steps.  The Dopri8 solver
-            typically uses ≪100 steps for a year-long EMRI inspiral;
-            the default of 4096 accommodates edge cases without
-            significant runtime cost (execution scales with actual
-            step count, not max_steps).
+            typically uses ~100–150 steps for a year-long EMRI inspiral,
+            so the default of 256 leaves a safe margin.  Under reverse-mode
+            autodiff (``jax.grad``), diffrax allocates adjoint buffers
+            scaling with ``max_steps``, so lowering this value directly
+            reduces GPU memory use under ``vmap``.  Raise it only for
+            pathological cases that actually require more steps.
         dense_steps : int
             Number of output trajectory points.
         backward : bool
@@ -321,18 +406,32 @@ class EMRIInspiral(eqx.Module):
 
         Returns
         -------
-        t, p, e, Phi_phi, Phi_theta, Phi_r : jnp.ndarray, shape (dense_steps,)
-            Trajectory arrays.  ``t`` is in seconds; phases in radians.
-            In backward mode ``t`` is time before plunge (:math:`\tau`).
+        t, p, e : jnp.ndarray, shape (N_save,)
+            When ``phases=False`` (set at construction time).
+        t, p, e, Phi_phi, Phi_theta, Phi_r : jnp.ndarray, shape (N_save,)
+            When ``phases=True`` (default).  ``t`` is in seconds; phases in
+            radians.  In backward mode ``t`` is time before plunge
+            (:math:`\tau`).  ``N_save`` equals ``dense_steps`` when
+            ``t_obs=None``, or ``len(t_obs)`` when ``t_obs`` was provided at
+            construction.
         """
         a_ = jnp.asarray(a, dtype=jnp.float64)
         M_s = (M + mu) * MTSUN_SI                 # total mass in seconds (matches FEW convention)
         T_s = T * YEAR_SI                         # observation time in seconds
         T_geo = jnp.asarray(T_s / M_s)           # geometric time  (units of M)
         mu_over_M = jnp.asarray(M * mu / (M + mu) ** 2)  # symmetric mass ratio eta (matches FEW)
-        ode_args = (mu_over_M, a_, x0)
+        # Precompute the spin-only separatrix r_isco = p_sep(a, e=0) once and
+        # thread it through ``ode_args``; the base class now mirrors the fast
+        # variant to avoid recomputing it at every RHS evaluation.
+        r_isco = get_separatrix(
+            jnp.abs(a_), jnp.zeros((), dtype=jnp.float64), _x_sign(a_, x0)
+        )
+        ode_args = (mu_over_M, a_, x0, r_isco)
 
-        t_save = jnp.linspace(jnp.zeros((), jnp.float64), T_geo, dense_steps)
+        if self.t_obs is not None:
+            t_save = self.t_obs / M_s   # physical seconds → geometric time
+        else:
+            t_save = jnp.linspace(jnp.zeros((), jnp.float64), T_geo, dense_steps)
 
         if backward:
             if e_f is None:
@@ -341,30 +440,46 @@ class EMRIInspiral(eqx.Module):
                     "Run a forward integration first and read off e at the "
                     "last valid trajectory point."
                 )
-            e_f_ = jnp.asarray(float(e_f), dtype=jnp.float64)
+            e_f_ = jnp.asarray(e_f, dtype=jnp.float64)
             p_sep = get_separatrix(jnp.abs(a_), e_f_, _x_sign(a_, x0))
             p_start = p_sep + SEPARATRIX_BUFFER
-            y0 = jnp.array(
-                [p_start, e_f_, Phi_phi0, Phi_theta0, Phi_r0], dtype=jnp.float64
-            )
-            sol = self._solve_backward(y0, t_save, T_geo, ode_args, max_steps, atol, rtol)
-        else:
-            p0_min = min_valid_p(a_, e0, x0)
-            if not isinstance(p0, jax.core.Tracer) and float(p0) < float(p0_min):
-                raise ValueError(
-                    f"p0={float(p0):.6g} is outside the flux interpolation grid. "
-                    f"Must be >= {float(p0_min):.6g} for a={float(a_):.4g}, "
-                    f"e0={float(e0):.4g}, x0={float(x0):.4g}."
+            if self.phases:
+                y0 = jnp.array(
+                    [p_start, e_f_, Phi_phi0, Phi_theta0, Phi_r0], dtype=jnp.float64
                 )
-            y0 = jnp.array([p0, e0, Phi_phi0, Phi_theta0, Phi_r0], dtype=jnp.float64)
-            sol = self._solve(y0, t_save, T_geo, ode_args, max_steps, atol, rtol)
+                sol = self._solve_backward(y0, t_save, T_geo, ode_args, max_steps, atol, rtol)
+            else:
+                y0 = jnp.array([p_start, e_f_], dtype=jnp.float64)
+                sol = self._solve_2d(y0, t_save, T_geo, ode_args, max_steps, atol, rtol)
+        else:
+            # Only validate p0 against the grid when every input is concrete;
+            # under jit/vmap/grad these are tracers and the check is skipped.
+            if not any(
+                isinstance(x, jax.core.Tracer) for x in (p0, e0, a_, x0)
+            ):
+                p0_min = float(min_valid_p(a_, e0, x0))
+                if float(p0) < p0_min:
+                    raise ValueError(
+                        f"p0={float(p0):.6g} is outside the flux interpolation "
+                        f"grid.  Must be >= {p0_min:.6g} for a={float(a_):.4g}, "
+                        f"e0={float(e0):.4g}, x0={float(x0):.4g}."
+                    )
+            if self.phases:
+                y0 = jnp.array([p0, e0, Phi_phi0, Phi_theta0, Phi_r0], dtype=jnp.float64)
+                sol = self._solve(y0, t_save, T_geo, ode_args, max_steps, atol, rtol)
+            else:
+                y0 = jnp.array([p0, e0], dtype=jnp.float64)
+                sol = self._solve_2d(y0, t_save, T_geo, ode_args, max_steps, atol, rtol)
 
-        ys = sol.ys          # (dense_steps, 5)
-        t_arr = sol.ts       # (dense_steps,)
-
+        t_arr = sol.ts       # (N_save,)
+        ys = sol.ys          # (N_save, 5) or (N_save, 2)
         t_s = t_arr * M_s
         p_arr = ys[:, 0]
         e_arr = ys[:, 1]
+
+        if not self.phases:
+            return t_s, p_arr, e_arr
+
         # Phases are Boyer-Lindquist orbital phases [rad]; no mass-ratio scaling needed
         Phi_phi_arr   = ys[:, 2]
         Phi_theta_arr = ys[:, 3]
@@ -784,6 +899,52 @@ class EMRIInspiralFast(EMRIInspiral):
             args=ode_args,
         )
 
+    @eqx.filter_jit
+    def _solve_fast_2d(
+        self,
+        y0: jnp.ndarray,
+        t_save: jnp.ndarray,
+        T_geo: jnp.ndarray,
+        ode_args: tuple,
+        max_steps: int,
+        atol: float = 1e-10,
+        rtol: float = 1e-10,
+    ):
+        """JIT-compiled 2D fast forward solve: integrates (p, e) only.
+
+        Used when ``phases=False``.  ``ode_args`` is the same 4-tuple
+        ``(mu_over_M, a, x0, r_isco)`` as :meth:`_solve_fast`.
+        """
+        def _ode_rhs_fast_2d(t, y, args):
+            mu_over_M, a, x0, r_isco = args
+            p, e = y[0], y[1]
+            a_abs = jnp.abs(a)
+            x_in  = _x_sign(a, x0)
+            p_sep = get_separatrix_fast(a_abs, e, x_in)
+            pdot, edot = self._flux_pex_fast(a, x0, r_isco, p_sep, p, e)
+            return jnp.array([pdot * mu_over_M, edot * mu_over_M])
+
+        def _event_cond(t, y, args, **kwargs):
+            _, a, x0, _r_isco = args
+            p, e = y[0], y[1]
+            p_sep = get_separatrix_fast(jnp.abs(a), e, _x_sign(a, x0))
+            return p < p_sep + SEPARATRIX_BUFFER
+
+        return diffrax.diffeqsolve(
+            diffrax.ODETerm(_ode_rhs_fast_2d),
+            diffrax.Dopri8(),
+            t0=jnp.zeros((), dtype=jnp.float64),
+            t1=T_geo,
+            dt0=None,
+            y0=y0,
+            saveat=diffrax.SaveAt(ts=t_save),
+            stepsize_controller=diffrax.PIDController(rtol=rtol, atol=atol),
+            max_steps=max_steps,
+            event=diffrax.Event(_event_cond),
+            args=ode_args,
+            throw=False,
+        )
+
     # ------------------------------------------------------------------
     # Public interface (overrides __call__ to pass r_isco)
     # ------------------------------------------------------------------
@@ -803,7 +964,7 @@ class EMRIInspiralFast(EMRIInspiral):
         Phi_r0: float = 0.0,
         atol: float = 1e-9,
         rtol: float = 1e-9,
-        max_steps: int = 4096,
+        max_steps: int = 256,
         dense_steps: int = 100,
         backward: bool = False,
         e_f: Optional[float] = None,
@@ -826,42 +987,64 @@ class EMRIInspiralFast(EMRIInspiral):
         r_isco = get_separatrix_fast(a_abs, jnp.zeros((), dtype=jnp.float64), x_in)
 
         ode_args = (mu_over_M, a_, x0, r_isco)
-        t_save   = jnp.linspace(jnp.zeros((), jnp.float64), T_geo, dense_steps)
+
+        if self.t_obs is not None:
+            t_save = self.t_obs / M_s   # physical seconds → geometric time
+        else:
+            t_save = jnp.linspace(jnp.zeros((), jnp.float64), T_geo, dense_steps)
 
         if backward:
             if e_f is None:
                 raise ValueError(
                     "e_f must be provided when backward=True."
                 )
-            e_f_ = jnp.asarray(float(e_f), dtype=jnp.float64)
+            e_f_ = jnp.asarray(e_f, dtype=jnp.float64)
             p_sep = get_separatrix_fast(a_abs, e_f_, x_in)
             p_start = p_sep + SEPARATRIX_BUFFER
-            y0 = jnp.array(
-                [p_start, e_f_, Phi_phi0, Phi_theta0, Phi_r0], dtype=jnp.float64
-            )
-            sol = self._solve_fast_backward(
-                y0, t_save, T_geo, ode_args, max_steps, atol, rtol
-            )
-        else:
-            p0_min = min_valid_p(a_, e0, x0)
-            if not isinstance(p0, jax.core.Tracer) and float(p0) < float(p0_min):
-                raise ValueError(
-                    f"p0={float(p0):.6g} is outside the flux interpolation grid. "
-                    f"Must be >= {float(p0_min):.6g} for a={float(a_):.4g}, "
-                    f"e0={float(e0):.4g}, x0={float(x0):.4g}."
+            if self.phases:
+                y0 = jnp.array(
+                    [p_start, e_f_, Phi_phi0, Phi_theta0, Phi_r0], dtype=jnp.float64
                 )
-            y0 = jnp.array(
-                [p0, e0, Phi_phi0, Phi_theta0, Phi_r0], dtype=jnp.float64
-            )
-            sol = self._solve_fast(y0, t_save, T_geo, ode_args, max_steps, atol, rtol)
+                sol = self._solve_fast_backward(
+                    y0, t_save, T_geo, ode_args, max_steps, atol, rtol
+                )
+            else:
+                y0 = jnp.array([p_start, e_f_], dtype=jnp.float64)
+                sol = self._solve_fast_2d(y0, t_save, T_geo, ode_args, max_steps, atol, rtol)
+        else:
+            # Only validate p0 against the grid when every input is concrete;
+            # under jit/vmap/grad these are tracers and the check is skipped.
+            if not any(
+                isinstance(x, jax.core.Tracer) for x in (p0, e0, a_, x0)
+            ):
+                p0_min = float(min_valid_p(a_, e0, x0))
+                if float(p0) < p0_min:
+                    raise ValueError(
+                        f"p0={float(p0):.6g} is outside the flux interpolation "
+                        f"grid.  Must be >= {p0_min:.6g} for a={float(a_):.4g}, "
+                        f"e0={float(e0):.4g}, x0={float(x0):.4g}."
+                    )
+            if self.phases:
+                y0 = jnp.array(
+                    [p0, e0, Phi_phi0, Phi_theta0, Phi_r0], dtype=jnp.float64
+                )
+                sol = self._solve_fast(y0, t_save, T_geo, ode_args, max_steps, atol, rtol)
+            else:
+                y0 = jnp.array([p0, e0], dtype=jnp.float64)
+                sol = self._solve_fast_2d(y0, t_save, T_geo, ode_args, max_steps, atol, rtol)
 
         ys  = sol.ys
         t_s = sol.ts * M_s
+        p_arr = ys[:, 0]
+        e_arr = ys[:, 1]
+
+        if not self.phases:
+            return t_s, p_arr, e_arr
 
         return (
             t_s,
-            ys[:, 0],
-            ys[:, 1],
+            p_arr,
+            e_arr,
             ys[:, 2],
             ys[:, 3],
             ys[:, 4],
