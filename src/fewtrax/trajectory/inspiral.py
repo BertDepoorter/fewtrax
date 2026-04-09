@@ -206,6 +206,7 @@ class EMRIInspiral(eqx.Module):
             max_steps=max_steps,
             event=diffrax.Event(_event_cond),
             args=ode_args,
+            throw=False,
         )
 
     @eqx.filter_jit
@@ -753,6 +754,7 @@ class EMRIInspiralFast(EMRIInspiral):
             max_steps=max_steps,
             event=diffrax.Event(_event_cond),
             args=ode_args,
+            throw=False,
         )
 
     @eqx.filter_jit
