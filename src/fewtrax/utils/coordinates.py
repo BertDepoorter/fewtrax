@@ -252,7 +252,7 @@ def kerrecceq_forward_map(
     return u, w, z, in_A
 
 
-def min_valid_p(a: float, e: float, x: float) -> float:
+def min_valid_p(a, e, x):
     r"""Minimum :math:`p` within the flux interpolation grid for given (a, e, x).
 
     Mirrors the logic in ``few.trajectory.ode.flux.KerrEccEqFlux._min_p``.
@@ -260,21 +260,26 @@ def min_valid_p(a: float, e: float, x: float) -> float:
     :math:`p_{\rm sep} + \Delta p_{\rm min}` because the :math:`w` coordinate
     of the Region A grid exceeds 1 near the separatrix.
 
+    Compatible with JAX tracers (vmap/jit).
+
     Parameters
     ----------
-    a, e, x : float
+    a, e, x : array-like
         Spin, eccentricity, and inclination cosine.
 
     Returns
     -------
-    float
+    jax array
         Minimum valid :math:`p` [geometric units, M=1].
     """
-    import math
-    a_abs = abs(a)
-    x_in = float(jnp.sign(jnp.asarray(a * x, dtype=jnp.float64)))
-    x_in = x_in if x_in != 0.0 else 1.0
-    p_sep = float(get_separatrix(jnp.asarray(a_abs), jnp.asarray(e), jnp.asarray(x_in)))
+    a = jnp.asarray(a, dtype=jnp.float64)
+    e = jnp.asarray(e, dtype=jnp.float64)
+    x = jnp.asarray(x, dtype=jnp.float64)
+
+    a_abs = jnp.abs(a)
+    x_in_raw = jnp.sign(a * x)
+    x_in = jnp.where(x_in_raw == 0.0, 1.0, x_in_raw)
+    p_sep = get_separatrix(a_abs, e, x_in)
 
     # z-coordinate for spin (Region A mapping)
     chi_max = (1.0 - AMIN) ** (1.0 / 3.0)
@@ -282,9 +287,7 @@ def min_valid_p(a: float, e: float, x: float) -> float:
     z = ((1.0 - a_abs) ** (1.0 / 3.0) - chi_min) / (chi_max - chi_min)
 
     # Secc at u=0 — if e <= Secc(0), the grid is valid all the way to the separatrix
-    secc_u0 = ESEP + (EMAX - ESEP) * math.sqrt(z)
-    if e <= secc_u0:
-        return p_sep + DELTAPMIN
+    secc_u0 = ESEP + (EMAX - ESEP) * jnp.sqrt(z)
 
     # Find u_min where w(e, u_min, z) == 1, i.e. Secc(u_min, z) == e
     # ESEP + (EMAX-ESEP)*sqrt(z + u^BETA*(1-z)) = e  =>  u^BETA = (rhs^2 - z)/(1-z)
@@ -293,7 +296,9 @@ def min_valid_p(a: float, e: float, x: float) -> float:
     p_min = (p_sep + DELTAPMIN) + (DELTAPMAX - DELTAPMIN) * (
         2.0 ** (u_min ** (1.0 / ALPHA_FLUX)) - 1.0
     )
-    return max(p_min, p_sep + DELTAPMIN)
+    p_min_high_e = jnp.maximum(p_min, p_sep + DELTAPMIN)
+
+    return jnp.where(e <= secc_u0, p_sep + DELTAPMIN, p_min_high_e)
 
 
 @partial(jit, static_argnames=("kind",))

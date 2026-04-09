@@ -348,11 +348,12 @@ class EMRIInspiral(eqx.Module):
             )
             sol = self._solve_backward(y0, t_save, T_geo, ode_args, max_steps, atol, rtol)
         else:
-            p0_min = min_valid_p(float(a_), float(e0), float(x0))
-            if float(p0) < p0_min:
+            p0_min = min_valid_p(a_, e0, x0)
+            if not isinstance(p0, jax.core.Tracer) and float(p0) < float(p0_min):
                 raise ValueError(
                     f"p0={float(p0):.6g} is outside the flux interpolation grid. "
-                    f"Must be >= {p0_min:.6g} for a={float(a_):.4g}, e0={float(e0):.4g}, x0={float(x0):.4g}."
+                    f"Must be >= {float(p0_min):.6g} for a={float(a_):.4g}, "
+                    f"e0={float(e0):.4g}, x0={float(x0):.4g}."
                 )
             y0 = jnp.array([p0, e0, Phi_phi0, Phi_theta0, Phi_r0], dtype=jnp.float64)
             sol = self._solve(y0, t_save, T_geo, ode_args, max_steps, atol, rtol)
@@ -840,11 +841,12 @@ class EMRIInspiralFast(EMRIInspiral):
                 y0, t_save, T_geo, ode_args, max_steps, atol, rtol
             )
         else:
-            p0_min = min_valid_p(float(a_), float(e0), float(x0))
-            if float(p0) < p0_min:
+            p0_min = min_valid_p(a_, e0, x0)
+            if not isinstance(p0, jax.core.Tracer) and float(p0) < float(p0_min):
                 raise ValueError(
                     f"p0={float(p0):.6g} is outside the flux interpolation grid. "
-                    f"Must be >= {p0_min:.6g} for a={float(a_):.4g}, e0={float(e0):.4g}, x0={float(x0):.4g}."
+                    f"Must be >= {float(p0_min):.6g} for a={float(a_):.4g}, "
+                    f"e0={float(e0):.4g}, x0={float(x0):.4g}."
                 )
             y0 = jnp.array(
                 [p0, e0, Phi_phi0, Phi_theta0, Phi_r0], dtype=jnp.float64
