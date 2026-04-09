@@ -315,3 +315,72 @@ class TestHighEccentricityHighSpin:
         assert jnp.isfinite(grad), (
             f"Gradient w.r.t. p0 is not finite for a={a}"
         )
+
+
+class TestJacfwdFisher:
+    """Forward-mode autodiff over the full 5-parameter space.
+
+    Guards against regressions in the coordinate-transform double-where
+    (``_Secc_of_uz``) and the orbital-energy sqrt guard — both of which
+    previously produced NaN tangents under ``jax.jacfwd`` at high
+    eccentricity.  The Fisher-matrix path in
+    ``gradient_identification.md §7`` exercises exactly this code path.
+    """
+
+    @pytest.mark.parametrize("e0", [0.2, 0.5, 0.75])
+    def test_jacfwd_5d_finite(self, flux_data, e0):
+        """``jacfwd`` over (M, μ, a, p₀, e₀) must return a finite Jacobian."""
+        from fewtrax.trajectory.inspiral import EMRIInspiral
+        from fewtrax.utils.geodesic import get_separatrix
+
+        traj = EMRIInspiral(flux_data, phases=False)
+        a = 0.5
+        p0 = float(get_separatrix(jnp.abs(jnp.asarray(a)),
+                                  jnp.asarray(e0), 1.0)) + 2.5
+
+        def freq_track(theta):
+            M, mu, a_, p0_, e0_ = theta
+            t, f = traj.get_frequency_track(
+                p0=p0_, e0=e0_, T=0.05, M=M, mu=mu, a=a_,
+                l=2, m=2, k=0, n=0, dense_steps=32,
+            )
+            return f
+
+        theta0 = jnp.array([1e6, 10.0, a, p0, e0], dtype=jnp.float64)
+        J = jax.jacfwd(freq_track)(theta0)
+
+        assert J.shape == (32, 5)
+        assert jnp.all(jnp.isfinite(J)), (
+            f"jacfwd produced non-finite entries at e0={e0}"
+        )
+        # Sanity: at least one sensitivity per parameter should be non-zero
+        col_norms = jnp.linalg.norm(J, axis=0)
+        assert jnp.all(col_norms > 0), (
+            f"Degenerate Jacobian column at e0={e0}: {col_norms}"
+        )
+
+    def test_fisher_matrix_psd(self, flux_data):
+        """Fisher = Jᵀ J / σ² must be symmetric and positive semi-definite."""
+        from fewtrax.trajectory.inspiral import EMRIInspiral
+
+        traj = EMRIInspiral(flux_data, phases=False)
+
+        def freq_track(theta):
+            M, mu, a_, p0_, e0_ = theta
+            _, f = traj.get_frequency_track(
+                p0=p0_, e0=e0_, T=0.05, M=M, mu=mu, a=a_,
+                l=2, m=2, k=0, n=0, dense_steps=32,
+            )
+            return f
+
+        theta0 = jnp.array([1e6, 10.0, 0.3, 10.0, 0.4], dtype=jnp.float64)
+        J = jax.jacfwd(freq_track)(theta0)
+        sigma_f = 1e-5
+        fisher = (J.T @ J) / sigma_f**2
+
+        assert jnp.all(jnp.isfinite(fisher))
+        # Symmetric
+        assert jnp.allclose(fisher, fisher.T, atol=1e-6 * jnp.abs(fisher).max())
+        # PSD — smallest eigenvalue ≥ 0 up to numerical noise
+        evals = jnp.linalg.eigvalsh(fisher)
+        assert float(evals.min()) > -1e-6 * float(evals.max())
