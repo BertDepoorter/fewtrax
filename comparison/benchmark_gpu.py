@@ -176,7 +176,7 @@ def bench_few_trajectory(
     use_gpu: bool = False,
 ) -> tuple[float, float]:
     from few.trajectory.inspiral import EMRIInspiral as FEWInspiral
-    traj = FEWInspiral(use_gpu=use_gpu)
+    traj = FEWInspiral(func='KerrEccEqFlux', use_gpu=use_gpu)
 
     def fn():
         traj(
