@@ -115,9 +115,9 @@ def bench_fewtrax_trajectory_sparse(
     n_warmup: int,
     n_repeat: int,
 ) -> tuple[float, float]:
-    """Time fewtrax EMRIInspiral (ODE only → sparse trajectory output)."""
-    from fewtrax.trajectory import EMRIInspiral
-    traj = EMRIInspiral(flux_data)
+    """Time fewtrax EMRIInspiralFast (ODE only → sparse trajectory output)."""
+    from fewtrax.trajectory import EMRIInspiralFast
+    traj = EMRIInspiralFast(flux_data)
 
     def fn():
         result = traj(
@@ -221,7 +221,7 @@ def bench_few_waveform(
         use_gpu=use_gpu,
     )
     call_kwargs = dict(
-        M=params["M"], mu=params["mu"],
+        m1=params["M"], m2=params["mu"],
         a=params["a"],
         p0=params["p0"], e0=params["e0"], x0=params.get("x0", 1.0),
         dist=params.get("dist", 1.0),
@@ -318,8 +318,8 @@ def bench_vmap_waveforms(
     Each batch varies p0 uniformly across [p0-0.5, p0+0.5].
     Only the trajectory step is vmapped (amplitude evaluation is CPU-bound).
     """
-    from fewtrax.trajectory import EMRIInspiral
-    traj = EMRIInspiral(flux_data)
+    from fewtrax.trajectory import EMRIInspiralFast
+    traj = EMRIInspiralFast(flux_data)
 
     fixed_kwargs = dict(
         e0=base_params["e0"],
