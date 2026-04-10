@@ -187,7 +187,7 @@ def make_loss_of_theta(loss_fn):
 # ---------------------------------------------------------------------------
 
 def bench_vmap_throughput(traj, grid, batch_sizes, T, dense_steps, nw, nr):
-    """Vmapped EMRIInspiralFast over growing batch sizes.
+    """Vmapped EMRIInspiral over growing batch sizes.
 
     Measures raw trajectory throughput: the foundation on which all
     autodiff and optimisation sections build.
@@ -493,9 +493,9 @@ def main():
     # Load fewtrax
     print("\n  Loading fewtrax …", end=" ", flush=True)
     from fewtrax.data import load_flux_data
-    from fewtrax.trajectory import EMRIInspiralFast
+    from fewtrax.trajectory import EMRIInspiral
     flux_data = load_flux_data(data_dir)
-    traj = EMRIInspiralFast(flux_data)
+    traj = EMRIInspiral(flux_data)
     print("done")
 
     # Build parameter grid
@@ -543,7 +543,7 @@ def main():
     # ------------------------------------------------------------------
     # A. vmap trajectory throughput
     # ------------------------------------------------------------------
-    print_header("A. vmap trajectory throughput  (EMRIInspiralFast)")
+    print_header("A. vmap trajectory throughput  (EMRIInspiral)")
     print(f"  T={T} yr,  dense_steps={dense},  n_warmup={nw},  n_repeat={nr}")
 
     batch_sizes_A = [1, 4, 16, 64, 256, 1024]

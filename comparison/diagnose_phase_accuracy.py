@@ -1,15 +1,22 @@
-"""Phase-accuracy diagnostic: EMRIInspiralFast vs EMRIInspiral over 2 years.
+"""Phase self-consistency diagnostic: EMRIInspiral (phases=True vs phases=False).
 
 For each randomly drawn intrinsic EMRI parameter set this script:
 
-1. Runs the *exact* (EMRIInspiral) and *fast* (EMRIInspiralFast) inspiral for
-   T = 2 years.
+1. Runs ``EMRIInspiral(phases=True)`` (full 5D ODE) and
+   ``EMRIInspiral(phases=False)`` (2D (p, e) sub-system only).
 2. Identifies trajectories that plunge before T (incomplete trajectories).
-3. For trajectories that survive the full 2 years, computes the final
-   accumulated dephasing  |ΔΦ_φ(T)| = |Φ_φ^fast(T) - Φ_φ^exact(T)|.
-4. Flags trajectories where the dephasing exceeds the threshold Δ_max = 1e-2 rad.
-5. Saves a CSV of per-trajectory diagnostics and a set of diagnostic plots that
-   map the failing region in (p₀, e₀), (a, e₀), and (M, mu) space.
+3. Computes the final-step inconsistency |Δp(T)| and |Δe(T)| between the
+   two solve paths.  Because they share the same 2D ODE kernel, differences
+   should be at machine-precision (< 1e-10 relative).
+4. Flags trajectories where |Δp|/p₀ exceeds threshold (default 1e-8).
+5. Saves a CSV of per-trajectory diagnostics and diagnostic scatter plots
+   that map any failing region in (p₀, e₀), (a, e₀), and (M, mu) space.
+
+Previously this script compared ``EMRIInspiral`` (exact, 64-pt GL elliptic
+integrals) against ``EMRIInspiralFast`` (AGM + 24-pt GL).  These two variants
+have been merged into a single ``EMRIInspiral`` class with platform-aware
+dispatch (CPU → AGM+24-pt GL, GPU → 64-pt GL), so the comparison now tests
+internal ODE path consistency.
 
 Usage
 -----
@@ -42,7 +49,7 @@ from utils import find_data_dir, block_jax
 # ---------------------------------------------------------------------------
 # Threshold and defaults
 # ---------------------------------------------------------------------------
-DEPHASING_THRESHOLD_RAD: float = 1e-2  # maximum |ΔΦ_φ| in radians (2-yr inspiral)
+DEPHASING_THRESHOLD_RAD: float = 1e-8  # maximum |Δp|/p₀ (relative p inconsistency)
 
 
 # ---------------------------------------------------------------------------
@@ -125,19 +132,21 @@ def last_valid_phase(phi: np.ndarray) -> np.ndarray:
 # ---------------------------------------------------------------------------
 
 def run_diagnostic(
-    traj_ref, traj_fast,
+    traj_5d, traj_2d,
     grid: dict,
     dense_steps: int = 500,
     T: float = 2.0,
     batch_size: int = 256,
     threshold: float = DEPHASING_THRESHOLD_RAD,
 ) -> dict:
-    """Run accuracy diagnostic over the full parameter grid.
+    """Run (p, e) consistency diagnostic between phases=True and phases=False.
 
     Parameters
     ----------
-    traj_ref, traj_fast :
-        Callable EMRI trajectory objects (EMRIInspiral, EMRIInspiralFast).
+    traj_5d : EMRIInspiral(phases=True)
+        Full 5D ODE trajectory (p, e, Φ_φ, Φ_θ, Φ_r).
+    traj_2d : EMRIInspiral(phases=False)
+        2D sub-system ODE trajectory (p, e) only.
     grid : dict
         Parameter grid from :func:`build_param_grid`.
     dense_steps : int
@@ -147,7 +156,7 @@ def run_diagnostic(
     batch_size : int
         Chunk size for vmapped evaluation (to avoid OOM on GPU).
     threshold : float
-        Maximum allowed |ΔΦ_φ| at the end of the inspiral [rad].
+        Maximum allowed relative |Δp|/p₀ between the two solve paths.
 
     Returns
     -------
@@ -155,16 +164,17 @@ def run_diagnostic(
         Per-trajectory diagnostics and aggregate statistics.
     """
     N = len(grid["p0"])
-    batched_ref  = make_batched_traj(traj_ref,  dense_steps=dense_steps, T=T)
-    batched_fast = make_batched_traj(traj_fast, dense_steps=dense_steps, T=T)
+    batched_ref  = make_batched_traj(traj_5d, dense_steps=dense_steps, T=T)
+    batched_fast = make_batched_traj(traj_2d, dense_steps=dense_steps, T=T)
 
-    # Output arrays
-    phi_ref_end  = np.full(N, np.nan)  # Φ_φ^exact at last valid step
-    phi_fast_end = np.full(N, np.nan)  # Φ_φ^fast  at last valid step
-    phi_ref_full  = np.full((N, dense_steps), np.nan)
-    phi_fast_full = np.full((N, dense_steps), np.nan)
-    compl_ref  = np.zeros(N)   # fraction of trajectory completed (ref)
-    compl_fast = np.zeros(N)   # fraction of trajectory completed (fast)
+    # Output arrays — track final (p, e) from each solve path
+    p_ref_end  = np.full(N, np.nan)  # p^5D at last valid step
+    p_fast_end = np.full(N, np.nan)  # p^2D at last valid step
+    # Re-use phi_* names for plot compatibility; they now hold p-track data
+    phi_ref_full  = np.full((N, dense_steps), np.nan)  # p(t) from 5D
+    phi_fast_full = np.full((N, dense_steps), np.nan)  # p(t) from 2D
+    compl_ref  = np.zeros(N)
+    compl_fast = np.zeros(N)
     t_end_ref  = np.full(N, np.nan)
     t_end_fast = np.full(N, np.nan)
 
@@ -193,18 +203,19 @@ def run_diagnostic(
 
         dt = time.perf_counter() - t0
 
-        # Unpack
-        t_r,  p_r,  e_r,  Pphi_r,  *_ = (np.asarray(x) for x in out_ref)
-        t_f,  p_f,  e_f,  Pphi_f,  *_ = (np.asarray(x) for x in out_fast)
+        # Unpack — phases=True returns (t, p, e, Phi_phi, …); phases=False (t, p, e)
+        t_r, p_r, e_r, *_ = (np.asarray(x) for x in out_ref)
+        t_f, p_f, e_f, *_ = (np.asarray(x) for x in out_fast)
 
-        phi_ref_full[sl]  = Pphi_r
-        phi_fast_full[sl] = Pphi_f
+        # Store p(t) track in the phi_*_full arrays (for plot reuse)
+        phi_ref_full[sl]  = p_r
+        phi_fast_full[sl] = p_f
 
-        compl_ref[sl]  = trajectory_completion_fraction(Pphi_r)
-        compl_fast[sl] = trajectory_completion_fraction(Pphi_f)
+        compl_ref[sl]  = trajectory_completion_fraction(p_r)
+        compl_fast[sl] = trajectory_completion_fraction(p_f)
 
-        phi_ref_end[sl]  = last_valid_phase(Pphi_r)
-        phi_fast_end[sl] = last_valid_phase(Pphi_f)
+        p_ref_end[sl]  = last_valid_phase(p_r)
+        p_fast_end[sl] = last_valid_phase(p_f)
 
         # Last valid time (in years)
         t_yr_r = t_r / YEAR_SI
@@ -221,22 +232,18 @@ def run_diagnostic(
               f"{n_done/dt:.0f} traj/s)", flush=True)
 
     # -----------------------------------------------------------------------
-    # Compute per-trajectory dephasing
+    # Compute per-trajectory p inconsistency between phases=True and =False
     # -----------------------------------------------------------------------
-    # We compare the LAST VALID phase of EACH model, which is the
-    # accumulated phase at plunge (or at T if the full inspiral completed).
-    # For trajectories where both plunge before T: compare at their respective
-    # plunge times — this is a proxy for the actual dephasing budget.
-    # The gold-standard comparison is for trajectories that BOTH complete T.
+    # Both paths share the same 2D ODE kernel, so |Δp|/p₀ should be ≲ 1e-10.
 
-    delta_phi = np.abs(phi_fast_end - phi_ref_end)  # |ΔΦ_φ| [rad]
+    delta_phi = np.abs(p_fast_end - p_ref_end) / (np.abs(p_ref_end) + 1e-30)
 
-    # Trajectories that both survived the full 2-year window
+    # Trajectories that both survived the full window
     both_complete = (compl_ref >= 0.99) & (compl_fast >= 0.99)
-    # Trajectories that fail the dephasing criterion (among complete ones)
+    # Trajectories that fail the consistency criterion (among complete ones)
     fails = both_complete & (delta_phi > threshold)
 
-    # RMS of the full Φ_φ track (NaN-aware)
+    # RMS of the full p(t) track inconsistency (NaN-aware)
     delta_phi_track_rms = np.sqrt(
         np.nanmean((phi_fast_full - phi_ref_full)**2, axis=1)
     )
@@ -252,8 +259,8 @@ def run_diagnostic(
         t_end_ref=t_end_ref,
         t_end_fast=t_end_fast,
 
-        phi_ref_end=phi_ref_end,
-        phi_fast_end=phi_fast_end,
+        phi_ref_end=p_ref_end,
+        phi_fast_end=p_fast_end,
         delta_phi=delta_phi,
         delta_phi_rms=delta_phi_track_rms,
 
@@ -272,20 +279,20 @@ def run_diagnostic(
 
     # Print summary
     print()
-    print(f"  Total trajectories       : {N}")
-    print(f"  Both completed T={T:.1f} yr : {both_complete.sum()} "
+    print(f"  Total trajectories         : {N}")
+    print(f"  Both completed T={T:.1f} yr  : {both_complete.sum()} "
           f"({100*both_complete.mean():.1f} %)")
-    print(f"  Ref  plunged before T    : {(compl_ref < 0.99).sum()}")
-    print(f"  Fast plunged before T    : {(compl_fast < 0.99).sum()}")
+    print(f"  5D plunged before T        : {(compl_ref < 0.99).sum()}")
+    print(f"  2D plunged before T        : {(compl_fast < 0.99).sum()}")
     print()
     if both_complete.sum() > 0:
         dp_bc = delta_phi[both_complete]
-        print(f"  Dephasing |ΔΦ_φ| statistics (complete trajectories):")
-        print(f"    mean : {np.nanmean(dp_bc):.3e} rad")
-        print(f"    median: {np.nanmedian(dp_bc):.3e} rad")
-        print(f"    95th% : {np.nanpercentile(dp_bc, 95):.3e} rad")
-        print(f"    max  : {np.nanmax(dp_bc):.3e} rad")
-        print(f"  Trajectories failing |ΔΦ_φ| > {threshold:.0e} rad: "
+        print(f"  p inconsistency |Δp|/p₀ (complete trajectories):")
+        print(f"    mean   : {np.nanmean(dp_bc):.3e}")
+        print(f"    median : {np.nanmedian(dp_bc):.3e}")
+        print(f"    95th%  : {np.nanpercentile(dp_bc, 95):.3e}")
+        print(f"    max    : {np.nanmax(dp_bc):.3e}")
+        print(f"  Trajectories failing |Δp|/p₀ > {threshold:.0e}: "
               f"{fails.sum()} / {both_complete.sum()} "
               f"({100*fails[both_complete].mean():.1f} %)")
 
@@ -533,7 +540,7 @@ def save_csv(stats: dict, path: Path):
 
 def parse_args():
     p = argparse.ArgumentParser(
-        description="Diagnose EMRIInspiralFast phase accuracy vs EMRIInspiral."
+        description="Diagnose EMRIInspiral phases=True vs phases=False consistency."
     )
     p.add_argument("--data-dir", default=None,
                    help="Path to FEW HDF5 data files (overrides FEW_DATA_DIR).")
@@ -576,14 +583,14 @@ def main():
     print(f"  FEW data directory: {data_dir}\n")
 
     from fewtrax.data import load_flux_data
-    from fewtrax.trajectory.inspiral import EMRIInspiral, EMRIInspiralFast
+    from fewtrax.trajectory.inspiral import EMRIInspiral
 
     print("  Loading flux data …", end=" ", flush=True)
     flux_data = load_flux_data(data_dir)
     print("done")
 
-    traj_ref  = EMRIInspiral(flux_data)
-    traj_fast = EMRIInspiralFast(flux_data)
+    traj_ref  = EMRIInspiral(flux_data, phases=True)   # full 5D ODE
+    traj_fast = EMRIInspiral(flux_data, phases=False)  # 2D (p,e) sub-system
 
     # ---- Build parameter grid ----------------------------------------------
     print(f"  Building parameter grid (N={args.N}, seed={args.seed}, "
