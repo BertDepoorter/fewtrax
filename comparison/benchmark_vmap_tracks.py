@@ -318,14 +318,24 @@ def bench_autodiff(
     print(f"{mean_s*1e3:.2f} ± {std_s*1e3:.2f} ms")
 
     # --- 2. jax.jacfwd (vector output → 5-param Jacobian) ---
+    # NOTE: jacfwd uses forward-mode autodiff (JVP), which is incompatible with
+    # diffrax's default RecursiveCheckpointAdjoint (custom_vjp, no custom_jvp).
+    # Switch to adjoint=diffrax.DirectAdjoint() in _solve_fast to enable this.
     print(f"    jax.jacfwd (N_out={3*dense_steps}) …", end=" ", flush=True)
-    jac_fn = jax.jit(jax.jacfwd(output_fn, argnums=(0, 1, 2, 3, 4)))
-    mean_s, std_s = repeat_timer(
-        lambda: block_jax(jac_fn(M0, mu0, a0, p00, e00)),
-        n_warmup=n_warmup, n_repeat=n_repeat,
-    )
-    results["jacfwd"] = (mean_s, std_s)
-    print(f"{mean_s*1e3:.2f} ± {std_s*1e3:.2f} ms")
+    try:
+        jac_fn = jax.jit(jax.jacfwd(output_fn, argnums=(0, 1, 2, 3, 4)))
+        mean_s, std_s = repeat_timer(
+            lambda: block_jax(jac_fn(M0, mu0, a0, p00, e00)),
+            n_warmup=n_warmup, n_repeat=n_repeat,
+        )
+        results["jacfwd"] = (mean_s, std_s)
+        print(f"{mean_s*1e3:.2f} ± {std_s*1e3:.2f} ms")
+    except TypeError as exc:
+        if "custom_vjp" in str(exc) or "forward-mode" in str(exc):
+            results["jacfwd"] = None
+            print("skipped (solver uses custom_vjp; use DirectAdjoint to enable jacfwd)")
+        else:
+            raise
 
     # --- 3. jax.jacrev (vector output → 5-param Jacobian, reverse mode) ---
     print(f"    jax.jacrev (N_out={3*dense_steps}) …", end=" ", flush=True)
@@ -620,7 +630,7 @@ def make_plots(
             "jacrev":  "jacrev\n(rev)",
             "hessian": "hessian\n(5×5)",
         }
-        keys   = [k for k in labels_map if k in autodiff_results]
+        keys   = [k for k in labels_map if autodiff_results.get(k) is not None]
         means  = [autodiff_results[k][0] * 1e3 for k in keys]
         stds   = [autodiff_results[k][1] * 1e3 for k in keys]
         labels = [labels_map[k] for k in keys]
@@ -863,7 +873,7 @@ def main():
         ad_rows = [
             (ad_labels[k], f"{v[0]*1e3:.2f}", f"{v[1]*1e3:.2f}")
             for k, v in autodiff_results.items()
-            if k in ad_labels
+            if k in ad_labels and v is not None
         ]
         print_table(ad_rows, ad_headers, ad_widths)
 
