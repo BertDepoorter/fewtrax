@@ -384,3 +384,331 @@ class TestJacfwdFisher:
         # PSD — smallest eigenvalue ≥ 0 up to numerical noise
         evals = jnp.linalg.eigvalsh(fisher)
         assert float(evals.min()) > -1e-6 * float(evals.max())
+
+
+class TestEMRIInspiralPhasesFalse:
+    """Test the 2D (phases=False) ODE solve.
+
+    When phases=False, EMRIInspiral integrates only (p, e) and returns
+    (t, p, e).  The adjoint and JVP cost are ~2.5x lower than the full
+    5D solve, which benefits jax.grad / jax.jacfwd for loss functions that
+    do not require the orbital phases.
+    """
+
+    def test_returns_three_arrays(self, flux_data):
+        """phases=False should return (t, p, e) only."""
+        from fewtrax.trajectory.inspiral import EMRIInspiral
+
+        traj = EMRIInspiral(flux_data, phases=False)
+        result = traj(p0=10.0, e0=0.4, T=0.1, M=1e6, mu=10.0, a=0.3, dense_steps=20)
+        assert len(result) == 3, "phases=False must return exactly (t, p, e)."
+
+    def test_pe_consistent_with_5d(self, flux_data):
+        """p and e from the 2D and 5D solves must agree to < 1e-6 relative error."""
+        from fewtrax.trajectory.inspiral import EMRIInspiral
+
+        kw = dict(p0=10.0, e0=0.4, T=0.1, M=1e6, mu=10.0, a=0.3, dense_steps=50)
+        traj_2d = EMRIInspiral(flux_data, phases=False)
+        traj_5d = EMRIInspiral(flux_data, phases=True)
+
+        _t2, p2, e2       = traj_2d(**kw)
+        _t5, p5, e5, *_ph = traj_5d(**kw)
+
+        np.testing.assert_allclose(np.asarray(p2), np.asarray(p5), rtol=1e-6,
+                                   err_msg="p mismatch between 2D and 5D solve.")
+        np.testing.assert_allclose(np.asarray(e2), np.asarray(e5), rtol=1e-6,
+                                   err_msg="e mismatch between 2D and 5D solve.")
+
+    def test_grad_phases_false(self, flux_data):
+        """jax.grad w.r.t. p0 must be finite with phases=False."""
+        from fewtrax.trajectory.inspiral import EMRIInspiral
+
+        traj = EMRIInspiral(flux_data, phases=False)
+
+        def final_p(p0):
+            _, p, _ = traj(p0=p0, e0=0.4, T=0.1, M=1e6, mu=10.0, a=0.3, dense_steps=20)
+            valid = jnp.isfinite(p)
+            return jnp.sum(jnp.where(valid, p, 0.0))
+
+        grad = jax.grad(final_p)(jnp.float64(10.0))
+        assert jnp.isfinite(grad), "Gradient w.r.t. p0 must be finite (phases=False)."
+
+    def test_vmap_phases_false(self, flux_data):
+        """phases=False should be vmappable over (p0, e0)."""
+        from fewtrax.trajectory.inspiral import EMRIInspiral
+        from fewtrax.utils.geodesic import get_separatrix
+
+        traj = EMRIInspiral(flux_data, phases=False)
+
+        def single(p0, e0):
+            _, p, e = traj(p0=p0, e0=e0, a=0.3, T=0.1, M=1e6, mu=10.0, dense_steps=20)
+            return p, e
+
+        a_val = jnp.float64(0.3)
+        e0_vals = jnp.array([0.2, 0.4, 0.6], dtype=jnp.float64)
+        p0_vals = jnp.array(
+            [float(get_separatrix(a_val, e, jnp.float64(1.0))) + 2.0 for e in e0_vals],
+            dtype=jnp.float64,
+        )
+
+        p_batch, e_batch = jax.jit(jax.vmap(single))(p0_vals, e0_vals)
+        assert p_batch.shape == (3, 20)
+        assert jnp.all(jnp.isfinite(p_batch[:, 0]))
+
+
+class TestEMRIInspiralTObs:
+    """Test the t_obs construction-time parameter.
+
+    t_obs pins the output times to a fixed physical grid (e.g. STFT segment
+    centres) rather than a uniform dense_steps grid.  The array shape is
+    static (required for JIT/vmap).
+    """
+
+    def test_output_length_matches_t_obs(self, flux_data):
+        """Output time array must have exactly len(t_obs) elements."""
+        from fewtrax.trajectory.inspiral import EMRIInspiral
+        from fewtrax.utils.constants import YEAR_SI
+
+        n_obs = 20
+        T_yr = 0.1
+        t_obs = np.linspace(0.0, T_yr * YEAR_SI * 0.9, n_obs)
+
+        traj = EMRIInspiral(flux_data, t_obs=t_obs)
+        result = traj(p0=10.0, e0=0.4, T=T_yr, M=1e6, mu=10.0, a=0.3)
+        assert result[0].shape[0] == n_obs, (
+            f"Expected {n_obs} output points; got {result[0].shape[0]}."
+        )
+
+    def test_t_obs_first_time_near_zero(self, flux_data):
+        """First output time must be approximately zero when t_obs[0]=0."""
+        from fewtrax.trajectory.inspiral import EMRIInspiral
+        from fewtrax.utils.constants import YEAR_SI
+
+        t_obs = np.linspace(0.0, 0.08 * YEAR_SI, 15)
+        traj = EMRIInspiral(flux_data, t_obs=t_obs)
+        result = traj(p0=10.0, e0=0.4, T=0.1, M=1e6, mu=10.0, a=0.3)
+        assert float(result[0][0]) == pytest.approx(0.0, abs=1.0)
+
+    def test_t_obs_pe_consistent_with_dense_steps(self, flux_data):
+        """Trajectory output at t_obs times must agree with the dense_steps
+        output interpolated to the same times (tolerance 1e-4 relative)."""
+        from fewtrax.trajectory.inspiral import EMRIInspiral
+        from fewtrax.utils.constants import YEAR_SI
+
+        T_yr = 0.1
+        n_pts = 15
+        t_obs = np.linspace(0.0, T_yr * YEAR_SI * 0.8, n_pts)
+
+        traj_tobs  = EMRIInspiral(flux_data, t_obs=t_obs)
+        traj_dense = EMRIInspiral(flux_data, t_obs=None)
+
+        kw = dict(p0=10.0, e0=0.4, T=T_yr, M=1e6, mu=10.0, a=0.3)
+        res_tobs  = traj_tobs(**kw)
+        res_dense = traj_dense(**kw, dense_steps=500)
+
+        t_tobs  = np.asarray(res_tobs[0])
+        p_tobs  = np.asarray(res_tobs[1])
+        t_dense = np.asarray(res_dense[0])
+        p_dense = np.asarray(res_dense[1])
+
+        # Interpolate dense onto the t_obs grid for comparison
+        p_interp = np.interp(t_tobs, t_dense, p_dense)
+        np.testing.assert_allclose(p_tobs, p_interp, rtol=1e-4,
+                                   err_msg="t_obs output disagrees with dense interpolation.")
+
+
+class TestEMRIInspiralMultiTrack:
+    """Tests for the get_multi_track method.
+
+    get_multi_track runs the ODE once and evaluates multiple harmonic
+    mode frequencies simultaneously via a single matrix-vector product,
+    which is faster than calling get_frequency_track once per mode.
+    """
+
+    def test_single_mode_matches_frequency_track(self, flux_data):
+        """get_multi_track for one (m,k,n) mode must match get_frequency_track."""
+        from fewtrax.trajectory.inspiral import EMRIInspiral
+
+        traj = EMRIInspiral(flux_data)
+        kw = dict(p0=10.0, e0=0.4, T=0.1, M=1e6, mu=10.0, a=0.3, dense_steps=50)
+
+        _t_single, f_single = traj.get_frequency_track(l=2, m=2, k=0, n=0, **kw)
+        _t_multi,  freqs    = traj.get_multi_track([(2, 0, 0)], **kw)
+
+        np.testing.assert_allclose(
+            np.asarray(f_single), np.asarray(freqs[0]), rtol=1e-8,
+            err_msg="Single-mode get_multi_track disagrees with get_frequency_track.",
+        )
+
+    def test_multiple_modes_output_shape(self, flux_data):
+        """Output freqs must have shape (N_modes, dense_steps), all non-negative."""
+        from fewtrax.trajectory.inspiral import EMRIInspiral
+
+        traj = EMRIInspiral(flux_data)
+        modes = [(2, 0, 0), (2, 0, 1), (3, 0, 0)]
+        _t, freqs = traj.get_multi_track(
+            modes, p0=10.0, e0=0.4, T=0.1, M=1e6, mu=10.0, a=0.3, dense_steps=30
+        )
+        assert freqs.shape == (3, 30), f"Expected shape (3, 30); got {freqs.shape}."
+        assert np.all(np.asarray(freqs) >= 0.0), "All frequencies must be non-negative."
+
+    def test_lmkn_tuples_accepted(self, flux_data):
+        """4-tuple (l, m, k, n) modes should produce the same frequencies as
+        the corresponding 3-tuple (m, k, n)."""
+        from fewtrax.trajectory.inspiral import EMRIInspiral
+
+        traj = EMRIInspiral(flux_data)
+        kw = dict(p0=10.0, e0=0.4, T=0.1, M=1e6, mu=10.0, a=0.3, dense_steps=30)
+        _t3, f3 = traj.get_multi_track([(2, 0, 0)], **kw)
+        _t4, f4 = traj.get_multi_track([(2, 2, 0, 0)], **kw)
+        np.testing.assert_allclose(np.asarray(f3), np.asarray(f4), rtol=1e-12)
+
+    def test_return_dict_mode(self, flux_data):
+        """return_dict=True must key results by the original mode tuples."""
+        from fewtrax.trajectory.inspiral import EMRIInspiral
+
+        traj = EMRIInspiral(flux_data)
+        modes = [(2, 0, 0), (2, 0, 1)]
+        result = traj.get_multi_track(
+            modes, p0=10.0, e0=0.4, T=0.1, M=1e6, mu=10.0, a=0.3,
+            dense_steps=30, return_dict=True,
+        )
+        assert isinstance(result, dict)
+        for key in modes:
+            assert tuple(key) in result, f"Key {key} missing from return dict."
+            t_k, f_k = result[tuple(key)]
+            assert len(t_k) == 30
+            assert len(f_k) == 30
+
+    def test_empty_modes_raises(self, flux_data):
+        """Empty mode list must raise ValueError."""
+        from fewtrax.trajectory.inspiral import EMRIInspiral
+
+        traj = EMRIInspiral(flux_data)
+        with pytest.raises(ValueError, match="non-empty"):
+            traj.get_multi_track(
+                [], p0=10.0, e0=0.4, T=0.1, M=1e6, mu=10.0, a=0.3
+            )
+
+
+class TestPlatformDispatch:
+    """Test CPU/GPU platform-aware dispatch in get_fundamental_frequencies_platform.
+
+    The hybrid implementation dispatches at JIT-trace time:
+    - GPU  -> get_fundamental_frequencies (64-point Gauss-Legendre)
+    - CPU  -> get_fundamental_frequencies_fast (AGM-12 + 24-pt GL)
+
+    Both paths must agree to < 1e-10 relative error for the smooth integrands
+    encountered in bound EMRI orbits.
+    """
+
+    def test_platform_dispatch_returns_finite(self):
+        """Platform-dispatched frequencies must be finite for a typical orbit."""
+        from fewtrax.utils.geodesic import get_fundamental_frequencies_platform
+
+        Om = get_fundamental_frequencies_platform(
+            jnp.float64(0.5), jnp.float64(10.0), jnp.float64(0.4), jnp.float64(1.0)
+        )
+        for val in Om:
+            assert jnp.isfinite(val), f"Non-finite frequency from platform dispatch: {val}"
+
+    def test_platform_dispatch_routes_correctly(self):
+        """Platform dispatch must return the same result as the expected path."""
+        from fewtrax.utils.geodesic import (
+            get_fundamental_frequencies,
+            get_fundamental_frequencies_fast,
+            get_fundamental_frequencies_platform,
+        )
+
+        a, p, e, x = (jnp.float64(v) for v in (0.3, 12.0, 0.3, 1.0))
+
+        Om_plat = get_fundamental_frequencies_platform(a, p, e, x)
+        Om_gpu  = get_fundamental_frequencies(a, p, e, x)
+        Om_cpu  = get_fundamental_frequencies_fast(a, p, e, x)
+
+        platform = jax.devices()[0].platform
+        expected = Om_gpu if platform == "gpu" else Om_cpu
+
+        for got, exp in zip(Om_plat, expected):
+            assert float(got) == pytest.approx(float(exp), rel=1e-12), (
+                f"Platform dispatch returned wrong value for platform={platform!r}."
+            )
+
+    @pytest.mark.parametrize("a,p,e", [
+        (0.0,  10.0, 0.3),   # Schwarzschild
+        (0.5,  10.0, 0.4),   # moderate spin
+        (0.9,   8.0, 0.2),   # high spin
+        (0.5,  12.0, 0.7),   # high eccentricity
+        (0.99,  7.0, 0.1),   # near-extreme spin
+    ])
+    def test_cpu_gpu_paths_agree(self, a, p, e):
+        """64-pt GL and AGM+24-pt GL frequency evaluations must agree to < 1e-10."""
+        from fewtrax.utils.geodesic import (
+            get_fundamental_frequencies,
+            get_fundamental_frequencies_fast,
+        )
+
+        a_, p_, e_, x_ = (jnp.float64(v) for v in (a, p, e, 1.0))
+        Om_exact = get_fundamental_frequencies(a_, p_, e_, x_)
+        Om_fast  = get_fundamental_frequencies_fast(a_, p_, e_, x_)
+
+        for name, exact, fast in zip(
+            ("Omega_phi", "Omega_theta", "Omega_r"), Om_exact, Om_fast
+        ):
+            assert float(fast) == pytest.approx(float(exact), rel=1e-10), (
+                f"a={a}, p={p}, e={e}: {name} "
+                f"fast={float(fast):.14g} vs exact={float(exact):.14g}"
+            )
+
+
+class TestDirectAdjoint:
+    """Test that DirectAdjoint enables forward-mode autodiff (jacfwd/hessian).
+
+    RecursiveCheckpointAdjoint (the default) uses a custom_vjp rule that
+    is incompatible with jax.jacfwd.  DirectAdjoint uses a custom_jvp rule
+    instead, enabling forward-mode AD at the cost of higher memory use.
+    """
+
+    def test_jacfwd_with_direct_adjoint(self, flux_data):
+        """EMRIInspiral(adjoint=DirectAdjoint()) must support jax.jacfwd."""
+        import diffrax
+        from fewtrax.trajectory.inspiral import EMRIInspiral
+
+        traj = EMRIInspiral(flux_data, phases=False, adjoint=diffrax.DirectAdjoint())
+
+        def pe_track(p0, e0):
+            _, p, e = traj(
+                p0=p0, e0=e0, T=0.05, M=1e6, mu=10.0, a=0.3, dense_steps=16,
+            )
+            return jnp.stack([p, e], axis=0)  # (2, dense_steps)
+
+        J_p0, J_e0 = jax.jacfwd(pe_track, argnums=(0, 1))(
+            jnp.float64(10.0), jnp.float64(0.4)
+        )
+        assert J_p0.shape == (2, 16)
+        assert J_e0.shape == (2, 16)
+        assert jnp.all(jnp.isfinite(J_p0)), "jacfwd J w.r.t. p0 contains non-finite values."
+        assert jnp.all(jnp.isfinite(J_e0)), "jacfwd J w.r.t. e0 contains non-finite values."
+
+    def test_direct_adjoint_agrees_with_default(self, flux_data):
+        """DirectAdjoint and default RecursiveCheckpointAdjoint must yield
+        identical trajectories (same ODE, different AD bookkeeping)."""
+        import diffrax
+        from fewtrax.trajectory.inspiral import EMRIInspiral
+
+        kw = dict(p0=10.0, e0=0.4, T=0.1, M=1e6, mu=10.0, a=0.3,
+                  dense_steps=40, phases=False)
+        traj_rca = EMRIInspiral(flux_data)
+        traj_da  = EMRIInspiral(flux_data, adjoint=diffrax.DirectAdjoint())
+
+        _t_r, p_r, e_r = traj_rca(**{k: v for k, v in kw.items() if k != "phases"})
+        _t_d, p_d, e_d = traj_da( **{k: v for k, v in kw.items() if k != "phases"})
+
+        np.testing.assert_allclose(
+            np.asarray(p_r), np.asarray(p_d), rtol=1e-10,
+            err_msg="p differs between RecursiveCheckpointAdjoint and DirectAdjoint."
+        )
+        np.testing.assert_allclose(
+            np.asarray(e_r), np.asarray(e_d), rtol=1e-10,
+            err_msg="e differs between RecursiveCheckpointAdjoint and DirectAdjoint."
+        )
