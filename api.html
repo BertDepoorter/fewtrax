@@ -1184,10 +1184,12 @@ found as the root of a polynomial (Glampedakis &amp; Kennefick 2002).</p>
 <dl class="py function">
 <dt class="sig sig-object py" id="fewtrax.utils.geodesic.get_separatrix_fast">
 <span class="sig-prename descclassname"><span class="pre">fewtrax.utils.geodesic.</span></span><span class="sig-name descname"><span class="pre">get_separatrix_fast</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">a</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">e</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/fewtrax/utils/geodesic.html#get_separatrix_fast"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#fewtrax.utils.geodesic.get_separatrix_fast" title="Link to this definition"></a></dt>
-<dd><p>Fast separatrix via Newton-Raphson (replaces 50-step bisection).</p>
-<p>Identical interface to <a class="reference internal" href="#fewtrax.utils.geodesic.get_separatrix" title="fewtrax.utils.geodesic.get_separatrix"><code class="xref py py-func docutils literal notranslate"><span class="pre">get_separatrix()</span></code></a>; uses <code class="xref py py-data docutils literal notranslate"><span class="pre">_N_NR</span></code>
-Newton-Raphson iterations instead of binary search.  Roughly 4–5×
-faster for typical EMRI parameter ranges.</p>
+<dd><p>Fast separatrix via hybrid bisection + Newton-Raphson.</p>
+<p>Identical interface to <a class="reference internal" href="#fewtrax.utils.geodesic.get_separatrix" title="fewtrax.utils.geodesic.get_separatrix"><code class="xref py py-func docutils literal notranslate"><span class="pre">get_separatrix()</span></code></a>.  Uses
+<code class="xref py py-data docutils literal notranslate"><span class="pre">_N_BISECT_INIT</span></code> bisection steps to obtain a tight initial guess,
+then <code class="xref py py-data docutils literal notranslate"><span class="pre">_N_NR</span></code> Newton-Raphson steps to reach float64 precision.
+Robust across the full physical parameter space including near-extremal
+prograde orbits where pure NR from the bracket midpoint can diverge.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">

@@ -137,10 +137,16 @@
 <span class="c1"># 12 iterations gives ~2^{-50} ≈ 1e-15 relative error (quadratic convergence).</span>
 <span class="n">_N_AGM</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">12</span>
 
-<span class="c1"># Number of Newton-Raphson iterations for the fast separatrix.</span>
-<span class="c1"># The bracket for equatorial orbits is tight, so 10 Newton steps (quadratic</span>
-<span class="c1"># convergence) is far more than enough for double-precision.</span>
-<span class="n">_N_NR</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">10</span>
+<span class="c1"># Hybrid bisection+NR for the fast separatrix.</span>
+<span class="c1"># Phase 1: _N_BISECT_INIT bisection steps narrow the bracket to width</span>
+<span class="c1">#   ~(hi-lo)/2^20 ≈ 5e-6, giving a safe NR starting point even when the</span>
+<span class="c1">#   root sits near the bracket edge (e.g. high-spin prograde: root ≈ 1+e,</span>
+<span class="c1">#   bracket [1+e, 6+2e], midpoint far from root).</span>
+<span class="c1"># Phase 2: _N_NR Newton-Raphson steps from the tight midpoint.</span>
+<span class="c1">#   Starting within 2.5e-6 of the root, quadratic convergence reaches</span>
+<span class="c1">#   float64 precision in ≤3 steps; 5 is used for a generous safety margin.</span>
+<span class="n">_N_BISECT_INIT</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">20</span>
+<span class="n">_N_NR</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">5</span>
 
 
 <div class="viewcode-block" id="ellipk">
@@ -548,11 +554,21 @@
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_bisect_equat_fast</span><span class="p">(</span><span class="n">a</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">e</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">lo</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">hi</span><span class="p">:</span> <span class="nb">float</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Newton-Raphson root of the separatrix polynomial.</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Hybrid bisection + Newton-Raphson root of the separatrix polynomial.</span>
 
-<span class="sd">    Replaces the 50-step bisection with ``_N_NR`` Newton-Raphson iterations.</span>
-<span class="sd">    Quadratic convergence from the bracket midpoint gives ~1e-15 accuracy in</span>
-<span class="sd">    under 10 steps for all physical (a, e) values.</span>
+<span class="sd">    Pure NR from the bracket midpoint is unreliable: for high-spin prograde</span>
+<span class="sd">    orbits the root sits near ``1+e`` while the bracket is ``[1+e, 6+2e]``,</span>
+<span class="sd">    so the midpoint is far from the root and NR can diverge or stall.</span>
+
+<span class="sd">    Strategy</span>
+<span class="sd">    --------</span>
+<span class="sd">    1. ``_N_BISECT_INIT`` bisection steps (globally convergent) tighten the</span>
+<span class="sd">       bracket to width ``(hi-lo)/2^20 &lt; 5e-6``.</span>
+<span class="sd">    2. ``_N_NR`` Newton-Raphson steps from the bisected midpoint.</span>
+<span class="sd">       Starting within ~2.5e-6 of the root, quadratic convergence reaches</span>
+<span class="sd">       full float64 precision in ≤3 steps.</span>
+
+<span class="sd">    Both loops have static bounds: fully JIT / vmap / AD compatible.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="c1"># Separatrix polynomial in p (Glampedakis &amp; Kennefick 2002):</span>
     <span class="c1">#   P(p) = a⁴(−3−2e+e²)² + p²(−6−2e+p)² − 2a²(1+e)p(14+2e²+3p−ep)</span>
@@ -571,12 +587,26 @@
         <span class="k">return</span> <span class="p">(</span><span class="mf">2.0</span> <span class="o">*</span> <span class="n">p</span> <span class="o">*</span> <span class="p">(</span><span class="n">csep</span> <span class="o">+</span> <span class="n">p</span><span class="p">)</span> <span class="o">*</span> <span class="p">(</span><span class="n">csep</span> <span class="o">+</span> <span class="mf">2.0</span> <span class="o">*</span> <span class="n">p</span><span class="p">)</span>
                 <span class="o">-</span> <span class="n">B_fac</span> <span class="o">*</span> <span class="p">(</span><span class="n">lin_c</span> <span class="o">+</span> <span class="mf">2.0</span> <span class="o">*</span> <span class="n">quad_c</span> <span class="o">*</span> <span class="n">p</span><span class="p">))</span>
 
+    <span class="c1"># Phase 1: bisection — narrow bracket to &lt; 5e-6 width</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">bisect_step</span><span class="p">(</span><span class="n">_</span><span class="p">,</span> <span class="n">state</span><span class="p">):</span>
+        <span class="n">lo_</span><span class="p">,</span> <span class="n">hi_</span> <span class="o">=</span> <span class="n">state</span>
+        <span class="n">mid</span> <span class="o">=</span> <span class="p">(</span><span class="n">lo_</span> <span class="o">+</span> <span class="n">hi_</span><span class="p">)</span> <span class="o">*</span> <span class="mf">0.5</span>
+        <span class="n">fl</span>  <span class="o">=</span> <span class="n">_poly</span><span class="p">(</span><span class="n">lo_</span><span class="p">)</span>
+        <span class="n">fm</span>  <span class="o">=</span> <span class="n">_poly</span><span class="p">(</span><span class="n">mid</span><span class="p">)</span>
+        <span class="n">same_sign</span> <span class="o">=</span> <span class="n">fl</span> <span class="o">*</span> <span class="n">fm</span> <span class="o">&gt;</span> <span class="mf">0.0</span>
+        <span class="k">return</span> <span class="n">jnp</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">same_sign</span><span class="p">,</span> <span class="n">mid</span><span class="p">,</span> <span class="n">lo_</span><span class="p">),</span> <span class="n">jnp</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">same_sign</span><span class="p">,</span> <span class="n">hi_</span><span class="p">,</span> <span class="n">mid</span><span class="p">)</span>
+
+    <span class="n">lo_t</span><span class="p">,</span> <span class="n">hi_t</span> <span class="o">=</span> <span class="n">jax</span><span class="o">.</span><span class="n">lax</span><span class="o">.</span><span class="n">fori_loop</span><span class="p">(</span>
+        <span class="mi">0</span><span class="p">,</span> <span class="n">_N_BISECT_INIT</span><span class="p">,</span> <span class="n">bisect_step</span><span class="p">,</span> <span class="p">(</span><span class="n">jnp</span><span class="o">.</span><span class="n">float64</span><span class="p">(</span><span class="n">lo</span><span class="p">),</span> <span class="n">jnp</span><span class="o">.</span><span class="n">float64</span><span class="p">(</span><span class="n">hi</span><span class="p">))</span>
+    <span class="p">)</span>
+
+    <span class="c1"># Phase 2: NR refinement from the tight midpoint</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">newton_step</span><span class="p">(</span><span class="n">_</span><span class="p">,</span> <span class="n">p</span><span class="p">):</span>
         <span class="n">fp</span>  <span class="o">=</span> <span class="n">_poly</span><span class="p">(</span><span class="n">p</span><span class="p">)</span>
         <span class="n">dfp</span> <span class="o">=</span> <span class="n">_dpoly</span><span class="p">(</span><span class="n">p</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">p</span> <span class="o">-</span> <span class="n">fp</span> <span class="o">/</span> <span class="n">jnp</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">jnp</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">dfp</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mf">1e-30</span><span class="p">,</span> <span class="n">dfp</span><span class="p">,</span> <span class="mf">1e-30</span><span class="p">)</span>
 
-    <span class="n">p0</span> <span class="o">=</span> <span class="p">(</span><span class="n">jnp</span><span class="o">.</span><span class="n">float64</span><span class="p">(</span><span class="n">lo</span><span class="p">)</span> <span class="o">+</span> <span class="n">jnp</span><span class="o">.</span><span class="n">float64</span><span class="p">(</span><span class="n">hi</span><span class="p">))</span> <span class="o">*</span> <span class="mf">0.5</span>
+    <span class="n">p0</span> <span class="o">=</span> <span class="p">(</span><span class="n">lo_t</span> <span class="o">+</span> <span class="n">hi_t</span><span class="p">)</span> <span class="o">*</span> <span class="mf">0.5</span>
     <span class="k">return</span> <span class="n">jax</span><span class="o">.</span><span class="n">lax</span><span class="o">.</span><span class="n">fori_loop</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">_N_NR</span><span class="p">,</span> <span class="n">newton_step</span><span class="p">,</span> <span class="n">p0</span><span class="p">)</span>
 
 
@@ -584,11 +614,13 @@
 <a class="viewcode-back" href="../../../api.html#fewtrax.utils.geodesic.get_separatrix_fast">[docs]</a>
 <span class="nd">@partial</span><span class="p">(</span><span class="n">jit</span><span class="p">,</span> <span class="n">static_argnames</span><span class="o">=</span><span class="p">())</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">get_separatrix_fast</span><span class="p">(</span><span class="n">a</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">e</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">x</span><span class="p">:</span> <span class="nb">float</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
-<span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;Fast separatrix via Newton-Raphson (replaces 50-step bisection).</span>
+<span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;Fast separatrix via hybrid bisection + Newton-Raphson.</span>
 
-<span class="sd">    Identical interface to :func:`get_separatrix`; uses :data:`_N_NR`</span>
-<span class="sd">    Newton-Raphson iterations instead of binary search.  Roughly 4–5×</span>
-<span class="sd">    faster for typical EMRI parameter ranges.</span>
+<span class="sd">    Identical interface to :func:`get_separatrix`.  Uses</span>
+<span class="sd">    :data:`_N_BISECT_INIT` bisection steps to obtain a tight initial guess,</span>
+<span class="sd">    then :data:`_N_NR` Newton-Raphson steps to reach float64 precision.</span>
+<span class="sd">    Robust across the full physical parameter space including near-extremal</span>
+<span class="sd">    prograde orbits where pure NR from the bracket midpoint can diverge.</span>
 
 <span class="sd">    Parameters</span>
 <span class="sd">    ----------</span>

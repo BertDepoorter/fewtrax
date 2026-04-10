@@ -964,6 +964,7 @@
             <span class="n">max_steps</span><span class="o">=</span><span class="n">max_steps</span><span class="p">,</span>
             <span class="n">event</span><span class="o">=</span><span class="n">diffrax</span><span class="o">.</span><span class="n">Event</span><span class="p">(</span><span class="n">_event_cond</span><span class="p">),</span>
             <span class="n">args</span><span class="o">=</span><span class="n">ode_args</span><span class="p">,</span>
+            <span class="n">adjoint</span><span class="o">=</span><span class="n">diffrax</span><span class="o">.</span><span class="n">DirectAdjoint</span><span class="p">(),</span>
             <span class="n">throw</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
         <span class="p">)</span>
 
@@ -992,6 +993,7 @@
             <span class="n">stepsize_controller</span><span class="o">=</span><span class="n">diffrax</span><span class="o">.</span><span class="n">PIDController</span><span class="p">(</span><span class="n">rtol</span><span class="o">=</span><span class="n">rtol</span><span class="p">,</span> <span class="n">atol</span><span class="o">=</span><span class="n">atol</span><span class="p">),</span>
             <span class="n">max_steps</span><span class="o">=</span><span class="n">max_steps</span><span class="p">,</span>
             <span class="n">args</span><span class="o">=</span><span class="n">ode_args</span><span class="p">,</span>
+            <span class="n">adjoint</span><span class="o">=</span><span class="n">diffrax</span><span class="o">.</span><span class="n">DirectAdjoint</span><span class="p">(),</span>
         <span class="p">)</span>
 
     <span class="nd">@eqx</span><span class="o">.</span><span class="n">filter_jit</span>
@@ -1037,6 +1039,7 @@
             <span class="n">max_steps</span><span class="o">=</span><span class="n">max_steps</span><span class="p">,</span>
             <span class="n">event</span><span class="o">=</span><span class="n">diffrax</span><span class="o">.</span><span class="n">Event</span><span class="p">(</span><span class="n">_event_cond</span><span class="p">),</span>
             <span class="n">args</span><span class="o">=</span><span class="n">ode_args</span><span class="p">,</span>
+            <span class="n">adjoint</span><span class="o">=</span><span class="n">diffrax</span><span class="o">.</span><span class="n">DirectAdjoint</span><span class="p">(),</span>
             <span class="n">throw</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
         <span class="p">)</span>
 
