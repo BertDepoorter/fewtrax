@@ -869,6 +869,7 @@ class EMRIInspiralFast(EMRIInspiral):
             max_steps=max_steps,
             event=diffrax.Event(_event_cond),
             args=ode_args,
+            adjoint=diffrax.DirectAdjoint(),
             throw=False,
         )
 
@@ -897,6 +898,7 @@ class EMRIInspiralFast(EMRIInspiral):
             stepsize_controller=diffrax.PIDController(rtol=rtol, atol=atol),
             max_steps=max_steps,
             args=ode_args,
+            adjoint=diffrax.DirectAdjoint(),
         )
 
     @eqx.filter_jit
@@ -942,6 +944,7 @@ class EMRIInspiralFast(EMRIInspiral):
             max_steps=max_steps,
             event=diffrax.Event(_event_cond),
             args=ode_args,
+            adjoint=diffrax.DirectAdjoint(),
             throw=False,
         )
 
