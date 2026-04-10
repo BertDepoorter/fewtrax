@@ -226,10 +226,10 @@ def check_accuracy(
     t_f, p_f, e_f, Pphi_f, Pth_f, Pr_f = (np.asarray(x) for x in out_fast)
 
     # Per-trajectory final-point and RMS errors
-    dp_rms  = np.sqrt(np.mean((p_f - p_r)**2,   axis=1))
-    de_rms  = np.sqrt(np.mean((e_f - e_r)**2,   axis=1))
-    dPhi_rms = np.sqrt(np.mean((Pphi_f - Pphi_r)**2, axis=1))
-    dPhi_max = np.max(np.abs(Pphi_f - Pphi_r),  axis=1)
+    dp_rms  = np.sqrt(np.nanmean((p_f - p_r)**2,   axis=1))
+    de_rms  = np.sqrt(np.nanmean((e_f - e_r)**2,   axis=1))
+    dPhi_rms = np.sqrt(np.nanmean((Pphi_f - Pphi_r)**2, axis=1))
+    dPhi_max = np.nanmax(np.abs(Pphi_f - Pphi_r),  axis=1)
 
     print("done")
     print(f"    Δp   (rms) : mean={dp_rms.mean():.3e}  max={dp_rms.max():.3e}")
