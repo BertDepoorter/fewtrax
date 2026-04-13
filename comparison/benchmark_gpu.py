@@ -48,7 +48,7 @@ import jax.numpy as jnp
 jax.config.update("jax_enable_x64", True)
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from utils import find_data_dir, block_jax, print_header, print_table, repeat_timer
+from utils import find_data_dir, block_jax, print_header, print_table, repeat_timer, get_cpu_memory_mb
 
 from fewtrax.utils.constants import MTSUN_SI
 from fewtrax.utils.geodesic import get_separatrix_fast, get_fundamental_frequencies_fast
@@ -78,10 +78,11 @@ def describe_devices() -> None:
 
 
 def get_peak_mem_mib() -> float:
+    """Peak device memory in MiB; falls back to CPU RSS on CPU backend."""
     try:
         return jax.devices()[0].memory_stats().get("peak_bytes_in_use", 0) / 1024**2
     except Exception:
-        return float("nan")
+        return get_cpu_memory_mb()
 
 
 # ---------------------------------------------------------------------------
@@ -187,7 +188,7 @@ def make_loss_of_theta(loss_fn):
 # ---------------------------------------------------------------------------
 
 def bench_vmap_throughput(traj, grid, batch_sizes, T, dense_steps, nw, nr):
-    """Vmapped EMRIInspiralFast over growing batch sizes.
+    """Vmapped EMRIInspiral over growing batch sizes.
 
     Measures raw trajectory throughput: the foundation on which all
     autodiff and optimisation sections build.
@@ -223,12 +224,22 @@ def bench_vmap_throughput(traj, grid, batch_sizes, T, dense_steps, nw, nr):
 # B. Autodiff overhead — gradient of scalar loss w.r.t. (M, μ, a, p₀, e₀)
 # ---------------------------------------------------------------------------
 
-def bench_autodiff(loss_fn, theta_ref, nw, nr):
+def bench_autodiff(loss_fn, loss_fn_fwd, theta_ref, nw, nr):
     """Compare forward eval, value_and_grad, and jacfwd costs.
 
     The gradient ∇L is used at every step of gradient-based optimisers
     (Adam, L-BFGS) and HMC leapfrog steps.  The overhead factor vs a
     plain forward eval quantifies the cost of adding autodiff.
+
+    Parameters
+    ----------
+    loss_fn :
+        Loss built on ``RecursiveCheckpointAdjoint`` (default).  Used for the
+        forward eval and ``value_and_grad`` (reverse-mode) measurements.
+    loss_fn_fwd :
+        Loss built on ``DirectAdjoint``.  Required for ``jacfwd`` (forward-mode),
+        because ``RecursiveCheckpointAdjoint`` uses ``custom_vjp`` which cannot
+        be composed with forward-mode JVP transforms.
     """
     M, mu, a, p0, e0 = theta_ref
 
@@ -251,7 +262,9 @@ def bench_autodiff(loss_fn, theta_ref, nw, nr):
     # --- forward-mode gradient via jacfwd (5 JVPs) ---
     # jacfwd(scalar_loss) = grad, but forces forward-mode instead of adjoint.
     # For 5 parameters, forward mode costs 5 JVPs ≈ 5× forward pass.
-    jf_jit = jax.jit(jax.jacfwd(loss_fn, argnums=(0, 1, 2, 3, 4)))
+    # Requires DirectAdjoint: RecursiveCheckpointAdjoint uses custom_vjp which
+    # cannot be composed with forward-mode JVP transforms.
+    jf_jit = jax.jit(jax.jacfwd(loss_fn_fwd, argnums=(0, 1, 2, 3, 4)))
     def jf_fn():
         block_jax(jf_jit(M, mu, a, p0, e0))
     jf_mean, jf_std = repeat_timer(jf_fn, n_warmup=nw, n_repeat=nr)
@@ -492,10 +505,14 @@ def main():
 
     # Load fewtrax
     print("\n  Loading fewtrax …", end=" ", flush=True)
+    import diffrax
     from fewtrax.data import load_flux_data
-    from fewtrax.trajectory import EMRIInspiralFast
+    from fewtrax.trajectory import EMRIInspiral
     flux_data = load_flux_data(data_dir)
-    traj = EMRIInspiralFast(flux_data)
+    traj = EMRIInspiral(flux_data)
+    # DirectAdjoint is required for jacfwd / Fisher (forward-mode JVP).
+    # RecursiveCheckpointAdjoint uses custom_vjp and cannot be composed with JVP transforms.
+    traj_fwd = EMRIInspiral(flux_data, adjoint=diffrax.DirectAdjoint())
     print("done")
 
     # Build parameter grid
@@ -525,10 +542,13 @@ def main():
     print(f"  Frequency track: mode (m={args.m_mode}, k={args.k_mode}, n={args.n_mode})")
     print(f"  σ_f = {args.sigma_f:.1e} Hz  (STFT noise model)")
 
-    # Build differentiable frequency track and loss for the reference mode
-    freq_track_fn = make_freq_track(traj, args.m_mode, args.k_mode, args.n_mode,
-                                    T, dense)
-    freq_of_theta  = make_freq_of_theta(freq_track_fn)
+    # Build differentiable frequency track and loss for the reference mode.
+    # Two variants: default (RecursiveCheckpointAdjoint) for reverse-mode grad,
+    # and fwd (DirectAdjoint) for jacfwd / Fisher matrix computation.
+    freq_track_fn     = make_freq_track(traj,     args.m_mode, args.k_mode, args.n_mode, T, dense)
+    freq_track_fn_fwd = make_freq_track(traj_fwd, args.m_mode, args.k_mode, args.n_mode, T, dense)
+    freq_of_theta     = make_freq_of_theta(freq_track_fn)
+    freq_of_theta_fwd = make_freq_of_theta(freq_track_fn_fwd)
 
     # Synthetic "observed" frequency track: reference parameters + noise
     print("\n  Generating synthetic f_obs from reference parameters …", end=" ")
@@ -537,13 +557,14 @@ def main():
     f_obs   = jnp.array(f_clean + rng.normal(0.0, args.sigma_f, dense), dtype=jnp.float64)
     print(f"done  (f̄ = {float(jnp.mean(f_obs))*1e3:.3f} mHz)")
 
-    loss_fn       = make_loss(freq_track_fn, f_obs)
+    loss_fn       = make_loss(freq_track_fn,     f_obs)
+    loss_fn_fwd   = make_loss(freq_track_fn_fwd, f_obs)
     loss_of_theta = make_loss_of_theta(loss_fn)
 
     # ------------------------------------------------------------------
     # A. vmap trajectory throughput
     # ------------------------------------------------------------------
-    print_header("A. vmap trajectory throughput  (EMRIInspiralFast)")
+    print_header("A. vmap trajectory throughput  (EMRIInspiral)")
     print(f"  T={T} yr,  dense_steps={dense},  n_warmup={nw},  n_repeat={nr}")
 
     batch_sizes_A = [1, 4, 16, 64, 256, 1024]
@@ -570,7 +591,7 @@ def main():
           f"a={theta_ref[2]:.3f}")
 
     if not args.skip_autodiff:
-        autodiff_results = bench_autodiff(loss_fn, theta_ref, nw, nr)
+        autodiff_results = bench_autodiff(loss_fn, loss_fn_fwd, theta_ref, nw, nr)
 
         print()
         print("  Overhead summary:")
@@ -593,13 +614,13 @@ def main():
     if not args.skip_fisher:
         print("\n  [Single parameter set]")
         fisher_single_result = bench_fisher_single(
-            freq_of_theta, theta_ref_arr, dense, args.sigma_f, nw, nr
+            freq_of_theta_fwd, theta_ref_arr, dense, args.sigma_f, nw, nr
         )
 
         print("\n  [Batched: vmap(jacfwd) over N parameter sets]")
         batch_sizes_C = [1, 4, 16, 64, 256]
         fisher_batch_result = bench_fisher_batched(
-            freq_of_theta, grid, batch_sizes_C, args.sigma_f, nw, nr
+            freq_of_theta_fwd, grid, batch_sizes_C, args.sigma_f, nw, nr
         )
 
         rows_C = [

@@ -6,14 +6,19 @@ of intrinsic parameters.
 
 What is measured
 ----------------
-A. **vmap throughput** — vmapped ``EMRIInspiralFast`` and ``EMRIInspiral``
-   over batches drawn from a random (seeded) parameter grid.  Reports
+A. **vmap throughput (phases=True)** — vmapped ``EMRIInspiral(phases=True)``
+   over batches drawn from a random (seeded) parameter grid.  Returns the
+   full 5D trajectory (p, e, Φ_φ, Φ_θ, Φ_r) and reports
    trajectories/second, per-trajectory wall time, and peak GPU memory.
 
-B. **Accuracy** — per-trajectory RMS and max difference in (p, e, Phi_phi)
-   between EMRIInspiralFast and EMRIInspiral (exact).
+B. **vmap throughput (phases=False)** — vmapped ``EMRIInspiral(phases=False)``,
+   which integrates only the 2D (p, e) sub-system.  ~2.5× cheaper per step
+   for gradient-only workloads (Fisher matrix, frequency-track loss) that
+   do not need the accumulated orbital phases.
 
-C. **Memory profiling** — peak JAX device memory versus batch size.
+C. **Consistency** — per-trajectory RMS difference in (p, e) between the
+   phases=True and phases=False solves.  Both share the same 2D ODE kernel,
+   so the difference should be at machine precision.
 
 D. **Autodiff benchmarks** — timing for ``jax.grad``, ``jax.jacfwd``,
    and ``jax.hessian`` of a scalar trajectory loss w.r.t. all five
@@ -53,7 +58,7 @@ import jax.numpy as jnp
 jax.config.update("jax_enable_x64", True)
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from utils import find_data_dir, block_jax, print_header, print_table, repeat_timer
+from utils import find_data_dir, block_jax, print_header, print_table, repeat_timer, get_cpu_memory_mb
 
 
 # ---------------------------------------------------------------------------
@@ -61,21 +66,27 @@ from utils import find_data_dir, block_jax, print_header, print_table, repeat_ti
 # ---------------------------------------------------------------------------
 
 def get_jax_memory_mb() -> float:
-    """Return current JAX device memory usage in MiB (GPU only)."""
+    """Return current JAX device memory usage in MiB.
+
+    Falls back to CPU RSS when JAX device stats are unavailable (CPU backend).
+    """
     try:
         stats = jax.devices()[0].memory_stats()
         return stats.get("bytes_in_use", 0) / 1024**2
     except Exception:
-        return float("nan")
+        return get_cpu_memory_mb()
 
 
 def get_peak_memory_mb() -> float:
-    """Return peak JAX device memory usage in MiB (GPU only)."""
+    """Return peak JAX device memory usage in MiB.
+
+    Falls back to CPU peak RSS when JAX device stats are unavailable.
+    """
     try:
         stats = jax.devices()[0].memory_stats()
         return stats.get("peak_bytes_in_use", 0) / 1024**2
     except Exception:
-        return float("nan")
+        return get_cpu_memory_mb()
 
 
 def nvidia_smi_free_mib() -> float:
@@ -133,7 +144,11 @@ def build_param_grid(
 
 def make_batched_traj(traj, dense_steps: int = 100, max_steps: int = 4096,
                       atol: float = 1e-9, rtol: float = 1e-9, T: float = 0.5):
-    """Return a vmapped function (p0, e0, a, M, mu) -> (t, p, e, Phi_phi, Phi_theta, Phi_r)."""
+    """Return a vmapped function (p0, e0, a, M, mu) -> trajectory arrays.
+
+    Returns 6 arrays (t, p, e, Phi_phi, Phi_theta, Phi_r) when the trajectory
+    was built with ``phases=True``, or 3 arrays (t, p, e) with ``phases=False``.
+    """
     fixed = dict(
         T=T, x0=1.0, dt=10.0,
         dense_steps=dense_steps, max_steps=max_steps, atol=atol, rtol=rtol,
@@ -194,23 +209,28 @@ def bench_batch(
 
 
 # ---------------------------------------------------------------------------
-# Accuracy: EMRIInspiralFast vs EMRIInspiral
+# Consistency: phases=True vs phases=False
 # ---------------------------------------------------------------------------
 
 def check_accuracy(
-    traj_ref,
-    traj_fast,
+    traj_5d,
+    traj_2d,
     grid: dict,
     N: int = 32,
     dense_steps: int = 200,
     T: float = 0.5,
 ) -> dict:
-    """Compare (p, e, Phi_phi) from fast vs exact trajectories."""
-    print(f"\n  Accuracy check: fast vs exact (N={N}, dense_steps={dense_steps}) …",
-          end=" ", flush=True)
+    """Verify (p, e) consistency between phases=True and phases=False solves.
 
-    batched_ref  = make_batched_traj(traj_ref,  dense_steps=dense_steps, T=T)
-    batched_fast = make_batched_traj(traj_fast, dense_steps=dense_steps, T=T)
+    Both share the identical 2D ODE kernel for (p, e), so differences should
+    be at machine precision (< 1e-10 relative).  Large discrepancies would
+    indicate a regression in one of the two solve paths.
+    """
+    print(f"\n  Consistency check: phases=True vs phases=False "
+          f"(N={N}, dense_steps={dense_steps}) …", end=" ", flush=True)
+
+    batched_5d = make_batched_traj(traj_5d, dense_steps=dense_steps, T=T)
+    batched_2d = make_batched_traj(traj_2d, dense_steps=dense_steps, T=T)
 
     p0 = jnp.array(grid["p0"][:N], dtype=jnp.float64)
     e0 = jnp.array(grid["e0"][:N], dtype=jnp.float64)
@@ -218,30 +238,24 @@ def check_accuracy(
     M  = jnp.array(grid["M"][:N],  dtype=jnp.float64)
     mu = jnp.array(grid["mu"][:N], dtype=jnp.float64)
 
-    out_ref  = batched_ref(p0, e0, a, M, mu)
-    out_fast = batched_fast(p0, e0, a, M, mu)
+    out_5d = batched_5d(p0, e0, a, M, mu)
+    out_2d = batched_2d(p0, e0, a, M, mu)
 
-    # Unpack: (t, p, e, Phi_phi, Phi_theta, Phi_r) each shape (N, dense_steps)
-    t_r, p_r, e_r, Pphi_r, Pth_r, Pr_r = (np.asarray(x) for x in out_ref)
-    t_f, p_f, e_f, Pphi_f, Pth_f, Pr_f = (np.asarray(x) for x in out_fast)
+    # phases=True returns (t, p, e, Phi_phi, Phi_theta, Phi_r); phases=False (t, p, e)
+    t_r, p_r, e_r = (np.asarray(x) for x in out_5d[:3])
+    t_f, p_f, e_f = (np.asarray(x) for x in out_2d[:3])
 
-    # Per-trajectory final-point and RMS errors
-    dp_rms  = np.sqrt(np.nanmean((p_f - p_r)**2,   axis=1))
-    de_rms  = np.sqrt(np.nanmean((e_f - e_r)**2,   axis=1))
-    dPhi_rms = np.sqrt(np.nanmean((Pphi_f - Pphi_r)**2, axis=1))
-    dPhi_max = np.nanmax(np.abs(Pphi_f - Pphi_r),  axis=1)
+    dp_rms = np.sqrt(np.mean((p_f - p_r)**2, axis=1))
+    de_rms = np.sqrt(np.mean((e_f - e_r)**2, axis=1))
 
     print("done")
-    print(f"    Δp   (rms) : mean={dp_rms.mean():.3e}  max={dp_rms.max():.3e}")
-    print(f"    Δe   (rms) : mean={de_rms.mean():.3e}  max={de_rms.max():.3e}")
-    print(f"    ΔΦ_φ (rms) : mean={dPhi_rms.mean():.3e}  max={dPhi_rms.max():.3e} rad")
-    print(f"    ΔΦ_φ (max) : mean={dPhi_max.mean():.3e}  max={dPhi_max.max():.3e} rad")
+    print(f"    Δp (rms) : mean={dp_rms.mean():.3e}  max={dp_rms.max():.3e}")
+    print(f"    Δe (rms) : mean={de_rms.mean():.3e}  max={de_rms.max():.3e}")
 
     return dict(
         dp_rms=dp_rms, de_rms=de_rms,
-        dPhi_rms=dPhi_rms, dPhi_max=dPhi_max,
-        p_ref=p_r, e_ref=e_r, Phi_phi_ref=Pphi_r,
-        p_fast=p_f, e_fast=e_f, Phi_phi_fast=Pphi_f,
+        p_5d=p_r, e_5d=e_r,
+        p_2d=p_f, e_2d=e_f,
         t=t_r,
     )
 
@@ -524,8 +538,8 @@ def make_plots(
     ax_t, ax_m = axes
 
     for res, color, ls, label in [
-        (fast_results,  "C0", "-",  "EMRIInspiralFast"),
-        (exact_results, "C1", "--", "EMRIInspiral (exact)"),
+        (fast_results,  "C0", "-",  "EMRIInspiral (phases=True)"),
+        (exact_results, "C1", "--", "EMRIInspiral (phases=False)"),
     ]:
         if not res:
             continue
@@ -560,11 +574,11 @@ def make_plots(
     mem_vals = [r["mem_peak_mb"] for r in fast_results]
     if any(np.isfinite(m) for m in mem_vals):
         fig, ax = plt.subplots(figsize=(7, 4))
-        ax.plot([r["N"] for r in fast_results], mem_vals, "C0-o", label="EMRIInspiralFast")
+        ax.plot([r["N"] for r in fast_results], mem_vals, "C0-o", label="phases=True")
         if exact_results:
             ax.plot([r["N"] for r in exact_results],
                     [r["mem_peak_mb"] for r in exact_results],
-                    "C1--s", label="EMRIInspiral")
+                    "C1--s", label="phases=False")
         ax.set_xlabel("Batch size N")
         ax.set_ylabel("Peak JAX memory [MiB]")
         ax.set_title("GPU memory vs batch size")
@@ -604,11 +618,10 @@ def make_plots(
 
     # ---- 4. Accuracy histograms ----
     if accuracy is not None:
-        fig, axes = plt.subplots(1, 3, figsize=(14, 4))
+        fig, axes = plt.subplots(1, 2, figsize=(10, 4))
         for ax, data, title, xlabel in [
-            (axes[0], accuracy["dp_rms"],   "Δp RMS per trajectory",    "Δp [M]"),
-            (axes[1], accuracy["de_rms"],   "Δe RMS per trajectory",    "Δe"),
-            (axes[2], accuracy["dPhi_max"], "ΔΦ_φ max per trajectory",  "ΔΦ_φ [rad]"),
+            (axes[0], accuracy["dp_rms"], "Δp RMS per trajectory", "Δp [M]"),
+            (axes[1], accuracy["de_rms"], "Δe RMS per trajectory", "Δe"),
         ]:
             ax.hist(np.log10(data + 1e-20), bins=20, color="C2", edgecolor="k", lw=0.3)
             ax.set_xlabel(f"log₁₀({xlabel})")
@@ -616,7 +629,7 @@ def make_plots(
             ax.set_title(title)
             ax.grid(True, alpha=0.3)
 
-        fig.suptitle("Accuracy: EMRIInspiralFast vs EMRIInspiral (exact)")
+        fig.suptitle("Consistency: phases=True vs phases=False (p, e)")
         fig.tight_layout()
         fig.savefig(out_dir / "accuracy_histograms.png", dpi=150)
         plt.close(fig)
@@ -769,10 +782,15 @@ def main():
     data_dir = find_data_dir(args.data_dir)
     print(f"\n  FEW data directory: {data_dir}")
     from fewtrax.data import load_flux_data
-    from fewtrax.trajectory import EMRIInspiral, EMRIInspiralFast
+    from fewtrax.trajectory import EMRIInspiral
     flux_data = load_flux_data(data_dir)
-    traj_exact = EMRIInspiral(flux_data)
-    traj_fast  = EMRIInspiralFast(flux_data)
+    # phases=True: full 5D solve (p, e, Φ_φ, Φ_θ, Φ_r) — needed for waveforms
+    traj_5d = EMRIInspiral(flux_data, phases=True)
+    # phases=False: 2D (p, e) only — cheaper for gradient workloads
+    traj_2d = EMRIInspiral(flux_data, phases=False)
+    # Aliases used by benchmarking helpers (fast=2D, exact=5D for throughput plots)
+    traj_fast  = traj_5d  # primary benchmark target (full waveform pipeline)
+    traj_exact = traj_2d  # secondary benchmark target (grad-only workloads)
 
     # --- Build parameter grid ---
     N_max = max(args.max_batch, 64) + 16
@@ -790,33 +808,35 @@ def main():
     max_bs = args.max_batch
     batch_sizes = sorted({1, 4, 16, 64, 256, max_bs} & {n for n in range(1, max_bs + 1)})
 
-    # --- A. EMRIInspiralFast benchmark ---
-    print_header("A. EMRIInspiralFast — vmapped batch throughput")
+    # --- A. EMRIInspiral (phases=True) benchmark ---
+    print_header("A. EMRIInspiral (phases=True) — vmapped batch throughput")
+    print("   Full 5D solve: (p, e, Φ_φ, Φ_θ, Φ_r)")
     fast_results = bench_batch(
-        traj_fast, grid, batch_sizes, nw, nr,
-        dense_steps=args.dense, T=args.T, label="fast",
+        traj_5d, grid, batch_sizes, nw, nr,
+        dense_steps=args.dense, T=args.T, label="5D",
     )
 
-    # --- B. EMRIInspiral (exact) benchmark ---
+    # --- B. EMRIInspiral (phases=False) benchmark ---
     exact_results = []
     if not args.skip_exact:
-        print_header("B. EMRIInspiral (exact) — vmapped batch throughput")
+        print_header("B. EMRIInspiral (phases=False) — vmapped batch throughput")
+        print("   2D solve: (p, e) only — cheaper for gradient-only workloads")
         exact_results = bench_batch(
-            traj_exact, grid, batch_sizes, nw, nr,
-            dense_steps=args.dense, T=args.T, label="exact",
+            traj_2d, grid, batch_sizes, nw, nr,
+            dense_steps=args.dense, T=args.T, label="2D",
         )
 
     # --- Throughput summary table ---
     print_header("Throughput summary")
-    headers = ["N_batch", "fast [ms]", "fast [traj/s]",
-               "exact [ms]", "exact [traj/s]", "speedup"]
-    widths  = [10, 12, 14, 12, 14, 10]
+    headers = ["N_batch", "5D [ms]", "5D [traj/s]",
+               "2D [ms]", "2D [traj/s]", "speedup (2D/5D)"]
+    widths  = [10, 14, 14, 14, 14, 16]
     rows = []
     for fr in fast_results:
         N = fr["N"]
         er = next((r for r in exact_results if r["N"] == N), None)
         if er:
-            sp  = f"{fr['throughput'] / er['throughput']:.2f}×"
+            sp  = f"{er['throughput'] / fr['throughput']:.2f}×"
             ex_ms  = f"{er['mean_s']*1e3:.1f} ± {er['std_s']*1e3:.1f}"
             ex_tps = f"{er['throughput']:.1f}"
         else:
@@ -829,19 +849,19 @@ def main():
         ))
     print_table(rows, headers, widths)
 
-    peak_fast = max(r["throughput"] for r in fast_results)
-    print(f"\n  Peak EMRIInspiralFast throughput: {peak_fast:.1f} traj/s")
+    peak_5d = max(r["throughput"] for r in fast_results)
+    print(f"\n  Peak throughput  (phases=True,  5D): {peak_5d:.1f} traj/s")
     if exact_results:
-        peak_exact = max(r["throughput"] for r in exact_results)
-        print(f"  Peak EMRIInspiral throughput:    {peak_exact:.1f} traj/s")
-        print(f"  Peak fast/exact speedup:         {peak_fast/peak_exact:.2f}×")
+        peak_2d = max(r["throughput"] for r in exact_results)
+        print(f"  Peak throughput  (phases=False, 2D): {peak_2d:.1f} traj/s")
+        print(f"  2D / 5D speedup:                     {peak_2d/peak_5d:.2f}×")
 
-    # --- C. Accuracy ---
+    # --- C. Consistency ---
     accuracy = None
     if not args.skip_accuracy and not args.skip_exact:
-        print_header("C. Accuracy: EMRIInspiralFast vs EMRIInspiral")
+        print_header("C. Consistency: phases=True vs phases=False (p, e)")
         accuracy = check_accuracy(
-            traj_exact, traj_fast, grid,
+            traj_5d, traj_2d, grid,
             N=min(32, args.max_batch),
             dense_steps=max(args.dense, 200),
             T=args.T,
@@ -850,11 +870,11 @@ def main():
     # --- D. Autodiff benchmarks ---
     autodiff_results = None
     if not args.skip_autodiff:
-        print_header("D. Autodiff benchmarks  (EMRIInspiralFast, single trajectory)")
+        print_header("D. Autodiff benchmarks  (EMRIInspiral phases=True, single trajectory)")
         print(f"   Parameters: M, μ, a, p₀, e₀  |  T={args.T} yr  "
               f"|  dense_steps={args.dense}")
         autodiff_results = bench_autodiff(
-            traj_fast, grid,
+            traj_5d, grid,
             T=args.T, dense_steps=args.dense,
             n_warmup=nw, n_repeat=nr,
             run_hessian=not args.skip_hessian,
@@ -884,7 +904,7 @@ def main():
         print(f"   dense_steps={args.dense}  |  T={args.T} yr")
         fisher_batch_sizes = sorted({1, 4, 16, 64} & {n for n in range(1, max_bs + 1)})
         fisher_results = bench_fisher(
-            traj_fast, grid,
+            traj_5d, grid,
             T=args.T, dense_steps=args.dense,
             batch_sizes=fisher_batch_sizes,
             n_warmup=nw, n_repeat=nr,
@@ -898,7 +918,7 @@ def main():
             float(grid["M"][0]), float(grid["mu"][0]),
             float(grid["a"][0]), float(grid["p0"][0]), float(grid["e0"][0]),
         )
-        t, p, e, Phi_phi, Phi_theta, Phi_r = traj_fast(
+        t, p, e, Phi_phi, Phi_theta, Phi_r = traj_5d(
             p0=p00, e0=e00, a=a0, M=M0, mu=mu0,
             T=args.T, x0=1.0, dt=10.0,
             dense_steps=max(args.dense, 200), max_steps=4096,

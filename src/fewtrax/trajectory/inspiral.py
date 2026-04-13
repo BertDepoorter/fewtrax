@@ -57,7 +57,7 @@ and the integration runs for duration :math:`T` years.
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import Any, Optional
 import numpy as np
 import jax
 import jax.numpy as jnp
@@ -66,11 +66,11 @@ import equinox as eqx
 
 from fewtrax.utils.constants import MTSUN_SI, YEAR_SI
 from fewtrax.utils.geodesic import (
-    get_separatrix, get_fundamental_frequencies,
-    get_separatrix_fast, get_fundamental_frequencies_fast,
+    get_separatrix_fast,
+    get_fundamental_frequencies_platform,
 )
 from fewtrax.utils.coordinates import (
-    kerrecceq_forward_map, kerrecceq_forward_map_fast, DELTAPMIN, min_valid_p,
+    kerrecceq_forward_map_fast, DELTAPMIN, min_valid_p,
 )
 from fewtrax.data.loader import FluxData, _pdot_PN_jax, _edot_PN_jax
 
@@ -101,9 +101,32 @@ class EMRIInspiral(eqx.Module):
     This avoids the runtime Jacobian inversion that was previously
     needed in the ELQ convention, improving both speed and accuracy.
 
+    **Hybrid implementation** — per-step optimisations relative to a naive
+    baseline:
+
+    * **Fast separatrix** — :func:`~fewtrax.utils.geodesic.get_separatrix_fast`
+      (20-step bisection + 5 Newton-Raphson) replaces the 50-step pure-bisection
+      version.  Same float64 accuracy, fewer operations.
+    * **p_sep reuse** — the separatrix is computed once per ODE-RHS evaluation
+      and passed directly to the flux helper, eliminating the redundant internal
+      call that the base-class ``_flux_pex`` used to make.
+    * **Platform-aware elliptic integrals** —
+      :func:`~fewtrax.utils.geodesic.get_fundamental_frequencies_platform`
+      selects 64-point Gauss-Legendre (GPU: maps to cuBLAS contractions) or
+      AGM + 24-pt GL (CPU: fewer sequential operations) at JIT-trace time.
+    * **Configurable adjoint** — defaults to
+      :class:`diffrax.RecursiveCheckpointAdjoint` (low memory, optimal for
+      ``jax.grad`` / ``jax.jacrev``).  Pass ``adjoint=diffrax.DirectAdjoint()``
+      to enable ``jax.jacfwd`` / ``jax.hessian``.
+
     ``a`` and ``x0`` are **call-time** arguments rather than constructor
     fields, so a single instance can be vmapped over the full five-parameter
-    space :math:`(M, \mu, a, p_0, e_0)` without rebuilding the Module.
+    space :math:`(M, \mu, a, p_0, e_0)` without rebuilding the Module::
+
+        from jax import vmap
+        traj = EMRIInspiral(flux_data)
+        batch = vmap(lambda p0, e0, a: traj(p0=p0, e0=e0, a=a, T=1.0, M=1e6, mu=10.0))
+        results = batch(p0_arr, e0_arr, a_arr)
 
     Parameters
     ----------
@@ -114,12 +137,14 @@ class EMRIInspiral(eqx.Module):
     flux_data: FluxData
     t_obs: Optional[jnp.ndarray]
     phases: bool = eqx.field(static=True)
+    adjoint: Any = eqx.field(static=True)
 
     def __init__(
         self,
         flux_data: FluxData,
         t_obs: Optional[jnp.ndarray] = None,
         phases: bool = True,
+        adjoint: Optional[Any] = None,
     ):
         """
         Parameters
@@ -139,12 +164,32 @@ class EMRIInspiral(eqx.Module):
             ``(t, p, e)``; the adjoint and JVP cost are ~2.5× lower,
             which benefits ``jax.grad`` / ``jax.jacfwd`` for frequency-track
             loss functions that do not require the orbital phases.
+        adjoint : diffrax adjoint, optional
+            Adjoint method for reverse-mode autodiff through the ODE solve.
+
+            * ``None`` (default) → :class:`diffrax.RecursiveCheckpointAdjoint`.
+              Memory-efficient checkpointing; supports ``jax.grad`` and
+              ``jax.jacrev``.  Recommended for large-batch or memory-constrained
+              workloads.
+            * :class:`diffrax.DirectAdjoint` → expresses the adjoint as a
+              second ODE backward in time; also provides a ``custom_jvp`` rule
+              that enables ``jax.jacfwd`` and ``jax.hessian``.  Higher memory
+              pressure at large batch sizes.
+
+            Example::
+
+                import diffrax
+                traj = EMRIInspiral(flux_data, adjoint=diffrax.DirectAdjoint())
+                J = jax.jacfwd(lambda p0: traj(p0=p0, ...))(p0_val)
         """
         self.flux_data = flux_data
         self.t_obs = (
             jnp.asarray(t_obs, dtype=jnp.float64) if t_obs is not None else None
         )
         self.phases = phases
+        self.adjoint = (
+            diffrax.RecursiveCheckpointAdjoint() if adjoint is None else adjoint
+        )
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -157,6 +202,7 @@ class EMRIInspiral(eqx.Module):
         r_isco: jnp.ndarray,
         p: jnp.ndarray,
         e: jnp.ndarray,
+        p_sep: jnp.ndarray,
     ) -> tuple[jnp.ndarray, jnp.ndarray]:
         r"""Return physical :math:`(\dot{p}, \dot{e})` from the pex spline tables.
 
@@ -165,13 +211,12 @@ class EMRIInspiral(eqx.Module):
         separatrix-dependent PN functions.  Returns **negative** values for
         :math:`\dot{p}` (inspiraling orbit loses semi-latus rectum).
 
-        ``r_isco = p_sep(a, e=0)`` is constant along a trajectory and is
-        supplied by the caller via ``ode_args`` so that it is not recomputed
-        at every ODE step.
+        ``r_isco = p_sep(a, e=0)`` and ``p_sep = p_sep(a, e)`` are both
+        pre-computed by the caller (in ``_ode_rhs``) so that the separatrix
+        polynomial is evaluated only once per ODE-RHS call.
         """
         a_abs = jnp.abs(a)
-        x_in = _x_sign(a, x0)
-        u, w, z, in_A = kerrecceq_forward_map(a_abs, p, e, kind="flux")
+        u, w, z, in_A = kerrecceq_forward_map_fast(a_abs, p, e, p_sep, kind="flux")
 
         rp_A = self.flux_data.pdot_A(u, w, z)
         re_A = self.flux_data.edot_A(u, w, z)
@@ -181,15 +226,11 @@ class EMRIInspiral(eqx.Module):
         rp = jnp.where(in_A, rp_A, rp_B)
         re = jnp.where(in_A, re_A, re_B)
 
-        # Eccentricity-dependent separatrix (still needed per-step)
-        p_sep = get_separatrix(a_abs, e, x_in)
         pdot_pn = _pdot_PN_jax(p, e, r_isco, p_sep)
         edot_pn = _edot_PN_jax(p, e, r_isco, p_sep)
 
         # Negative: orbit is inspiraling (p decreases, e typically decreases)
-        pdot = -rp * pdot_pn
-        edot = -re * edot_pn
-        return pdot, edot
+        return -rp * pdot_pn, -re * edot_pn
 
     def _ode_rhs(self, t: float, y: jnp.ndarray, args) -> jnp.ndarray:
         r"""ODE right-hand side: :math:`dy/dt` for :math:`y=(p,e,\Phi_\phi,\Phi_\theta,\Phi_r)`.
@@ -199,14 +240,23 @@ class EMRIInspiral(eqx.Module):
         ``r_isco`` is the spin-only separatrix ``p_sep(a, e=0)``, precomputed
         once per solve.  The orbital phases evolve at the Boyer-Lindquist
         frequencies and are *not* affected by the mass ratio.
+
+        ``p_sep(a, e)`` is computed once here and forwarded to ``_flux_pex``
+        so that the separatrix polynomial is not evaluated a second time inside
+        the coordinate-map helper.
         """
         mu_over_M, a, x0, r_isco = args
         p, e = y[0], y[1]
         a_abs = jnp.abs(a)
         x_in = _x_sign(a, x0)
 
-        pdot, edot = self._flux_pex(a, x0, r_isco, p, e)
-        Omega_phi, Omega_theta, Omega_r = get_fundamental_frequencies(a_abs, p, e, x_in)
+        # Compute p_sep once; reuse for both the flux helper and (implicitly)
+        # the event condition which is a separate diffrax callback.
+        p_sep = get_separatrix_fast(a_abs, e, x_in)
+        pdot, edot = self._flux_pex(a, x0, r_isco, p, e, p_sep)
+        Omega_phi, Omega_theta, Omega_r = get_fundamental_frequencies_platform(
+            a_abs, p, e, x_in
+        )
         # pdot/edot come from flux tables normalised to μ=M=1; scale to physical ratio
         return jnp.array([pdot * mu_over_M, edot * mu_over_M,
                           Omega_phi, Omega_theta, Omega_r])
@@ -223,14 +273,14 @@ class EMRIInspiral(eqx.Module):
         T_geo: jnp.ndarray,
         ode_args: tuple,
         max_steps: int,
-        atol: float=1e-10,
-        rtol: float=1e-10,
+        atol: float = 1e-10,
+        rtol: float = 1e-10,
     ):
         """JIT-compiled diffrax solve.  All shape-determining args are static."""
         def _event_cond(t, y, args, **kwargs):
             _, a, x0, _r_isco = args
             p, e = y[0], y[1]
-            p_sep = get_separatrix(jnp.abs(a), e, _x_sign(a, x0))
+            p_sep = get_separatrix_fast(jnp.abs(a), e, _x_sign(a, x0))
             return p < p_sep + SEPARATRIX_BUFFER
 
         return diffrax.diffeqsolve(
@@ -245,6 +295,7 @@ class EMRIInspiral(eqx.Module):
             max_steps=max_steps,
             event=diffrax.Event(_event_cond),
             args=ode_args,
+            adjoint=self.adjoint,
             throw=False,
         )
 
@@ -256,8 +307,8 @@ class EMRIInspiral(eqx.Module):
         T_geo: jnp.ndarray,
         ode_args: tuple,
         max_steps: int,
-        atol: float=1e-10,
-        rtol: float=1e-10,
+        atol: float = 1e-10,
+        rtol: float = 1e-10,
     ):
         r"""JIT-compiled backward diffrax solve.
 
@@ -284,6 +335,7 @@ class EMRIInspiral(eqx.Module):
             stepsize_controller=diffrax.PIDController(rtol=rtol, atol=atol),
             max_steps=max_steps,
             args=ode_args,
+            adjoint=self.adjoint,
         )
 
     @eqx.filter_jit
@@ -306,13 +358,16 @@ class EMRIInspiral(eqx.Module):
         def _ode_rhs_2d(t, y, args):
             mu_over_M, a, x0, r_isco = args
             p, e = y[0], y[1]
-            pdot, edot = self._flux_pex(a, x0, r_isco, p, e)
+            a_abs = jnp.abs(a)
+            x_in = _x_sign(a, x0)
+            p_sep = get_separatrix_fast(a_abs, e, x_in)
+            pdot, edot = self._flux_pex(a, x0, r_isco, p, e, p_sep)
             return jnp.array([pdot * mu_over_M, edot * mu_over_M])
 
         def _event_cond(t, y, args, **kwargs):
             _, a, x0, _r_isco = args
             p, e = y[0], y[1]
-            p_sep = get_separatrix(jnp.abs(a), e, _x_sign(a, x0))
+            p_sep = get_separatrix_fast(jnp.abs(a), e, _x_sign(a, x0))
             return p < p_sep + SEPARATRIX_BUFFER
 
         return diffrax.diffeqsolve(
@@ -327,6 +382,7 @@ class EMRIInspiral(eqx.Module):
             max_steps=max_steps,
             event=diffrax.Event(_event_cond),
             args=ode_args,
+            adjoint=self.adjoint,
             throw=False,
         )
 
@@ -421,9 +477,8 @@ class EMRIInspiral(eqx.Module):
         T_geo = jnp.asarray(T_s / M_s)           # geometric time  (units of M)
         mu_over_M = jnp.asarray(M * mu / (M + mu) ** 2)  # symmetric mass ratio eta (matches FEW)
         # Precompute the spin-only separatrix r_isco = p_sep(a, e=0) once and
-        # thread it through ``ode_args``; the base class now mirrors the fast
-        # variant to avoid recomputing it at every RHS evaluation.
-        r_isco = get_separatrix(
+        # thread it through ``ode_args`` to avoid recomputing at every RHS step.
+        r_isco = get_separatrix_fast(
             jnp.abs(a_), jnp.zeros((), dtype=jnp.float64), _x_sign(a_, x0)
         )
         ode_args = (mu_over_M, a_, x0, r_isco)
@@ -441,7 +496,7 @@ class EMRIInspiral(eqx.Module):
                     "last valid trajectory point."
                 )
             e_f_ = jnp.asarray(e_f, dtype=jnp.float64)
-            p_sep = get_separatrix(jnp.abs(a_), e_f_, _x_sign(a_, x0))
+            p_sep = get_separatrix_fast(jnp.abs(a_), e_f_, _x_sign(a_, x0))
             p_start = p_sep + SEPARATRIX_BUFFER
             if self.phases:
                 y0 = jnp.array(
@@ -552,7 +607,7 @@ class EMRIInspiral(eqx.Module):
 
         def _freq_at_point(pe):
             p_, e_ = pe
-            Om_phi, Om_theta, Om_r = get_fundamental_frequencies(a_abs, p_, e_, x_in)
+            Om_phi, Om_theta, Om_r = get_fundamental_frequencies_platform(a_abs, p_, e_, x_in)
             return jnp.abs(m * Om_phi + k * Om_theta + n * Om_r) / (2.0 * jnp.pi)
 
         # Physical frequency: convert geometric Ω (rad/M) to Hz.
@@ -674,7 +729,7 @@ class EMRIInspiral(eqx.Module):
         # Compute Omegas at every trajectory point: shape (dense_steps, 3)
         def _omegas_at(pe):
             p_, e_ = pe[0], pe[1]
-            Om_phi, Om_theta, Om_r = get_fundamental_frequencies(a_abs, p_, e_, x_in)
+            Om_phi, Om_theta, Om_r = get_fundamental_frequencies_platform(a_abs, p_, e_, x_in)
             return jnp.stack([Om_phi, Om_theta, Om_r])
 
         Omegas = jax.vmap(_omegas_at)(jnp.stack([p_arr, e_arr], axis=1))  # (dense_steps, 3)
@@ -745,313 +800,6 @@ class EMRIInspiral(eqx.Module):
         if with_amplitudes:
             return t_s, freqs, amps
         return t_s, freqs
-
-
-class EMRIInspiralFast(EMRIInspiral):
-    r"""Fast EMRI trajectory integrator — same physics, lower per-step cost.
-
-    Inherits all public methods from :class:`EMRIInspiral` and overrides the
-    ODE internals with two independent optimisations:
-
-    1. **Pre-computed r_ISCO** — :math:`p_{\rm sep}(a, e{=}0)` is constant
-       along a trajectory (depends only on spin and inclination).  It is
-       computed once in :meth:`__call__` and passed through ``ode_args``
-       instead of being recomputed at every RHS evaluation.
-
-    2. **Fast elliptic integrals** — :func:`get_fundamental_frequencies_fast`
-       replaces the five 64-point Gauss-Legendre dot products with two
-       AGM-12 iterations (for K and E) and three 24-point GL evaluations
-       (for Π).  Accuracy is ~1e-12, well within the 1-rad dephasing budget
-       over two years.
-
-    3. **Fast separatrix root-finder** — the event condition and the p_sep
-       needed by ``_pdot_PN_jax`` / ``_edot_PN_jax`` use Newton-Raphson
-       (:data:`~fewtrax.utils.geodesic._N_NR` iters) rather than 50-step
-       bisection.
-
-    ``ode_args`` tuple is extended to ``(mu_over_M, a, x0, r_isco)``; the
-    base-class ``_solve`` / ``_solve_backward`` methods are not reused here
-    because the event condition must also unpack ``r_isco``.
-
-    Usage is identical to :class:`EMRIInspiral`::
-
-        traj_fast = EMRIInspiralFast(flux_data)
-        t, p, e, *_ = traj_fast(p0=10.0, e0=0.4, T=1.0, a=0.5, M=1e6, mu=10.0)
-    """
-
-    # ------------------------------------------------------------------
-    # Fast internal helpers
-    # ------------------------------------------------------------------
-
-    def _flux_pex_fast(
-        self,
-        a: jnp.ndarray,
-        x0: float,
-        r_isco: jnp.ndarray,
-        p_sep: jnp.ndarray,
-        p: jnp.ndarray,
-        e: jnp.ndarray,
-    ) -> tuple[jnp.ndarray, jnp.ndarray]:
-        r"""Physical :math:`(\dot p, \dot e)` with pre-computed separatrix values.
-
-        ``r_isco`` and ``p_sep`` are passed in from the caller so that
-        :func:`get_separatrix` is not re-entered here.  ``p_sep`` is
-        forwarded to :func:`kerrecceq_forward_map_fast` to avoid the
-        redundant internal separatrix evaluation.
-        """
-        a_abs = jnp.abs(a)
-
-        u, w, z, in_A = kerrecceq_forward_map_fast(a_abs, p, e, p_sep, kind="flux")
-
-        rp_A = self.flux_data.pdot_A(u, w, z)
-        re_A = self.flux_data.edot_A(u, w, z)
-        rp_B = self.flux_data.pdot_B(u, w, z)
-        re_B = self.flux_data.edot_B(u, w, z)
-
-        rp = jnp.where(in_A, rp_A, rp_B)
-        re = jnp.where(in_A, re_A, re_B)
-
-        pdot_pn = _pdot_PN_jax(p, e, r_isco, p_sep)
-        edot_pn = _edot_PN_jax(p, e, r_isco, p_sep)
-
-        return -rp * pdot_pn, -re * edot_pn
-
-    def _ode_rhs_fast(self, t: float, y: jnp.ndarray, args) -> jnp.ndarray:
-        r"""Fast ODE RHS using pre-computed r_isco and fast elliptic integrals."""
-        mu_over_M, a, x0, r_isco = args
-        p, e = y[0], y[1]
-        a_abs = jnp.abs(a)
-        x_in  = _x_sign(a, x0)
-
-        # Compute p_sep once; reuse for flux + event condition
-        p_sep = get_separatrix_fast(a_abs, e, x_in)
-
-        pdot, edot = self._flux_pex_fast(a, x0, r_isco, p_sep, p, e)
-        Omega_phi, Omega_theta, Omega_r = get_fundamental_frequencies_fast(
-            a_abs, p, e, x_in
-        )
-        return jnp.array(
-            [pdot * mu_over_M, edot * mu_over_M, Omega_phi, Omega_theta, Omega_r]
-        )
-
-    # ------------------------------------------------------------------
-    # JIT-compiled fast solvers
-    # ------------------------------------------------------------------
-
-    @eqx.filter_jit
-    def _solve_fast(
-        self,
-        y0: jnp.ndarray,
-        t_save: jnp.ndarray,
-        T_geo: jnp.ndarray,
-        ode_args: tuple,
-        max_steps: int,
-        atol: float = 1e-10,
-        rtol: float = 1e-10,
-    ):
-        """JIT-compiled fast forward solve.  ``ode_args`` is a 4-tuple."""
-
-        def _event_cond(t, y, args, **kwargs):
-            _, a, x0, _r_isco = args
-            p, e = y[0], y[1]
-            p_sep = get_separatrix_fast(jnp.abs(a), e, _x_sign(a, x0))
-            return p < p_sep + SEPARATRIX_BUFFER
-
-        return diffrax.diffeqsolve(
-            diffrax.ODETerm(self._ode_rhs_fast),
-            diffrax.Dopri8(),
-            t0=jnp.zeros((), dtype=jnp.float64),
-            t1=T_geo,
-            dt0=None,
-            y0=y0,
-            saveat=diffrax.SaveAt(ts=t_save),
-            stepsize_controller=diffrax.PIDController(rtol=rtol, atol=atol),
-            max_steps=max_steps,
-            event=diffrax.Event(_event_cond),
-            args=ode_args,
-            adjoint=diffrax.DirectAdjoint(),
-            throw=False,
-        )
-
-    @eqx.filter_jit
-    def _solve_fast_backward(
-        self,
-        y0: jnp.ndarray,
-        t_save: jnp.ndarray,
-        T_geo: jnp.ndarray,
-        ode_args: tuple,
-        max_steps: int,
-        atol: float = 1e-10,
-        rtol: float = 1e-10,
-    ):
-        """JIT-compiled fast backward solve.  No separatrix event needed."""
-        return diffrax.diffeqsolve(
-            diffrax.ODETerm(
-                lambda t, y, args: -self._ode_rhs_fast(t, y, args)
-            ),
-            diffrax.Dopri8(),
-            t0=jnp.zeros((), dtype=jnp.float64),
-            t1=T_geo,
-            dt0=None,
-            y0=y0,
-            saveat=diffrax.SaveAt(ts=t_save),
-            stepsize_controller=diffrax.PIDController(rtol=rtol, atol=atol),
-            max_steps=max_steps,
-            args=ode_args,
-            adjoint=diffrax.DirectAdjoint(),
-        )
-
-    @eqx.filter_jit
-    def _solve_fast_2d(
-        self,
-        y0: jnp.ndarray,
-        t_save: jnp.ndarray,
-        T_geo: jnp.ndarray,
-        ode_args: tuple,
-        max_steps: int,
-        atol: float = 1e-10,
-        rtol: float = 1e-10,
-    ):
-        """JIT-compiled 2D fast forward solve: integrates (p, e) only.
-
-        Used when ``phases=False``.  ``ode_args`` is the same 4-tuple
-        ``(mu_over_M, a, x0, r_isco)`` as :meth:`_solve_fast`.
-        """
-        def _ode_rhs_fast_2d(t, y, args):
-            mu_over_M, a, x0, r_isco = args
-            p, e = y[0], y[1]
-            a_abs = jnp.abs(a)
-            x_in  = _x_sign(a, x0)
-            p_sep = get_separatrix_fast(a_abs, e, x_in)
-            pdot, edot = self._flux_pex_fast(a, x0, r_isco, p_sep, p, e)
-            return jnp.array([pdot * mu_over_M, edot * mu_over_M])
-
-        def _event_cond(t, y, args, **kwargs):
-            _, a, x0, _r_isco = args
-            p, e = y[0], y[1]
-            p_sep = get_separatrix_fast(jnp.abs(a), e, _x_sign(a, x0))
-            return p < p_sep + SEPARATRIX_BUFFER
-
-        return diffrax.diffeqsolve(
-            diffrax.ODETerm(_ode_rhs_fast_2d),
-            diffrax.Dopri8(),
-            t0=jnp.zeros((), dtype=jnp.float64),
-            t1=T_geo,
-            dt0=None,
-            y0=y0,
-            saveat=diffrax.SaveAt(ts=t_save),
-            stepsize_controller=diffrax.PIDController(rtol=rtol, atol=atol),
-            max_steps=max_steps,
-            event=diffrax.Event(_event_cond),
-            args=ode_args,
-            adjoint=diffrax.DirectAdjoint(),
-            throw=False,
-        )
-
-    # ------------------------------------------------------------------
-    # Public interface (overrides __call__ to pass r_isco)
-    # ------------------------------------------------------------------
-
-    def __call__(
-        self,
-        p0: float,
-        e0: float,
-        T: float,
-        a: float,
-        x0: float = 1.0,
-        dt: float = 10.0,
-        M: float = 1e6,
-        mu: float = 10.0,
-        Phi_phi0: float = 0.0,
-        Phi_theta0: float = 0.0,
-        Phi_r0: float = 0.0,
-        atol: float = 1e-9,
-        rtol: float = 1e-9,
-        max_steps: int = 256,
-        dense_steps: int = 100,
-        backward: bool = False,
-        e_f: Optional[float] = None,
-    ) -> tuple[jnp.ndarray, ...]:
-        r"""Integrate the EMRI trajectory (fast variant).
-
-        Interface identical to :meth:`EMRIInspiral.__call__`; ``r_isco`` is
-        computed once here and threaded through the ODE as a constant arg.
-        """
-        a_ = jnp.asarray(a, dtype=jnp.float64)
-        M_s    = (M + mu) * MTSUN_SI
-        T_s    = T * YEAR_SI
-        T_geo  = jnp.asarray(T_s / M_s)
-        mu_over_M = jnp.asarray(M * mu / (M + mu) ** 2)
-
-        x_in   = _x_sign(a_, x0)
-        a_abs  = jnp.abs(a_)
-
-        # Precompute r_isco (constant along the trajectory)
-        r_isco = get_separatrix_fast(a_abs, jnp.zeros((), dtype=jnp.float64), x_in)
-
-        ode_args = (mu_over_M, a_, x0, r_isco)
-
-        if self.t_obs is not None:
-            t_save = self.t_obs / M_s   # physical seconds → geometric time
-        else:
-            t_save = jnp.linspace(jnp.zeros((), jnp.float64), T_geo, dense_steps)
-
-        if backward:
-            if e_f is None:
-                raise ValueError(
-                    "e_f must be provided when backward=True."
-                )
-            e_f_ = jnp.asarray(e_f, dtype=jnp.float64)
-            p_sep = get_separatrix_fast(a_abs, e_f_, x_in)
-            p_start = p_sep + SEPARATRIX_BUFFER
-            if self.phases:
-                y0 = jnp.array(
-                    [p_start, e_f_, Phi_phi0, Phi_theta0, Phi_r0], dtype=jnp.float64
-                )
-                sol = self._solve_fast_backward(
-                    y0, t_save, T_geo, ode_args, max_steps, atol, rtol
-                )
-            else:
-                y0 = jnp.array([p_start, e_f_], dtype=jnp.float64)
-                sol = self._solve_fast_2d(y0, t_save, T_geo, ode_args, max_steps, atol, rtol)
-        else:
-            # Only validate p0 against the grid when every input is concrete;
-            # under jit/vmap/grad these are tracers and the check is skipped.
-            if not any(
-                isinstance(x, jax.core.Tracer) for x in (p0, e0, a_, x0)
-            ):
-                p0_min = float(min_valid_p(a_, e0, x0))
-                if float(p0) < p0_min:
-                    raise ValueError(
-                        f"p0={float(p0):.6g} is outside the flux interpolation "
-                        f"grid.  Must be >= {p0_min:.6g} for a={float(a_):.4g}, "
-                        f"e0={float(e0):.4g}, x0={float(x0):.4g}."
-                    )
-            if self.phases:
-                y0 = jnp.array(
-                    [p0, e0, Phi_phi0, Phi_theta0, Phi_r0], dtype=jnp.float64
-                )
-                sol = self._solve_fast(y0, t_save, T_geo, ode_args, max_steps, atol, rtol)
-            else:
-                y0 = jnp.array([p0, e0], dtype=jnp.float64)
-                sol = self._solve_fast_2d(y0, t_save, T_geo, ode_args, max_steps, atol, rtol)
-
-        ys  = sol.ys
-        t_s = sol.ts * M_s
-        p_arr = ys[:, 0]
-        e_arr = ys[:, 1]
-
-        if not self.phases:
-            return t_s, p_arr, e_arr
-
-        return (
-            t_s,
-            p_arr,
-            e_arr,
-            ys[:, 2],
-            ys[:, 3],
-            ys[:, 4],
-        )
 
 
 def run_inspiral(

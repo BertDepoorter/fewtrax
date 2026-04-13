@@ -135,7 +135,7 @@ def eval_fewtrax_frequencies_batch(
 
     Returns array of shape (N, 3) in geometric units [rad / M].
     """
-    from fewtrax.utils.geodesic import get_fundamental_frequencies
+    from fewtrax.utils.geodesic import get_fundamental_frequencies_platform as get_fundamental_frequencies
 
     a_abs = jnp.asarray(abs(a), dtype=jnp.float64)
     x_in_val = float(np.sign(a * x0)) if a * x0 != 0.0 else 1.0
@@ -197,7 +197,7 @@ def direct_frequency_formula_check(
     For any (a, p, e), we can cross-check by comparing against a reference
     value if FEW's frequency API is available, or flag the Schwarzschild case.
     """
-    from fewtrax.utils.geodesic import get_fundamental_frequencies
+    from fewtrax.utils.geodesic import get_fundamental_frequencies_platform as get_fundamental_frequencies
 
     a_abs  = float(abs(a))
     x_in   = float(np.sign(a * x0)) if a * x0 != 0 else 1.0

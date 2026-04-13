@@ -63,7 +63,7 @@ from fewtrax.utils.constants import (
 )
 from fewtrax.utils.harmonics import get_ylms_for_modes
 from fewtrax.data.loader import load_flux_data, load_amplitude_data, FluxData, AmplitudeData
-from fewtrax.trajectory.inspiral import EMRIInspiralFast as EMRIInspiral
+from fewtrax.trajectory.inspiral import EMRIInspiral
 from fewtrax.amplitude.interp import AmplitudeInterpolator
 from fewtrax.summation.modes import ModeSum
 

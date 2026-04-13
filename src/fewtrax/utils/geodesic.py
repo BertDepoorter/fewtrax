@@ -785,3 +785,38 @@ def get_fundamental_frequencies_fast(
     """
     Gamma, Up_phi, Up_theta, Up_r = _mino_frequencies_equatorial_fast(a, p, e, x)
     return Up_phi / Gamma, Up_theta / Gamma, Up_r / Gamma
+
+
+def get_fundamental_frequencies_platform(
+    a: float, p: float, e: float, x: float
+) -> tuple[float, float, float]:
+    r"""Platform-aware Boyer-Lindquist fundamental frequencies.
+
+    Dispatches at JIT-trace time based on the default JAX device:
+
+    * **GPU** — :func:`get_fundamental_frequencies` (64-point Gauss-Legendre).
+      The K/E/Π evaluations compile to large BLAS contractions that saturate
+      GPU throughput at any batch size.
+
+    * **CPU / TPU** — :func:`get_fundamental_frequencies_fast` (AGM for K/E,
+      24-point GL for Π).  Fewer sequential operations → lower per-step cost
+      on scalar or small-batch workloads.
+
+    The branch is resolved at Python (trace) time, so there is no runtime
+    overhead on repeated JIT-compiled calls.
+
+    Parameters
+    ----------
+    a, p, e, x : float
+        BH spin, semi-latus rectum, eccentricity, inclination sign (±1).
+
+    Returns
+    -------
+    tuple of float
+        :math:`(\Omega_\phi, \Omega_\theta, \Omega_r)`.
+    """
+    platform = jax.devices()[0].platform
+    if platform == "gpu":
+        return get_fundamental_frequencies(a, p, e, x)
+    else:
+        return get_fundamental_frequencies_fast(a, p, e, x)
