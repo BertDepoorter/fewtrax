@@ -905,6 +905,44 @@
     <span class="n">Gamma</span><span class="p">,</span> <span class="n">Up_phi</span><span class="p">,</span> <span class="n">Up_theta</span><span class="p">,</span> <span class="n">Up_r</span> <span class="o">=</span> <span class="n">_mino_frequencies_equatorial_fast</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">p</span><span class="p">,</span> <span class="n">e</span><span class="p">,</span> <span class="n">x</span><span class="p">)</span>
     <span class="k">return</span> <span class="n">Up_phi</span> <span class="o">/</span> <span class="n">Gamma</span><span class="p">,</span> <span class="n">Up_theta</span> <span class="o">/</span> <span class="n">Gamma</span><span class="p">,</span> <span class="n">Up_r</span> <span class="o">/</span> <span class="n">Gamma</span></div>
 
+
+
+<div class="viewcode-block" id="get_fundamental_frequencies_platform">
+<a class="viewcode-back" href="../../../api.html#fewtrax.utils.geodesic.get_fundamental_frequencies_platform">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">get_fundamental_frequencies_platform</span><span class="p">(</span>
+    <span class="n">a</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">p</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">e</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">x</span><span class="p">:</span> <span class="nb">float</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">]:</span>
+<span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;Platform-aware Boyer-Lindquist fundamental frequencies.</span>
+
+<span class="sd">    Dispatches at JIT-trace time based on the default JAX device:</span>
+
+<span class="sd">    * **GPU** — :func:`get_fundamental_frequencies` (64-point Gauss-Legendre).</span>
+<span class="sd">      The K/E/Π evaluations compile to large BLAS contractions that saturate</span>
+<span class="sd">      GPU throughput at any batch size.</span>
+
+<span class="sd">    * **CPU / TPU** — :func:`get_fundamental_frequencies_fast` (AGM for K/E,</span>
+<span class="sd">      24-point GL for Π).  Fewer sequential operations → lower per-step cost</span>
+<span class="sd">      on scalar or small-batch workloads.</span>
+
+<span class="sd">    The branch is resolved at Python (trace) time, so there is no runtime</span>
+<span class="sd">    overhead on repeated JIT-compiled calls.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    a, p, e, x : float</span>
+<span class="sd">        BH spin, semi-latus rectum, eccentricity, inclination sign (±1).</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    tuple of float</span>
+<span class="sd">        :math:`(\Omega_\phi, \Omega_\theta, \Omega_r)`.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">platform</span> <span class="o">=</span> <span class="n">jax</span><span class="o">.</span><span class="n">devices</span><span class="p">()[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">platform</span>
+    <span class="k">if</span> <span class="n">platform</span> <span class="o">==</span> <span class="s2">&quot;gpu&quot;</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">get_fundamental_frequencies</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">p</span><span class="p">,</span> <span class="n">e</span><span class="p">,</span> <span class="n">x</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">get_fundamental_frequencies_fast</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">p</span><span class="p">,</span> <span class="n">e</span><span class="p">,</span> <span class="n">x</span><span class="p">)</span></div>
+
 </pre></div>
 
            </div>
