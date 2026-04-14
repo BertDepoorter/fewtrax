@@ -1,15 +1,22 @@
 """Teukolsky mode amplitude interpolation from FEW precomputed grids.
 
-The amplitude HDF5 file stores bicubic B-spline coefficients
-in ``scipy.interpolate.bisplev`` format (one set per z-slice per mode).
-This module evaluates those coefficients at query trajectory points using
-``scipy.interpolate.bisplev`` and linear interpolation in the spin
-coordinate z, returning complex mode amplitudes as a numpy array.
+Two backends are available:
 
-The result is then passed to the JAX summation module.
+:class:`AmplitudeInterpolator`
+    Legacy numpy/scipy backend.  Evaluates the raw bisplev B-spline
+    coefficients stored in the HDF5 file using ``scipy.interpolate.bisplev``
+    in a Python loop over trajectory points and modes.  CPU-only, not
+    JAX-traceable, kept for validation and backward compatibility.
 
-Design notes
-------------
+:class:`JAXAmplitudeInterpolator`
+    Fully JAX-native backend.  Uses :class:`~fewtrax.utils.splines.BatchedTricubicSplineE3`
+    splines built by :func:`~fewtrax.data.loader.load_amplitude_data_jax`.
+    A single ``einsum`` replaces the ``N_traj × N_modes`` bisplev loop,
+    evaluating all modes in parallel.  Supports :func:`jax.jit`,
+    :func:`jax.grad`, and :func:`jax.vmap` for batched waveform generation.
+
+Design notes (legacy backend)
+------------------------------
 * The amplitude evaluation is intentionally **numpy-based** rather than
   JAX-based.  The spline coefficient arrays are large (several GB for all
   6993 modes), and precomputing them as JAX arrays on the GPU would exceed
@@ -24,11 +31,16 @@ from __future__ import annotations
 
 from typing import Optional, Sequence
 import numpy as np
+import jax
+import jax.numpy as jnp
+import equinox as eqx
 
 from fewtrax.utils.coordinates import (
     ALPHA_AMP, BETA_AMP, DELTAPMIN, DELTAPMAX,
+    kerrecceq_forward_map_A, kerrecceq_forward_map_B,
 )
-from fewtrax.data.loader import AmplitudeData, _separatrix_numpy
+from fewtrax.utils.geodesic import get_separatrix_fast
+from fewtrax.data.loader import AmplitudeData, AmplitudeDataJAX, _separatrix_numpy
 
 
 class AmplitudeInterpolator:
@@ -230,3 +242,188 @@ class AmplitudeInterpolator:
         if power.max() == 0:
             return np.arange(len(power))
         return np.where(power >= threshold * power.max())[0]
+
+
+# ---------------------------------------------------------------------------
+# JAX-native amplitude interpolator
+# ---------------------------------------------------------------------------
+
+class JAXAmplitudeInterpolator(eqx.Module):
+    r"""Fully JAX-native Teukolsky amplitude evaluator.
+
+    Wraps an :class:`~fewtrax.data.loader.AmplitudeDataJAX` container and
+    provides a :meth:`__call__` that evaluates complex mode amplitudes
+    :math:`A_{\ell mkn}(a, p, e)` for all modes in a single fused
+    ``einsum``, replacing the ``N_{\rm traj} \times N_{\rm modes}``
+    ``scipy.bisplev`` Python loop in :class:`AmplitudeInterpolator`.
+
+    All public methods are :func:`jax.jit`-able, :func:`jax.vmap`-able, and
+    support :func:`jax.grad` / :func:`jax.jacfwd`.
+
+    Parameters
+    ----------
+    amp_data : AmplitudeDataJAX
+        Pre-built JAX amplitude container; construct with
+        :func:`~fewtrax.data.loader.load_amplitude_data_jax`.
+
+    Examples
+    --------
+    Single-point evaluation::
+
+        interp = JAXAmplitudeInterpolator(amp_data)
+        amps = interp(a=0.9, p=10.0, e=0.3)   # (n_modes,) complex128
+
+    Trajectory evaluation (vectorised over time steps)::
+
+        amps_traj = interp.evaluate_trajectory(a=0.9, p=p_arr, e=e_arr)
+        # (N_traj, n_modes) complex128
+
+    Batched waveform generation (vmap over initial conditions)::
+
+        batch_eval = jax.vmap(
+            lambda a, p0, e0: interp.evaluate_trajectory(a, traj_p(a, p0, e0), ...)
+        )
+    """
+
+    amp_data: AmplitudeDataJAX
+
+    def __init__(self, amp_data: AmplitudeDataJAX):
+        self.amp_data = amp_data
+
+    # ------------------------------------------------------------------
+    # Convenience forwarded properties
+    # ------------------------------------------------------------------
+
+    @property
+    def n_modes(self) -> int:
+        return self.amp_data.n_modes
+
+    @property
+    def l_arr(self) -> jnp.ndarray:
+        return self.amp_data.l_arr
+
+    @property
+    def m_arr(self) -> jnp.ndarray:
+        return self.amp_data.m_arr
+
+    @property
+    def k_arr(self) -> jnp.ndarray:
+        return self.amp_data.k_arr
+
+    @property
+    def n_arr(self) -> jnp.ndarray:
+        return self.amp_data.n_arr
+
+    # ------------------------------------------------------------------
+    # Single-point evaluation
+    # ------------------------------------------------------------------
+
+    def __call__(
+        self,
+        a: float,
+        p: float,
+        e: float,
+        pLSO: Optional[float] = None,
+    ) -> jnp.ndarray:
+        r"""Evaluate complex amplitudes at a single ``(a, p, e)`` point.
+
+        Parameters
+        ----------
+        a : float
+            Dimensionless BH spin (signed; prograde for a > 0).
+        p, e : float
+            Semi-latus rectum and eccentricity.
+        pLSO : float, optional
+            Pre-computed separatrix :math:`p_{\rm sep}(|a|, e)`.  When
+            provided the internal separatrix computation is skipped (saves
+            ~25 bisection iterations per call — useful inside the ODE where
+            pLSO is already known).
+
+        Returns
+        -------
+        jnp.ndarray, shape ``(n_modes,)`` complex128
+            Complex mode amplitudes :math:`A_{\ell mkn}`.
+        """
+        ad = self.amp_data
+        a_abs = jnp.abs(a)
+        x_in = jnp.where(a >= 0.0, 1.0, -1.0)
+
+        if pLSO is None:
+            pLSO = get_separatrix_fast(a_abs, e, x_in)
+
+        in_A = p <= pLSO + DELTAPMAX
+
+        # Compute coordinates for both regions (JAX always evaluates both
+        # branches; jnp.where selects the correct result for each region).
+        u_A, w_A, z_A = kerrecceq_forward_map_A(
+            a_abs, p, e, pLSO, ALPHA_AMP, BETA_AMP
+        )
+        u_B, w_B, z_B = kerrecceq_forward_map_B(
+            a_abs, p, e, pLSO, is_flux=False
+        )
+
+        # Clamp coordinates to [0, 1] (same as extrap=False in interpax)
+        u_A = jnp.clip(u_A, 0.0, 1.0)
+        w_A = jnp.clip(w_A, 0.0, 1.0)
+        z_A = jnp.clip(z_A, 0.0, 1.0)
+        u_B = jnp.clip(u_B, 0.0, 1.0)
+        w_B = jnp.clip(w_B, 0.0, 1.0)
+        z_B = jnp.clip(z_B, 0.0, 1.0)
+
+        # Evaluate Region A splines → (n_modes,)
+        amp_A = (
+            ad.spline_A_real(u_A, w_A, z_A)
+            + 1j * ad.spline_A_imag(u_A, w_A, z_A)
+        )
+
+        if ad._has_B:
+            amp_B = (
+                ad.spline_B_real(u_B, w_B, z_B)
+                + 1j * ad.spline_B_imag(u_B, w_B, z_B)
+            )
+            return jnp.where(in_A, amp_A, amp_B)
+
+        return amp_A
+
+    # ------------------------------------------------------------------
+    # Trajectory evaluation
+    # ------------------------------------------------------------------
+
+    def evaluate_trajectory(
+        self,
+        a: float,
+        p: jnp.ndarray,
+        e: jnp.ndarray,
+        pLSO: Optional[jnp.ndarray] = None,
+    ) -> jnp.ndarray:
+        r"""Evaluate amplitudes along a trajectory.
+
+        Uses :func:`jax.vmap` over trajectory points, so the spline
+        coefficients are read once and the polynomial evaluation is
+        vectorised across all time steps.
+
+        Parameters
+        ----------
+        a : float
+            Dimensionless spin (fixed along a trajectory).
+        p, e : jnp.ndarray, shape ``(N_traj,)``
+            Semi-latus rectum and eccentricity at each ODE step.
+        pLSO : jnp.ndarray, shape ``(N_traj,)``, optional
+            Pre-computed separatrix at each step.  When omitted it is
+            computed internally via :func:`~fewtrax.utils.geodesic.get_separatrix_fast`.
+
+        Returns
+        -------
+        jnp.ndarray, shape ``(N_traj, n_modes)`` complex128
+            Mode amplitudes at each trajectory point.
+        """
+        if pLSO is None:
+            a_abs = jnp.abs(a)
+            x_in = jnp.where(a >= 0.0, 1.0, -1.0)
+            pLSO = jax.vmap(
+                lambda pi, ei: get_separatrix_fast(a_abs, ei, x_in)
+            )(p, e)
+
+        return jax.vmap(
+            lambda pi, ei, pli: self(a, pi, ei, pLSO=pli)
+        )(p, e, pLSO)
