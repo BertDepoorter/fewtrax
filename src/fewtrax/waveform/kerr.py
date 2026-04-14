@@ -66,6 +66,8 @@ from fewtrax.data.loader import load_flux_data, load_amplitude_data, FluxData, A
 from fewtrax.trajectory.inspiral import EMRIInspiral
 from fewtrax.amplitude.interp import AmplitudeInterpolator
 from fewtrax.summation.modes import ModeSum
+from fewtrax.summation.tf_sum import direct_wdm_sum
+from fewtrax.utils.tf_tracks import WDMGrid, default_grid
 
 log = logging.getLogger(__name__)
 
@@ -309,8 +311,11 @@ class KerrEccentricEquatorialWaveform:
         mode_selection_threshold: Optional[float] = None,
         return_sparse: bool = False,
         return_complex: bool = False,
+        domain: str = "time",
+        grid: Optional[WDMGrid] = None,
+        wdm_hw: int = 2,
         **kwargs,
-    ) -> tuple[jnp.ndarray, jnp.ndarray]:
+    ):
         r"""Generate the EMRI gravitational waveform.
 
         Parameters
@@ -339,31 +344,42 @@ class KerrEccentricEquatorialWaveform:
         T : float
             Observation time [years].
         dt : float
-            Waveform sampling interval [s].
+            Waveform sampling interval [s].  Used for the time-domain output
+            (``domain="time"``); ignored for ``domain="wdm"`` (the WDM grid
+            controls the time resolution).
         mode_selection_threshold : float, optional
             Override the class-level mode selection threshold.
         return_sparse : bool
             If True, also return the sparse trajectory dictionary as a
-            third element of the tuple.
+            last element of the return value.
         return_complex : bool
-            If True, return the complex strain ``h = h₊ + i·h×`` as a
-            single array instead of the ``(hp, hx)`` tuple.  This is the
-            natural input format for
-            :class:`~jaxlisaresponse.ResponseWrapper`.
+            If True (``domain="time"`` only), return the complex strain
+            ``h = h₊ + i·h×`` instead of the ``(hp, hx)`` tuple.
+        domain : {"time", "wdm"}
+            Output domain.
+
+            * ``"time"`` *(default)*: dense time-domain strain arrays.
+            * ``"wdm"``: complex :math:`N_f\times N_t` WDM matrix
+              ``W`` where ``W.real`` is the WDM of :math:`h_+` and
+              ``-W.imag`` is the WDM of :math:`h_\times`.
+
+        grid : WDMGrid or None
+            WDM grid descriptor, required when ``domain="wdm"``.  If
+            ``None`` a default grid is constructed from ``T`` and ``dt``
+            using :func:`~fewtrax.utils.tf_tracks.default_grid`.
+        wdm_hw : int
+            Frequency half-width for WDM deposition (default 2).
 
         Returns
         -------
-        hp : jnp.ndarray, shape (N,)
-            Plus-polarisation strain :math:`h_+` [dimensionless].
-            *Not returned when* ``return_complex=True``.
-        hx : jnp.ndarray, shape (N,)
-            Cross-polarisation strain :math:`h_{\times}` [dimensionless].
-            *Not returned when* ``return_complex=True``.
-        h : jnp.ndarray, shape (N,), complex
-            Complex strain ``h₊ + i·h×``.  Returned *instead of*
-            ``(hp, hx)`` when ``return_complex=True``.
-        (optional) sparse_dict : dict
-            Returned as the last element if ``return_sparse=True``.
+        When ``domain="time"`` and ``return_complex=False``:
+            hp, hx : jnp.ndarray, shape (N,)
+        When ``domain="time"`` and ``return_complex=True``:
+            h : jnp.ndarray, shape (N,), complex
+        When ``domain="wdm"``:
+            W : jnp.ndarray, shape (Nf, Nt), complex64
+        Any of the above optionally followed by *sparse_dict* if
+        ``return_sparse=True``.
 
         Notes
         -----
@@ -373,6 +389,9 @@ class KerrEccentricEquatorialWaveform:
         and longitude of the source, and :math:`(\theta_K, \phi_K)` are
         the polar and azimuthal angles of the BH spin in the SSB frame.
         """
+        if domain not in ("time", "wdm"):
+            raise ValueError(f"domain must be 'time' or 'wdm', got {domain!r}")
+
         if mode_selection_threshold is not None:
             _old = self.mode_selection_threshold
             self.mode_selection_threshold = mode_selection_threshold
@@ -401,8 +420,6 @@ class KerrEccentricEquatorialWaveform:
             self.mode_selection_threshold = _old
 
         # --- Source-frame observer angles (FEW convention) ---
-        # phi = -π/2 by definition of the source frame;
-        # theta = angle between source direction and BH spin axis.
         theta_obs, phi_obs = _get_viewing_angles(
             float(qS), float(phiS), qK_eff, phiK_eff
         )
@@ -416,6 +433,58 @@ class KerrEccentricEquatorialWaveform:
             l_arr, m_arr, theta_obs, phi_obs
         )
 
+        # =================================================================
+        # WDM domain
+        # =================================================================
+        if domain == "wdm":
+            T_s = float(np.asarray(sparse["t"])[np.isfinite(np.asarray(sparse["t"]))][-1])
+            wdm_grid = grid if grid is not None else default_grid(T_s)
+            log.info(
+                "WDM generation: %s", wdm_grid
+            )
+
+            W = direct_wdm_sum(
+                t_traj=np.asarray(sparse["t"]),
+                teuk_modes=np.asarray(sparse["teuk_modes"]),
+                Phi_phi=np.asarray(sparse["Phi_phi"]),
+                Phi_theta=np.asarray(sparse["Phi_theta"]),
+                Phi_r=np.asarray(sparse["Phi_r"]),
+                l_arr=l_arr,
+                m_arr=m_arr,
+                k_arr=k_arr,
+                n_arr=n_arr,
+                ylms_pos=ylms_pos,
+                ylms_neg=ylms_neg,
+                a=a, M=M, mu=mu, x0=x0,
+                grid=wdm_grid,
+                dist=dist,
+                hw=wdm_hw,
+            )
+
+            # Apply SSB-frame polarisation rotation in WDM domain
+            # (a pixel-wise complex rotation by 2ψ_ldc)
+            cqS, sqS = np.cos(qS), np.sin(qS)
+            cqK_e, sqK_e = np.cos(qK_eff), np.sin(qK_eff)
+            up_ldc = cqS * sqK_e * np.cos(phiS - phiK_eff) - cqK_e * sqS
+            dw_ldc = sqK_e * np.sin(phiS - phiK_eff)
+            psi_ldc = float(-np.arctan2(up_ldc, dw_ldc)) if dw_ldc != 0.0 else 0.5 * np.pi
+            c2psi = float(np.cos(2.0 * psi_ldc))
+            s2psi = float(np.sin(2.0 * psi_ldc))
+            # W = W_plus + i W_cross;  rotation: hp' = c2ψ hp - s2ψ hx
+            #                                     hx' = s2ψ hp + c2ψ hx
+            W_plus  = jnp.real(W)
+            W_cross = -jnp.imag(W)
+            W_plus_rot  = c2psi * W_plus  - s2psi * W_cross
+            W_cross_rot = s2psi * W_plus  + c2psi * W_cross
+            W_out = W_plus_rot - 1j * W_cross_rot
+
+            if return_sparse:
+                return W_out, sparse
+            return W_out
+
+        # =================================================================
+        # Time domain (original path)
+        # =================================================================
         summer = ModeSum(
             l_arr, m_arr, k_arr, n_arr,
             ylms_pos, ylms_neg,
