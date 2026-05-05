@@ -566,7 +566,7 @@ def main():
     print_header("A. vmap trajectory throughput  (EMRIInspiral)")
     print(f"  T={T} yr,  dense_steps={dense},  n_warmup={nw},  n_repeat={nr}")
 
-    batch_sizes_A = [1, 4, 16, 64, 256, 1024]
+    batch_sizes_A = [1, 256, 1024, 4096, 16_384, 65_536]
     traj_results  = bench_vmap_throughput(traj, grid, batch_sizes_A, T, dense, nw, nr)
 
     rows_A = [
@@ -617,7 +617,7 @@ def main():
         )
 
         print("\n  [Batched: vmap(jacfwd) over N parameter sets]")
-        batch_sizes_C = [1, 4, 16, 64, 256]
+        batch_sizes_C = [1, 256, 1024, 4096, 16_384, 65_536]
         fisher_batch_result = bench_fisher_batched(
             freq_of_theta_fwd, grid, batch_sizes_C, args.sigma_f, nw, nr
         )
@@ -645,7 +645,7 @@ def main():
 
     multistart_results = []
     if not args.skip_multistart:
-        batch_sizes_D = [1, 4, 16, 64, 256]
+        batch_sizes_D = [1, 256, 1024, 4096, 16_384]
         multistart_results = bench_multistart_grad(
             loss_of_theta, theta_ref_arr, grid, batch_sizes_D, nw, nr
         )

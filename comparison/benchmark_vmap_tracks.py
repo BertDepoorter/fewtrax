@@ -896,7 +896,7 @@ def main():
     if not args.skip_fisher:
         print_header("E. Local Fisher matrix  (trajectory inner product, θ = M,μ,a,p₀,e₀)")
         print(f"   dense_steps={args.dense}  |  T={args.T} yr")
-        fisher_batch_sizes = sorted({1, 4, 16, 64} & {n for n in range(1, max_bs + 1)})
+        fisher_batch_sizes = sorted({1, 16, 64, 256} & {n for n in range(1, max_bs + 1)})
         fisher_results = bench_fisher(
             traj_5d, grid,
             T=args.T, dense_steps=args.dense,
