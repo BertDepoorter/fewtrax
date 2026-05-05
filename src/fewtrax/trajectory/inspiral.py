@@ -386,6 +386,46 @@ class EMRIInspiral(eqx.Module):
             throw=False,
         )
 
+    @eqx.filter_jit
+    def _solve_2d_backward(
+        self,
+        y0: jnp.ndarray,
+        t_save: jnp.ndarray,
+        T_geo: jnp.ndarray,
+        ode_args: tuple,
+        max_steps: int,
+        atol: float = 1e-10,
+        rtol: float = 1e-10,
+    ):
+        """JIT-compiled backward 2D diffrax solve: integrates (p, e) time-reversed.
+
+        Negates the 2D RHS so p and e *increase* along the output (moving away
+        from the separatrix).  No separatrix event is needed: the integration
+        always moves outward.
+        """
+        def _ode_rhs_2d_bwd(t, y, args):
+            mu_over_M, a, x0, r_isco = args
+            p, e = y[0], y[1]
+            a_abs = jnp.abs(a)
+            x_in = _x_sign(a, x0)
+            p_sep = get_separatrix_fast(a_abs, e, x_in)
+            pdot, edot = self._flux_pex(a, x0, r_isco, p, e, p_sep)
+            return jnp.array([-pdot * mu_over_M, -edot * mu_over_M])
+
+        return diffrax.diffeqsolve(
+            diffrax.ODETerm(_ode_rhs_2d_bwd),
+            diffrax.Dopri8(),
+            t0=jnp.zeros((), dtype=jnp.float64),
+            t1=T_geo,
+            dt0=None,
+            y0=y0,
+            saveat=diffrax.SaveAt(ts=t_save),
+            stepsize_controller=diffrax.PIDController(rtol=rtol, atol=atol),
+            max_steps=max_steps,
+            args=ode_args,
+            adjoint=self.adjoint,
+        )
+
     # ------------------------------------------------------------------
     # Public interface
     # ------------------------------------------------------------------
@@ -505,7 +545,7 @@ class EMRIInspiral(eqx.Module):
                 sol = self._solve_backward(y0, t_save, T_geo, ode_args, max_steps, atol, rtol)
             else:
                 y0 = jnp.array([p_start, e_f_], dtype=jnp.float64)
-                sol = self._solve_2d(y0, t_save, T_geo, ode_args, max_steps, atol, rtol)
+                sol = self._solve_2d_backward(y0, t_save, T_geo, ode_args, max_steps, atol, rtol)
         else:
             # Only validate p0 against the grid when every input is concrete;
             # under jit/vmap/grad these are tracers and the check is skipped.
