@@ -6,14 +6,14 @@ from fewtrax.summation.modes import (
     ModeSum,
 )
 from fewtrax.summation.tf_sum import (
-    direct_wdm_sum,
-    scatter_wdm,
+    direct_tf_sum,
+    scatter_tf,
 )
 
 __all__ = [
     "direct_mode_sum",
     "interpolated_mode_sum",
     "ModeSum",
-    "direct_wdm_sum",
-    "scatter_wdm",
+    "direct_tf_sum",
+    "scatter_tf",
 ]

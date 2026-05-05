@@ -62,12 +62,17 @@ from fewtrax.utils.constants import (
     MTSUN_SI, YEAR_SI, GPC_SI, G_SI, C_SI, MSUN_SI,
 )
 from fewtrax.utils.harmonics import get_ylms_for_modes
-from fewtrax.data.loader import load_flux_data, load_amplitude_data, FluxData, AmplitudeData
+from fewtrax.data.loader import (
+    load_flux_data, load_amplitude_data, load_amplitude_data_jax,
+    FluxData, AmplitudeData,
+)
 from fewtrax.trajectory.inspiral import EMRIInspiral
-from fewtrax.amplitude.interp import AmplitudeInterpolator
+from fewtrax.amplitude.interp import AmplitudeInterpolator, JAXAmplitudeInterpolator
 from fewtrax.summation.modes import ModeSum
-from fewtrax.summation.tf_sum import direct_wdm_sum
-from fewtrax.utils.tf_tracks import WDMGrid, default_grid
+from fewtrax.summation.tf_sum import direct_tf_sum
+from fewtrax.utils.tf_bases.base import TFGrid
+from fewtrax.utils.tf_bases.wdm import WDMGrid, default_grid
+from fewtrax.utils.tf_bases.sft import SFTGrid, default_sft_grid
 
 log = logging.getLogger(__name__)
 
@@ -134,13 +139,9 @@ def _to_ssb_frame(
     up_ldc = cqS * sqK * np.cos(phiS - phiK) - cqK * sqS
     dw_ldc = sqK * np.sin(phiS - phiK)
 
-    if dw_ldc != 0.0:
-        psi_ldc = float(-np.arctan2(up_ldc, dw_ldc))
-    else:
-        psi_ldc = 0.5 * np.pi
-
-    c2psi = float(np.cos(2.0 * psi_ldc))
-    s2psi = float(np.sin(2.0 * psi_ldc))
+    psi_ldc = -jnp.arctan2(up_ldc, dw_ldc)
+    c2psi = jnp.cos(2.0 * psi_ldc)
+    s2psi = jnp.sin(2.0 * psi_ldc)
 
     hp_new = c2psi * hp - s2psi * hx
     hx_new = s2psi * hp + c2psi * hx
@@ -175,6 +176,7 @@ class KerrEccentricEquatorialWaveform:
         mode_selection_threshold: float = 1.0e-5,
         dense_steps: int = 100,
         preload_amplitude: bool = True,
+        use_jax_amps: bool = True,
     ):
         self.data_dir = data_dir
         self.amp_filename = amp_filename
@@ -185,10 +187,15 @@ class KerrEccentricEquatorialWaveform:
         self._flux_data: FluxData = load_flux_data(data_dir)
 
         self._amp_data: Optional[AmplitudeData] = None
+        self._jax_amp_interp: Optional[JAXAmplitudeInterpolator] = None
         if preload_amplitude:
             log.info("Loading amplitude data …")
             self._amp_data = load_amplitude_data(data_dir, filename=amp_filename)
             self._amp_interp = AmplitudeInterpolator(self._amp_data)
+            if use_jax_amps:
+                log.info("Loading JAX amplitude data …")
+                _jax_amp_data = load_amplitude_data_jax(data_dir, filename=amp_filename)
+                self._jax_amp_interp = JAXAmplitudeInterpolator(_jax_amp_data)
         else:
             self._amp_interp = None
 
@@ -270,14 +277,21 @@ class KerrEccentricEquatorialWaveform:
         p_np = np.asarray(p)
         e_np = np.asarray(e)
 
-        # --- Mode selection ---
+        # --- Mode selection (always via numpy evaluator) ---
         mode_inds = self._amp_interp.select_modes(
             a, p_np, e_np, threshold=self.mode_selection_threshold, x=x0
         )
         log.info("Selected %d modes (threshold=%.1e)", len(mode_inds), self.mode_selection_threshold)
 
         # --- Amplitude evaluation ---
-        teuk_modes = self._amp_interp.evaluate(a, p_np, e_np, x=x0, specific_modes=mode_inds)
+        if self._jax_amp_interp is not None:
+            # JAX-native path: vmap over trajectory, then select modes
+            teuk_modes_all = self._jax_amp_interp.evaluate_trajectory(
+                jnp.asarray(a, dtype=jnp.float64), p, e
+            )  # (N_traj, n_all_modes)
+            teuk_modes = teuk_modes_all[:, mode_inds]
+        else:
+            teuk_modes = self._amp_interp.evaluate(a, p_np, e_np, x=x0, specific_modes=mode_inds)
 
         ad = self._amp_data
         return dict(
@@ -312,8 +326,8 @@ class KerrEccentricEquatorialWaveform:
         return_sparse: bool = False,
         return_complex: bool = False,
         domain: str = "time",
-        grid: Optional[WDMGrid] = None,
-        wdm_hw: int = 2,
+        grid: Optional[TFGrid] = None,
+        hw: int = 2,
         **kwargs,
     ):
         r"""Generate the EMRI gravitational waveform.
@@ -345,8 +359,7 @@ class KerrEccentricEquatorialWaveform:
             Observation time [years].
         dt : float
             Waveform sampling interval [s].  Used for the time-domain output
-            (``domain="time"``); ignored for ``domain="wdm"`` (the WDM grid
-            controls the time resolution).
+            (``domain="time"``); ignored for TF domains.
         mode_selection_threshold : float, optional
             Override the class-level mode selection threshold.
         return_sparse : bool
@@ -355,20 +368,23 @@ class KerrEccentricEquatorialWaveform:
         return_complex : bool
             If True (``domain="time"`` only), return the complex strain
             ``h = h₊ + i·h×`` instead of the ``(hp, hx)`` tuple.
-        domain : {"time", "wdm"}
+        domain : {"time", "wdm", "sft"}
             Output domain.
 
             * ``"time"`` *(default)*: dense time-domain strain arrays.
-            * ``"wdm"``: complex :math:`N_f\times N_t` WDM matrix
-              ``W`` where ``W.real`` is the WDM of :math:`h_+` and
-              ``-W.imag`` is the WDM of :math:`h_\times`.
+            * ``"wdm"``: complex :math:`N_f\times N_t` WDM matrix.
+            * ``"sft"``: complex :math:`N_f\times N_t` SFT matrix.
 
-        grid : WDMGrid or None
-            WDM grid descriptor, required when ``domain="wdm"``.  If
-            ``None`` a default grid is constructed from ``T`` and ``dt``
-            using :func:`~fewtrax.utils.tf_tracks.default_grid`.
-        wdm_hw : int
-            Frequency half-width for WDM deposition (default 2).
+        grid : TFGrid or None
+            TF grid descriptor, required for ``domain="wdm"`` or
+            ``domain="sft"``.  Pass a :class:`~fewtrax.utils.tf_bases.wdm.WDMGrid`
+            or a :class:`~fewtrax.utils.tf_bases.sft.SFTGrid`.  If ``None``,
+            a default WDM grid is constructed from ``T`` and ``dt`` for
+            ``domain="wdm"``, and a default 1-day SFT grid for
+            ``domain="sft"``.
+        hw : int
+            Frequency half-width for TF deposition (default 2).  Use
+            ``hw=3`` for SFT due to sinc spectral leakage.
 
         Returns
         -------
@@ -389,8 +405,8 @@ class KerrEccentricEquatorialWaveform:
         and longitude of the source, and :math:`(\theta_K, \phi_K)` are
         the polar and azimuthal angles of the BH spin in the SSB frame.
         """
-        if domain not in ("time", "wdm"):
-            raise ValueError(f"domain must be 'time' or 'wdm', got {domain!r}")
+        if domain not in ("time", "wdm", "sft"):
+            raise ValueError(f"domain must be 'time', 'wdm', or 'sft', got {domain!r}")
 
         if mode_selection_threshold is not None:
             _old = self.mode_selection_threshold
@@ -434,16 +450,19 @@ class KerrEccentricEquatorialWaveform:
         )
 
         # =================================================================
-        # WDM domain
+        # TF domain  (WDM or SFT — identical call, grid selects the basis)
         # =================================================================
-        if domain == "wdm":
+        if domain in ("wdm", "sft"):
             T_s = float(np.asarray(sparse["t"])[np.isfinite(np.asarray(sparse["t"]))][-1])
-            wdm_grid = grid if grid is not None else default_grid(T_s)
-            log.info(
-                "WDM generation: %s", wdm_grid
-            )
+            if grid is not None:
+                tf_grid = grid
+            elif domain == "wdm":
+                tf_grid = default_grid(T_s)
+            else:
+                tf_grid = default_sft_grid(T_s)
+            log.info("TF generation (%s): %s", domain, tf_grid)
 
-            W = direct_wdm_sum(
+            W = direct_tf_sum(
                 t_traj=np.asarray(sparse["t"]),
                 teuk_modes=np.asarray(sparse["teuk_modes"]),
                 Phi_phi=np.asarray(sparse["Phi_phi"]),
@@ -456,9 +475,11 @@ class KerrEccentricEquatorialWaveform:
                 ylms_pos=ylms_pos,
                 ylms_neg=ylms_neg,
                 a=a, M=M, mu=mu, x0=x0,
-                grid=wdm_grid,
+                grid=tf_grid,
                 dist=dist,
-                hw=wdm_hw,
+                hw=hw,
+                p_traj=np.asarray(sparse["p"]),
+                e_traj=np.asarray(sparse["e"]),
             )
 
             # Apply SSB-frame polarisation rotation in WDM domain
@@ -467,9 +488,9 @@ class KerrEccentricEquatorialWaveform:
             cqK_e, sqK_e = np.cos(qK_eff), np.sin(qK_eff)
             up_ldc = cqS * sqK_e * np.cos(phiS - phiK_eff) - cqK_e * sqS
             dw_ldc = sqK_e * np.sin(phiS - phiK_eff)
-            psi_ldc = float(-np.arctan2(up_ldc, dw_ldc)) if dw_ldc != 0.0 else 0.5 * np.pi
-            c2psi = float(np.cos(2.0 * psi_ldc))
-            s2psi = float(np.sin(2.0 * psi_ldc))
+            psi_ldc = -jnp.arctan2(up_ldc, dw_ldc)
+            c2psi = jnp.cos(2.0 * psi_ldc)
+            s2psi = jnp.sin(2.0 * psi_ldc)
             # W = W_plus + i W_cross;  rotation: hp' = c2ψ hp - s2ψ hx
             #                                     hx' = s2ψ hp + c2ψ hx
             W_plus  = jnp.real(W)
@@ -483,7 +504,7 @@ class KerrEccentricEquatorialWaveform:
             return W_out
 
         # =================================================================
-        # Time domain (original path)
+        # Time domain
         # =================================================================
         summer = ModeSum(
             l_arr, m_arr, k_arr, n_arr,
