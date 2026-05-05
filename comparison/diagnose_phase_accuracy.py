@@ -49,7 +49,7 @@ from utils import find_data_dir, block_jax
 # ---------------------------------------------------------------------------
 # Threshold and defaults
 # ---------------------------------------------------------------------------
-DEPHASING_THRESHOLD_RAD: float = 1e-8  # maximum |Δp|/p₀ (relative p inconsistency)
+P_CONSISTENCY_THRESHOLD: float = 1e-8  # maximum |Δp|/p₀ (relative p inconsistency)
 
 
 # ---------------------------------------------------------------------------
@@ -137,7 +137,7 @@ def run_diagnostic(
     dense_steps: int = 500,
     T: float = 2.0,
     batch_size: int = 256,
-    threshold: float = DEPHASING_THRESHOLD_RAD,
+    threshold: float = P_CONSISTENCY_THRESHOLD,
 ) -> dict:
     """Run (p, e) consistency diagnostic between phases=True and phases=False.
 
@@ -553,8 +553,8 @@ def parse_args():
                    help="Number of trajectory output time steps (default: 500).")
     p.add_argument("--batch-size", type=int, default=256,
                    help="Batch size for vmapped evaluation (default: 256).")
-    p.add_argument("--threshold", type=float, default=DEPHASING_THRESHOLD_RAD,
-                   help=f"Dephasing threshold [rad] (default: {DEPHASING_THRESHOLD_RAD}).")
+    p.add_argument("--threshold", type=float, default=P_CONSISTENCY_THRESHOLD,
+                   help=f"Relative p consistency threshold |Δp|/p₀ (default: {P_CONSISTENCY_THRESHOLD}).")
     p.add_argument("--max-steps", type=int, default=4096,
                    help="Max ODE internal steps (default: 4096).")
     p.add_argument("--atol", type=float, default=1e-9)

@@ -48,7 +48,7 @@ import jax.numpy as jnp
 jax.config.update("jax_enable_x64", True)
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from utils import find_data_dir, block_jax, print_header, print_table, repeat_timer
+from utils import find_data_dir, block_jax, print_header, print_table, repeat_timer, get_cpu_memory_mb
 
 from fewtrax.utils.constants import MTSUN_SI
 from fewtrax.utils.geodesic import get_separatrix_fast, get_fundamental_frequencies_fast
@@ -78,10 +78,11 @@ def describe_devices() -> None:
 
 
 def get_peak_mem_mib() -> float:
+    """Peak device memory in MiB; falls back to CPU RSS on CPU backend."""
     try:
         return jax.devices()[0].memory_stats().get("peak_bytes_in_use", 0) / 1024**2
     except Exception:
-        return float("nan")
+        return get_cpu_memory_mb()
 
 
 # ---------------------------------------------------------------------------

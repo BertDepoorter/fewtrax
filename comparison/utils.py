@@ -9,6 +9,8 @@ or from the shell environment.  Never hardcode paths here.
 from __future__ import annotations
 
 import os
+import resource
+import sys
 import time
 import contextlib
 from pathlib import Path
@@ -175,6 +177,39 @@ def repeat_timer(fn, n_warmup: int = 1, n_repeat: int = 5) -> tuple[float, float
         fn()
         times.append(time.perf_counter() - t0)
     return float(np.mean(times)), float(np.std(times))
+
+
+def get_cpu_memory_mb() -> float:
+    """Return current process RSS (resident set size) in MiB.
+
+    Uses ``resource.getrusage`` (macOS/Linux, no extra dependency).
+    On macOS ``ru_maxrss`` is in bytes; on Linux it is in KiB.
+    """
+    ru = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+    if sys.platform == "darwin":
+        return ru / (1024 * 1024)          # bytes → MiB
+    return ru / 1024                        # KiB → MiB
+
+
+@contextlib.contextmanager
+def memory_tracker(label: str = "", verbose: bool = True):
+    """Context manager that reports peak RSS increase of the enclosed block.
+
+    Example::
+
+        with memory_tracker("build waveform"):
+            h = gen(...)
+
+    Prints::
+
+        build waveform: ΔRSS +34.2 MiB  (peak 1247.8 MiB)
+    """
+    mem_before = get_cpu_memory_mb()
+    yield
+    mem_after = get_cpu_memory_mb()
+    delta = mem_after - mem_before
+    if verbose:
+        print(f"  {label}: ΔRSS {delta:+.1f} MiB  (peak {mem_after:.1f} MiB)")
 
 
 def block_jax(arrays) -> None:

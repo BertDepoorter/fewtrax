@@ -58,7 +58,7 @@ import jax.numpy as jnp
 jax.config.update("jax_enable_x64", True)
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from utils import find_data_dir, block_jax, print_header, print_table, repeat_timer
+from utils import find_data_dir, block_jax, print_header, print_table, repeat_timer, get_cpu_memory_mb
 
 
 # ---------------------------------------------------------------------------
@@ -66,21 +66,27 @@ from utils import find_data_dir, block_jax, print_header, print_table, repeat_ti
 # ---------------------------------------------------------------------------
 
 def get_jax_memory_mb() -> float:
-    """Return current JAX device memory usage in MiB (GPU only)."""
+    """Return current JAX device memory usage in MiB.
+
+    Falls back to CPU RSS when JAX device stats are unavailable (CPU backend).
+    """
     try:
         stats = jax.devices()[0].memory_stats()
         return stats.get("bytes_in_use", 0) / 1024**2
     except Exception:
-        return float("nan")
+        return get_cpu_memory_mb()
 
 
 def get_peak_memory_mb() -> float:
-    """Return peak JAX device memory usage in MiB (GPU only)."""
+    """Return peak JAX device memory usage in MiB.
+
+    Falls back to CPU peak RSS when JAX device stats are unavailable.
+    """
     try:
         stats = jax.devices()[0].memory_stats()
         return stats.get("peak_bytes_in_use", 0) / 1024**2
     except Exception:
-        return float("nan")
+        return get_cpu_memory_mb()
 
 
 def nvidia_smi_free_mib() -> float:
