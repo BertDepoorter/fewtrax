@@ -41,9 +41,10 @@ from typing import Any, Optional
 
 import h5py
 import numpy as np
+import jax.numpy as jnp
 import equinox as eqx
 
-from fewtrax.utils.splines import CubicSpline3D, TricubicSplineE3, BatchedTricubicSplineE3
+from fewtrax.utils.splines import CubicSpline3D, TricubicSplineE3
 
 log = logging.getLogger(__name__)
 
@@ -167,16 +168,31 @@ def _edot_PN(p, e, r_isco, p_sep):
     return one_me2 * (304.0 + 121.0 * e * e) / (15.0 * p * p * denom)
 
 
+_PN_DENOM_EPS = 1e-14  # floor for the pex-ratio PN denominator near plunge
+
+
+def _safe_pn_denom(denom):
+    """Prevent 1/denom NaN under jax.grad near p → p_sep.
+
+    The pex-ratio spline cancels this pole physically, but JAX evaluates
+    both branches of the division, so raw denom→0 produces unbounded
+    gradients.  A floor of _PN_DENOM_EPS keeps the gradient finite while
+    leaving the spline-multiplied result unchanged away from the pole.
+    """
+    return jnp.where(jnp.abs(denom) > _PN_DENOM_EPS, denom,
+                     _PN_DENOM_EPS * jnp.sign(denom + _PN_DENOM_EPS))
+
+
 def _pdot_PN_jax(p, e, r_isco, p_sep):
     """Leading-order ṗ PN factor (JAX, ODE runtime)."""
-    denom = (p - r_isco) ** 2 - (p_sep - r_isco) ** 2
+    denom = _safe_pn_denom((p - r_isco) ** 2 - (p_sep - r_isco) ** 2)
     one_me2 = (1.0 - e ** 2) ** 1.5
     return 8.0 * one_me2 * (8.0 + 7.0 * e ** 2) / (5.0 * p * denom)
 
 
 def _edot_PN_jax(p, e, r_isco, p_sep):
     """Leading-order ė PN factor (JAX, ODE runtime)."""
-    denom = (p - r_isco) ** 2 - (p_sep - r_isco) ** 2
+    denom = _safe_pn_denom((p - r_isco) ** 2 - (p_sep - r_isco) ** 2)
     one_me2 = (1.0 - e ** 2) ** 1.5
     return one_me2 * (304.0 + 121.0 * e ** 2) / (15.0 * p * p * denom)
 
@@ -258,51 +274,65 @@ class AmplitudeData:
 
 
 class AmplitudeDataJAX(eqx.Module):
-    r"""Fully JAX-native amplitude container backed by :class:`BatchedTricubicSplineE3`.
+    r"""Fully JAX-native amplitude container using bisplev B-spline coefficients.
 
-    Built by :func:`load_amplitude_data_jax`, which re-evaluates the raw
-    bisplev B-spline coefficients on a uniform 3-D grid and fits
-    :class:`~fewtrax.utils.splines.BatchedTricubicSplineE3` instances using
-    E(3) / not-a-knot boundary conditions.  The resulting evaluator is
-    compatible with :func:`jax.jit`, :func:`jax.grad`, and :func:`jax.vmap`.
+    Stores the same compact B-spline coefficient arrays that FEW writes to the
+    HDF5 file — reshaped from flat ``(N1 * N2,)`` to ``(N1, N2)`` per mode per
+    z-slice — together with the corresponding knot vectors.  No grid evaluation
+    or multispline re-fitting is performed at load time.
+
+    Amplitude evaluation proceeds as:
+
+    1. Linear interpolation in ``z`` between the two surrounding z-slices
+       (matching FEW's :class:`~fewtrax.amplitude.interp.AmplitudeInterpolator`
+       exactly).
+    2. 2-D B-spline evaluation at each z-slice via
+       :func:`~fewtrax.utils.bspline_jax.eval_bisplev_batched` (de Boor's
+       algorithm, all modes in one ``einsum``).
 
     Attributes
     ----------
-    spline_A_real, spline_A_imag : BatchedTricubicSplineE3
-        Real and imaginary tricubic splines for Region A,
-        shape ``(n_modes, Nu-1, Nw-1, Nz-1, 4, 4, 4)`` each.
-    spline_B_real, spline_B_imag : BatchedTricubicSplineE3 or None
-        Same for Region B (``None`` when the amplitude file has no Region B).
-    l_arr, m_arr, k_arr, n_arr : jnp.ndarray of int, shape ``(n_modes,)``
+    coeffs_A : (Nz, n_modes, 2, N1_A, N2_A) float64
+        B-spline coefficients for Region A.  Axis 2 indexes ``[real, imag]``.
+        ``N1_A = len(t1_A) - 4``,  ``N2_A = len(t2_A) - 4``.
+    t1_A : (len_t1_A,) float64
+        Knot vector for the first bisplev argument (w / eccentricity).
+    t2_A : (len_t2_A,) float64
+        Knot vector for the second bisplev argument (u / semi-latus rectum).
+    z_knots_A : (Nz,) float64
+        Spin coordinate z-values for the Nz stored slices.
+    coeffs_B : (Nz, n_modes, 2, N1_B, N2_B) float64 or None
+        Same for Region B.
+    t1_B, t2_B, z_knots_B : analogous to Region A, or None when absent.
+    l_arr, m_arr, k_arr, n_arr : (n_modes,) int
         Harmonic mode indices.
     _has_B : bool (static)
-        Whether Region B splines are present.
+        Whether Region B data are present.
 
-    Notes
-    -----
-    Memory footprint on an A100 (80 GB) for ``n_modes = 400``,
-    ``(Nu, Nw, Nz) = (33, 10, 11)``::
+    Memory
+    ------
+    For the default amplitude file (``n_modes = 6993``, ``Nz = 33``,
+    ``N1_A = N2_A = 33``, ``N1_B = N2_B = 17``)::
 
-        Region A: (400, 32, 9, 10, 64) × 8 B × 2 (real+imag) ≈ 118 MB
-        Region B: ~120 MB
-        Total:    ~240 MB (shared under vmap — not replicated per batch element)
-
-    For ``vmap`` over 256 waveforms the replicated data are the per-trajectory
-    amplitude arrays (256 steps × 400 modes × 16 B ≈ 1.6 MB × 256 ≈ 410 MB),
-    well within 80 GB.  The dominant cost for full waveform generation is the
-    phase matrix ``(N_dense × n_modes)``: keep ``N_dense × n_modes ≤ 3×10⁷``
-    (e.g. 10 k points × 400 modes per waveform × 256 batch = 16 GB) or use
-    mode-selection thresholding to reduce ``n_modes`` before building.
+        Region A: 33 × 6993 × 2 × 33 × 33 × 8 B  ≈ 4.0 GB
+        Region B: 33 × 6993 × 2 × 17 × 17 × 8 B  ≈ 1.1 GB
+        Total:                                     ≈ 5.1 GB
     """
 
-    spline_A_real: BatchedTricubicSplineE3
-    spline_A_imag: BatchedTricubicSplineE3
-    spline_B_real: Any   # BatchedTricubicSplineE3 | None
-    spline_B_imag: Any   # BatchedTricubicSplineE3 | None
-    l_arr: Any           # jnp.ndarray[int]
-    m_arr: Any           # jnp.ndarray[int]
-    k_arr: Any           # jnp.ndarray[int]
-    n_arr: Any           # jnp.ndarray[int]
+    coeffs_A: jnp.ndarray   # (Nz, n_modes, 2, N1_A, N2_A) float64
+    t1_A: jnp.ndarray       # (len_t1_A,) — w-knots (first bisplev arg)
+    t2_A: jnp.ndarray       # (len_t2_A,) — u-knots (second bisplev arg)
+    z_knots_A: jnp.ndarray  # (Nz,) spin-coordinate z values
+
+    coeffs_B: Any           # (Nz, n_modes, 2, N1_B, N2_B) float64 | None
+    t1_B: Any               # knot vector | None
+    t2_B: Any               # knot vector | None
+    z_knots_B: Any          # (Nz,) | None
+
+    l_arr: Any              # (n_modes,) int
+    m_arr: Any
+    k_arr: Any
+    n_arr: Any
     _has_B: bool = eqx.field(static=True)
 
     @property
@@ -645,115 +675,34 @@ def _generate_mode_arrays(lmax: int, mmax: int, nmax: int):
 # JAX-native amplitude loader
 # ---------------------------------------------------------------------------
 
-def _extract_uniform_grid(knots: np.ndarray, name: str) -> np.ndarray:
-    """Extract the unique breakpoint grid from a bisplev cubic knot vector.
-
-    A cubic (degree-3) clamped B-spline knot vector has 4 repeated values at
-    each end.  ``np.unique`` recovers the actual evaluation grid.  The
-    resulting grid is asserted to be uniformly spaced (required by
-    :class:`~fewtrax.utils.splines.BatchedTricubicSplineE3`).
-
-    Parameters
-    ----------
-    knots : np.ndarray
-        Full knot vector from the HDF5 amplitude file.
-    name : str
-        Axis name for error messages.
-
-    Returns
-    -------
-    np.ndarray, 1-D
-        Uniformly spaced grid of unique breakpoints.
-    """
-    grid = np.unique(knots)
-    if len(grid) < 2:
-        raise ValueError(
-            f"{name} grid has fewer than 2 unique points after extracting knots."
-        )
-    diffs = np.diff(grid)
-    if not np.allclose(diffs, diffs[0], rtol=1e-8, atol=1e-10):
-        raise ValueError(
-            f"{name} grid extracted from bisplev knots is not uniformly spaced "
-            f"(max deviation {np.abs(diffs - diffs[0]).max():.3e}). "
-            "Pass the grid explicitly via the u_grid / w_grid arguments."
-        )
-    return grid
-
-
-def _eval_region_on_grid(
-    coeffs: np.ndarray,
-    u_knots: np.ndarray,
-    w_knots: np.ndarray,
-    z_knots: np.ndarray,
-    u_grid: np.ndarray,
-    w_grid: np.ndarray,
-    z_grid: np.ndarray,
-) -> tuple[np.ndarray, np.ndarray]:
-    """Evaluate bisplev B-spline coefficients on a uniform 3-D grid.
-
-    For each z-slice in ``z_knots`` the 2-D B-spline is evaluated on the
-    ``(u_grid, w_grid)`` mesh.  If ``z_knots != z_grid`` (non-uniform z),
-    the slice values are resampled onto ``z_grid`` using 1-D cubic
-    interpolation per mode.
+def _reshape_coeffs(
+    coeffs_raw: np.ndarray,
+    n1: int,
+    n2: int,
+) -> np.ndarray:
+    """Reshape flat bisplev coefficients to a 2-D per-mode layout.
 
     Parameters
     ----------
-    coeffs : np.ndarray, shape ``(n_z, n_modes, 2, n_coeffs)``
-        Raw bisplev B-spline coefficients.  Axis 2: ``[real, imag]``.
-        The bisplev axis ordering is ``(w, u)`` (first arg = w).
-    u_knots, w_knots : np.ndarray
-        Full bisplev knot vectors (w is first axis in bisplev convention).
-    z_knots : np.ndarray
-        Spin-grid values for the stored slices.
-    u_grid, w_grid : np.ndarray
-        Target uniform evaluation grids (extracted from knots).
-    z_grid : np.ndarray
-        Target uniform z grid; may differ from ``z_knots`` when the spin
-        grid is non-uniform.
+    coeffs_raw : (Nz, n_modes, 2, N1*N2) float64
+        Raw coefficient array from HDF5.  The flat last axis encodes
+        ``c[i * N2 + j]`` = coefficient for ``B_i(w) * B_j(u)`` in C order.
+    n1 : int
+        Number of B-spline basis functions for the first axis (w).
+        ``n1 = len(w_knots) - 4``.
+    n2 : int
+        Number of B-spline basis functions for the second axis (u).
+        ``n2 = len(u_knots) - 4``.
 
     Returns
     -------
-    values_real, values_imag : np.ndarray, shape ``(n_modes, Nu, Nw, Nz)``
-        Grid values suitable for :meth:`BatchedTricubicSplineE3.from_grid_values`.
+    np.ndarray, shape (Nz, n_modes, 2, N1, N2) float64
     """
-    from scipy.interpolate import bisplev as _bisplev, interp1d
-
-    n_z_src = len(z_knots)
-    n_modes = coeffs.shape[1]
-    Nu, Nw, Nz_tgt = len(u_grid), len(w_grid), len(z_grid)
-
-    # Scratch arrays at the source z resolution
-    # shape: (n_modes, Nu, Nw, n_z_src)
-    raw_real = np.empty((n_modes, Nu, Nw, n_z_src), dtype=np.float64)
-    raw_imag = np.empty((n_modes, Nu, Nw, n_z_src), dtype=np.float64)
-
-    for iz in range(n_z_src):
-        c_block = coeffs[iz]   # (n_modes, 2, n_coeffs)
-        for im in range(n_modes):
-            # bisplev(w_pts, u_pts, (w_kn, u_kn, c, kw, ku))
-            # returns shape (Nw, Nu);  we store as (Nu, Nw) by transposing.
-            tck_r = (w_knots, u_knots, c_block[im, 0], 3, 3)
-            tck_i = (w_knots, u_knots, c_block[im, 1], 3, 3)
-            raw_real[im, :, :, iz] = _bisplev(w_grid, u_grid, tck_r).T
-            raw_imag[im, :, :, iz] = _bisplev(w_grid, u_grid, tck_i).T
-
-    # Resample onto z_grid if needed (handles non-uniform z_knots)
-    if np.allclose(z_knots, z_grid, atol=1e-12):
-        return raw_real, raw_imag
-
-    log.info("  z_knots not equal to z_grid — resampling in z …")
-    values_real = np.empty((n_modes, Nu, Nw, Nz_tgt), dtype=np.float64)
-    values_imag = np.empty((n_modes, Nu, Nw, Nz_tgt), dtype=np.float64)
-    for im in range(n_modes):
-        for iu in range(Nu):
-            for iw in range(Nw):
-                spl_r = interp1d(z_knots, raw_real[im, iu, iw, :],
-                                 kind="cubic", fill_value="extrapolate")
-                spl_i = interp1d(z_knots, raw_imag[im, iu, iw, :],
-                                 kind="cubic", fill_value="extrapolate")
-                values_real[im, iu, iw, :] = spl_r(z_grid)
-                values_imag[im, iu, iw, :] = spl_i(z_grid)
-    return values_real, values_imag
+    Nz, n_modes, n_ri, n_flat = coeffs_raw.shape
+    assert n_flat == n1 * n2, (
+        f"Flat coefficient length {n_flat} != {n1} × {n2} = {n1 * n2}"
+    )
+    return coeffs_raw.reshape(Nz, n_modes, n_ri, n1, n2)
 
 
 def load_amplitude_data_jax(
@@ -761,31 +710,26 @@ def load_amplitude_data_jax(
     filename: str = "ZNAmps_l10_m10_n55_DS2Outer.h5",
     mode_indices: Optional[np.ndarray] = None,
 ) -> "AmplitudeDataJAX":
-    r"""Load amplitude data as fully JAX-native :class:`AmplitudeDataJAX`.
+    r"""Load amplitude data as a fully JAX-native :class:`AmplitudeDataJAX`.
 
-    Reads the amplitude HDF5 file, re-evaluates the stored bicubic B-spline
-    coefficients on a uniform 3-D grid, then builds
-    :class:`~fewtrax.utils.splines.BatchedTricubicSplineE3` instances using
-    E(3) / not-a-knot boundary conditions.  The result is a JAX pytree that
-    is compatible with :func:`jax.jit`, :func:`jax.grad`, and
-    :func:`jax.vmap`.
+    Reads the amplitude HDF5 file and converts the stored bisplev B-spline
+    coefficients directly to JAX arrays — no grid evaluation, no multispline
+    re-fitting.  The result is an :class:`equinox.Module` compatible with
+    :func:`jax.jit`, :func:`jax.grad`, and :func:`jax.vmap`.
 
-    This replaces the :class:`~fewtrax.amplitude.interp.AmplitudeInterpolator`
-    / ``scipy.bisplev`` pipeline (which is not JAX-traceable) with a single
-    fused ``einsum`` kernel per trajectory point, evaluating all modes in
-    parallel.
+    The loaded data uses exactly the same B-spline representation that FEW
+    evaluates via ``scipy.bisplev``, so amplitude values are bit-identical
+    to FEW's output (to float64 precision).
 
     Parameters
     ----------
     data_dir : str or Path, optional
         FEW data directory.
     filename : str
-        Amplitude HDF5 file.  Default: ``ZNAmps_l10_m10_n55_DS2Outer.h5``.
-    mode_indices : array of int, optional
-        Subset of mode indices to include (e.g. from power thresholding via
-        :meth:`~fewtrax.amplitude.interp.AmplitudeInterpolator.select_modes`).
-        Reduces GPU memory by keeping only the dominant modes.  Default:
-        all modes.
+        Amplitude HDF5 file.
+    mode_indices : (n_sel,) int array, optional
+        Indices of modes to include.  Reduces memory proportionally.
+        Default: all modes.
 
     Returns
     -------
@@ -793,16 +737,12 @@ def load_amplitude_data_jax(
 
     Notes
     -----
-    Construction cost: ``O(n_modes × n_z)`` bisplev evaluations on the
-    ``(Nu × Nw)`` grid (≈ 4,400 evaluations for the default 400 modes ×
-    11 z-slices), followed by ``n_modes`` :class:`multispline.TricubicSpline`
-    fits.  Total ≈ 5–30 s on CPU.  This is a one-time cost per process.
+    Load time is dominated by HDF5 I/O and the single ``jnp.asarray`` call
+    that uploads the coefficient arrays to the JAX device.  No per-mode
+    fitting loops are needed.  Typical load time on CPU: 5–15 s.
 
-    Memory on A100 (80 GB) — see :class:`AmplitudeDataJAX` docstring for
-    the detailed breakdown.
+    Memory — see :class:`AmplitudeDataJAX` for the full breakdown.
     """
-    import jax.numpy as jnp
-
     data_path = find_few_data_dir(data_dir)
     fp = data_path / filename
     log.info("Loading JAX amplitude data from %s", fp)
@@ -813,105 +753,74 @@ def load_amplitude_data_jax(
         nmax = int(fh.attrs.get("nmax", 55))
 
         rA = fh["regionA"]
-        coeffs_A = rA["CoeffsRegionA"][()]   # (n_z, n_modes, 2, n_coeffs)
-        u_knots_A = rA["u_knots"][()]
-        w_knots_A = rA["w_knots"][()]
-        z_knots_A = rA["z_knots"][()]
+        raw_A = rA["CoeffsRegionA"][()]   # (Nz, n_modes, 2, N1*N2)
+        t1_A_np = rA["w_knots"][()]       # first bisplev arg = w
+        t2_A_np = rA["u_knots"][()]       # second bisplev arg = u
+        z_knots_A_np = rA["z_knots"][()]
 
         has_B = "regionB" in fh
         if has_B:
             rB = fh["regionB"]
-            coeffs_B = rB["CoeffsRegionB"][()]
-            u_knots_B = rB["u_knots"][()]
-            w_knots_B = rB["w_knots"][()]
-            z_knots_B = rB["z_knots"][()]
+            raw_B = rB["CoeffsRegionB"][()]
+            t1_B_np = rB["w_knots"][()]
+            t2_B_np = rB["u_knots"][()]
+            z_knots_B_np = rB["z_knots"][()]
         else:
-            coeffs_B = u_knots_B = w_knots_B = z_knots_B = None
+            raw_B = t1_B_np = t2_B_np = z_knots_B_np = None
 
-    # Generate mode index arrays
     l_arr, m_arr, k_arr, n_arr = _generate_mode_arrays(lmax, mmax, nmax)
-    n_modes_file = coeffs_A.shape[1]
+    n_modes_file = raw_A.shape[1]
     assert len(l_arr) == n_modes_file, (
         f"Mode count mismatch: generated {len(l_arr)}, file has {n_modes_file}"
     )
 
-    # Apply mode subset if requested
     if mode_indices is not None:
         mode_indices = np.asarray(mode_indices, dtype=np.int32)
-        coeffs_A = coeffs_A[:, mode_indices, :, :]
+        raw_A = raw_A[:, mode_indices, :, :]
         l_arr = l_arr[mode_indices]
         m_arr = m_arr[mode_indices]
         k_arr = k_arr[mode_indices]
         n_arr = n_arr[mode_indices]
         if has_B:
-            coeffs_B = coeffs_B[:, mode_indices, :, :]
+            raw_B = raw_B[:, mode_indices, :, :]
 
-    n_modes = coeffs_A.shape[1]
+    n_modes = raw_A.shape[1]
+    n1_A = len(t1_A_np) - 4   # N1 = len(w_knots) - 4
+    n2_A = len(t2_A_np) - 4   # N2 = len(u_knots) - 4
     log.info(
-        "Building JAX amplitude splines: %d modes, %d z-slices, Region B = %s",
-        n_modes, len(z_knots_A), has_B,
+        "JAX amplitude data: %d modes, %d z-slices, "
+        "Region A coeff grid (%d × %d), Region B = %s",
+        n_modes, len(z_knots_A_np), n1_A, n2_A, has_B,
     )
 
-    # Extract uniform (u, w) grids from bisplev knot vectors
-    u_grid_A = _extract_uniform_grid(u_knots_A, "u_A")
-    w_grid_A = _extract_uniform_grid(w_knots_A, "w_A")
+    # Reshape (Nz, n_modes, 2, N1*N2) → (Nz, n_modes, 2, N1, N2)
+    coeffs_A_np = _reshape_coeffs(raw_A, n1_A, n2_A)
+    log.info("  Region A coefficients: %s, %.2f GB",
+             coeffs_A_np.shape,
+             coeffs_A_np.nbytes / 1e9)
 
-    # Use the stored z_knots as the z grid (typically uniform in [0, 1])
-    # BatchedTricubicSplineE3 will verify uniform spacing.
-    z_grid_A = z_knots_A
-
-    log.info(
-        "  Region A grid: u(%d) × w(%d) × z(%d)",
-        len(u_grid_A), len(w_grid_A), len(z_grid_A),
-    )
-
-    # Re-evaluate bisplev on the 3-D grid → (n_modes, Nu, Nw, Nz)
-    log.info("  Evaluating Region A B-splines on grid …")
-    vals_real_A, vals_imag_A = _eval_region_on_grid(
-        coeffs_A, u_knots_A, w_knots_A, z_knots_A,
-        u_grid_A, w_grid_A, z_grid_A,
-    )
-
-    # Fit BatchedTricubicSplineE3 (E(3) boundary conditions via multispline)
-    log.info("  Fitting Region A tricubic splines …")
-    spline_A_real = BatchedTricubicSplineE3.from_grid_values(
-        u_grid_A, w_grid_A, z_grid_A, vals_real_A
-    )
-    spline_A_imag = BatchedTricubicSplineE3.from_grid_values(
-        u_grid_A, w_grid_A, z_grid_A, vals_imag_A
-    )
-
-    spline_B_real = spline_B_imag = None
+    coeffs_B_out = t1_B_out = t2_B_out = z_knots_B_out = None
     if has_B:
-        u_grid_B = _extract_uniform_grid(u_knots_B, "u_B")
-        w_grid_B = _extract_uniform_grid(w_knots_B, "w_B")
-        z_grid_B = z_knots_B
+        n1_B = len(t1_B_np) - 4
+        n2_B = len(t2_B_np) - 4
+        coeffs_B_out = _reshape_coeffs(raw_B, n1_B, n2_B)
+        log.info("  Region B coefficients: %s, %.2f GB",
+                 coeffs_B_out.shape,
+                 coeffs_B_out.nbytes / 1e9)
+        t1_B_out = t1_B_np
+        t2_B_out = t2_B_np
+        z_knots_B_out = z_knots_B_np
 
-        log.info(
-            "  Region B grid: u(%d) × w(%d) × z(%d)",
-            len(u_grid_B), len(w_grid_B), len(z_grid_B),
-        )
-
-        log.info("  Evaluating Region B B-splines on grid …")
-        vals_real_B, vals_imag_B = _eval_region_on_grid(
-            coeffs_B, u_knots_B, w_knots_B, z_knots_B,
-            u_grid_B, w_grid_B, z_grid_B,
-        )
-
-        log.info("  Fitting Region B tricubic splines …")
-        spline_B_real = BatchedTricubicSplineE3.from_grid_values(
-            u_grid_B, w_grid_B, z_grid_B, vals_real_B
-        )
-        spline_B_imag = BatchedTricubicSplineE3.from_grid_values(
-            u_grid_B, w_grid_B, z_grid_B, vals_imag_B
-        )
-
-    log.info("JAX amplitude splines ready.")
+    log.info("  Uploading to JAX device …")
     return AmplitudeDataJAX(
-        spline_A_real=spline_A_real,
-        spline_A_imag=spline_A_imag,
-        spline_B_real=spline_B_real,
-        spline_B_imag=spline_B_imag,
+        coeffs_A=jnp.asarray(coeffs_A_np, dtype=jnp.float64),
+        t1_A=jnp.asarray(t1_A_np, dtype=jnp.float64),
+        t2_A=jnp.asarray(t2_A_np, dtype=jnp.float64),
+        z_knots_A=jnp.asarray(z_knots_A_np, dtype=jnp.float64),
+        coeffs_B=jnp.asarray(coeffs_B_out, dtype=jnp.float64) if has_B else None,
+        t1_B=jnp.asarray(t1_B_out, dtype=jnp.float64) if has_B else None,
+        t2_B=jnp.asarray(t2_B_out, dtype=jnp.float64) if has_B else None,
+        z_knots_B=jnp.asarray(z_knots_B_out, dtype=jnp.float64) if has_B else None,
         l_arr=jnp.asarray(l_arr),
         m_arr=jnp.asarray(m_arr),
         k_arr=jnp.asarray(k_arr),

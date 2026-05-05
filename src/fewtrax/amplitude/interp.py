@@ -33,6 +33,7 @@ from typing import Optional, Sequence
 import numpy as np
 import jax
 import jax.numpy as jnp
+from jax import lax
 import equinox as eqx
 
 from fewtrax.utils.coordinates import (
@@ -40,6 +41,7 @@ from fewtrax.utils.coordinates import (
     kerrecceq_forward_map_A, kerrecceq_forward_map_B,
 )
 from fewtrax.utils.geodesic import get_separatrix_fast
+from fewtrax.utils.bspline_jax import eval_bisplev_batched
 from fewtrax.data.loader import AmplitudeData, AmplitudeDataJAX, _separatrix_numpy
 
 
@@ -315,6 +317,74 @@ class JAXAmplitudeInterpolator(eqx.Module):
         return self.amp_data.n_arr
 
     # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _eval_region(
+        w: float,
+        u: float,
+        z: float,
+        coeffs: jnp.ndarray,
+        t1: jnp.ndarray,
+        t2: jnp.ndarray,
+        z_knots: jnp.ndarray,
+    ) -> jnp.ndarray:
+        """Evaluate one region's complex amplitudes at a single (w, u, z) point.
+
+        Uses linear interpolation in ``z`` between the two surrounding
+        z-slices (matching FEW's ``AmplitudeInterpolator`` exactly), and
+        :func:`~fewtrax.utils.bspline_jax.eval_bisplev_batched` for the 2-D
+        B-spline evaluation at each slice.
+
+        Parameters
+        ----------
+        w, u, z : float
+            Normalised amplitude coordinates.
+        coeffs : (Nz, n_modes, 2, N1, N2) float64
+        t1 : (len_t1,) float64  — w-axis knot vector.
+        t2 : (len_t2,) float64  — u-axis knot vector.
+        z_knots : (Nz,) float64 — z-slice positions.
+
+        Returns
+        -------
+        (n_modes,) complex128
+        """
+        Nz = coeffs.shape[0]
+        n_modes = coeffs.shape[1]
+        N1 = coeffs.shape[3]   # static at JIT time
+        N2 = coeffs.shape[4]   # static at JIT time
+
+        # Find the z interval
+        iz = jnp.clip(
+            jnp.searchsorted(z_knots, z, side="right") - 1,
+            0, Nz - 2,
+        ).astype(jnp.int32)
+        alpha = (z - z_knots[iz]) / (z_knots[iz + 1] - z_knots[iz])
+
+        # Gather the (n_modes, 2, N1, N2) slabs at iz and iz+1.
+        # All start indices must share the same int dtype for dynamic_slice.
+        c_lo = lax.dynamic_slice(
+            coeffs,
+            jnp.array([iz,     0, 0, 0, 0], dtype=jnp.int32),
+            (1, n_modes, 2, N1, N2),
+        )[0]
+        c_hi = lax.dynamic_slice(
+            coeffs,
+            jnp.array([iz + 1, 0, 0, 0, 0], dtype=jnp.int32),
+            (1, n_modes, 2, N1, N2),
+        )[0]
+
+        # 2-D bisplev at each z-slice, linear-interpolate
+        def _eval2d(c_slice):
+            # c_slice: (n_modes, 2, N1, N2) — split real/imag
+            re = eval_bisplev_batched(w, u, c_slice[:, 0, :, :], t1, t2)
+            im = eval_bisplev_batched(w, u, c_slice[:, 1, :, :], t1, t2)
+            return re + 1j * im
+
+        return (1.0 - alpha) * _eval2d(c_lo) + alpha * _eval2d(c_hi)
+
+    # ------------------------------------------------------------------
     # Single-point evaluation
     # ------------------------------------------------------------------
 
@@ -335,9 +405,7 @@ class JAXAmplitudeInterpolator(eqx.Module):
             Semi-latus rectum and eccentricity.
         pLSO : float, optional
             Pre-computed separatrix :math:`p_{\rm sep}(|a|, e)`.  When
-            provided the internal separatrix computation is skipped (saves
-            ~25 bisection iterations per call — useful inside the ODE where
-            pLSO is already known).
+            provided the internal separatrix computation is skipped.
 
         Returns
         -------
@@ -353,33 +421,30 @@ class JAXAmplitudeInterpolator(eqx.Module):
 
         in_A = p <= pLSO + DELTAPMAX
 
-        # Compute coordinates for both regions (JAX always evaluates both
-        # branches; jnp.where selects the correct result for each region).
+        # Compute and clamp coordinates for both regions
         u_A, w_A, z_A = kerrecceq_forward_map_A(
             a_abs, p, e, pLSO, ALPHA_AMP, BETA_AMP
         )
-        u_B, w_B, z_B = kerrecceq_forward_map_B(
-            a_abs, p, e, pLSO, is_flux=False
-        )
-
-        # Clamp coordinates to [0, 1] (same as extrap=False in interpax)
         u_A = jnp.clip(u_A, 0.0, 1.0)
         w_A = jnp.clip(w_A, 0.0, 1.0)
         z_A = jnp.clip(z_A, 0.0, 1.0)
-        u_B = jnp.clip(u_B, 0.0, 1.0)
-        w_B = jnp.clip(w_B, 0.0, 1.0)
-        z_B = jnp.clip(z_B, 0.0, 1.0)
 
-        # Evaluate Region A splines → (n_modes,)
-        amp_A = (
-            ad.spline_A_real(u_A, w_A, z_A)
-            + 1j * ad.spline_A_imag(u_A, w_A, z_A)
+        amp_A = self._eval_region(
+            w_A, u_A, z_A,
+            ad.coeffs_A, ad.t1_A, ad.t2_A, ad.z_knots_A,
         )
 
         if ad._has_B:
-            amp_B = (
-                ad.spline_B_real(u_B, w_B, z_B)
-                + 1j * ad.spline_B_imag(u_B, w_B, z_B)
+            u_B, w_B, z_B = kerrecceq_forward_map_B(
+                a_abs, p, e, pLSO, is_flux=False
+            )
+            u_B = jnp.clip(u_B, 0.0, 1.0)
+            w_B = jnp.clip(w_B, 0.0, 1.0)
+            z_B = jnp.clip(z_B, 0.0, 1.0)
+
+            amp_B = self._eval_region(
+                w_B, u_B, z_B,
+                ad.coeffs_B, ad.t1_B, ad.t2_B, ad.z_knots_B,
             )
             return jnp.where(in_A, amp_A, amp_B)
 
