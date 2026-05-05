@@ -54,45 +54,7 @@ def spin_weighted_spherical_harmonic(
     complex
         The harmonic value.
 
-    Notes
-    -----
-    Expressions are hardcoded for :math:`\ell = 2 \ldots 10`.
     """
-    c = jnp.cos(theta / 2.0)
-    s = jnp.sin(theta / 2.0)
-    ep = jnp.exp(1j * m * phi)
-
-    # Use the lookup table implemented via lax.switch
-    def _y22(): return (jnp.sqrt(5.0 / jnp.pi) / 2.0) * c**4 * ep
-    def _y21(): return jnp.sqrt(5.0 / jnp.pi) * c**3 * s * ep
-    def _y20(): return jnp.sqrt(15.0 / (2.0 * jnp.pi)) * c**2 * s**2 * ep
-    def _y2m1(): return jnp.sqrt(5.0 / jnp.pi) * c * s**3 * ep
-    def _y2m2(): return (jnp.sqrt(5.0 / jnp.pi) / 2.0) * s**4 * ep
-
-    def _y33(): return -(jnp.sqrt(21.0 / (2.0 * jnp.pi))) * c**5 * s * ep
-    def _y32(): return (jnp.sqrt(7.0 / jnp.pi) / 2.0) * (c**6 - 5.0 * c**4 * s**2) * ep
-    def _y31(): return -(jnp.sqrt(7.0 / (10.0 * jnp.pi))) * (
-        -5.0 * c**5 * s + 10.0 * c**3 * s**3
-    ) * ep
-    def _y30(): return (jnp.sqrt(21.0 / (10.0 * jnp.pi)) / 2.0) * (
-        10.0 * c**4 * s**2 - 10.0 * c**2 * s**4
-    ) * ep
-    def _y3m1(): return -(jnp.sqrt(7.0 / (10.0 * jnp.pi))) * (
-        -10.0 * c**3 * s**3 + 5.0 * c * s**5
-    ) * ep
-    def _y3m2(): return (jnp.sqrt(7.0 / jnp.pi) / 2.0) * (
-        5.0 * c**2 * s**4 - s**6
-    ) * ep
-    def _y3m3(): return jnp.sqrt(21.0 / (2.0 * jnp.pi)) * c * s**5 * ep
-
-    # Map (l, m) to a flat index for lax.switch
-    _ylm_table = {
-        (2, -2): _y2m2, (2, -1): _y2m1, (2, 0): _y20, (2, 1): _y21, (2, 2): _y22,
-        (3, -3): _y3m3, (3, -2): _y3m2, (3, -1): _y3m1, (3, 0): _y30,
-        (3, 1): _y31, (3, 2): _y32, (3, 3): _y33,
-    }
-
-    # Fall back to general formula for l >= 4
     return _general_swsh(l, m, theta, phi)
 
 
@@ -142,12 +104,12 @@ def _general_swsh(l: int, m: int, theta: float, phi: float) -> complex:
 
     log_binom1 = binom_log(l - s, k_vals)
     log_binom2 = binom_log(l + s, k_vals + s - m)
-    sign = (-1.0) ** (l + s - k_vals)
+    sign_k = (-1.0) ** (l + s - k_vals)
     power_cos = (2.0 * k_vals + s - m)
     power_sin = (2.0 * l - 2.0 * k_vals - s + m)
 
     term = (
-        sign
+        sign_k
         * jnp.exp(log_binom1 + log_binom2)
         * jnp.where(power_cos >= 0, cos2**power_cos, 0.0)
         * jnp.where(power_sin >= 0, sin2**power_sin, 0.0)

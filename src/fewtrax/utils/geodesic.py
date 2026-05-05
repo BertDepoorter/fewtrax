@@ -350,27 +350,6 @@ def kerr_geo_angular_momentum_equatorial(
 # Separatrix via bisection
 # ---------------------------------------------------------------------------
 
-@partial(jit, static_argnames=("tol", "max_steps"))
-def _bisect(f_lo: float, f_hi: float, lo: float, hi: float, tol: float = 1.0e-13,
-            max_steps: int = 100) -> float:
-    """Generic bisection on a pre-evaluated sign-change bracket.
-
-    Performs bisection starting from ``lo`` / ``hi`` where the signs of the
-    function at those endpoints are given by ``f_lo`` and ``f_hi``.
-    """
-    # We carry the function reference indirectly via a closure in the callers.
-    # Here we just do the iteration on a generic bracket.
-    def cond(state):
-        lo, hi, _fl, _fh = state
-        return (hi - lo) > tol
-
-    def body(state):
-        lo, hi, fl, fh = state
-        mid = (lo + hi) / 2.0
-        return lo, hi, fl, fh  # placeholder – overridden below
-
-    return (lo + hi) / 2.0  # replaced by specialised callers
-
 
 def _bisect_equat(a: float, e: float, lo: float, hi: float, n_iter: int = 50):
     """Find equatorial separatrix root via fixed-count bisection.

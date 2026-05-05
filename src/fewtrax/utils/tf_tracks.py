@@ -42,96 +42,17 @@ import jax.numpy as jnp
 from fewtrax.utils.constants import MTSUN_SI
 from fewtrax.utils.geodesic import get_fundamental_frequencies
 
-
 # ---------------------------------------------------------------------------
-# WDM grid descriptor
+# Re-exports from tf_bases (single authoritative definitions)
 # ---------------------------------------------------------------------------
-
-@dataclass(frozen=True)
-class WDMGrid:
-    """Parameters of a WDM time-frequency grid.
-
-    Parameters
-    ----------
-    Nf : int
-        Number of frequency bins.
-    Nt : int
-        Number of time bins.
-    T : float
-        Total duration [s].
-
-    Notes
-    -----
-    Total samples in the underlying time series: N = Nf * Nt.
-    Time bin width:       delta_T = T / Nt         [s]
-    Frequency bin width:  delta_F = 1 / (2 delta_T) [Hz]
-    Nyquist frequency:    f_nyq   = Nf * delta_F    [Hz]
-    """
-
-    Nf: int
-    Nt: int
-    T: float  # observation duration [s]
-
-    @property
-    def delta_T(self) -> float:
-        """WDM time bin width [s]."""
-        return self.T / self.Nt
-
-    @property
-    def delta_F(self) -> float:
-        """WDM frequency bin width [Hz]."""
-        return 1.0 / (2.0 * self.delta_T)
-
-    @property
-    def f_nyq(self) -> float:
-        """Nyquist frequency of the underlying time series [Hz]."""
-        return self.Nf * self.delta_F
-
-    @property
-    def t_bins(self) -> np.ndarray:
-        """WDM time bin centres [s]."""
-        return np.arange(self.Nt, dtype=np.float64) * self.delta_T
-
-    @property
-    def f_bins(self) -> np.ndarray:
-        """WDM frequency bin centres [Hz]."""
-        return np.arange(self.Nf, dtype=np.float64) * self.delta_F
-
-    def freq_to_bin(self, f: np.ndarray) -> np.ndarray:
-        """Convert frequencies [Hz] to nearest integer bin indices."""
-        return np.round(f / self.delta_F).astype(int)
-
-    def __repr__(self) -> str:
-        return (
-            f"WDMGrid(Nf={self.Nf}, Nt={self.Nt}, "
-            f"T={self.T:.3e}s, "
-            f"dT={self.delta_T:.1f}s, "
-            f"dF={self.delta_F*1e6:.2f}μHz, "
-            f"f_nyq={self.f_nyq*1e3:.2f}mHz)"
-        )
-
-
-def default_grid(T: float, f_max: float = 5e-3, Nt: int = 4096) -> WDMGrid:
-    """Construct a WDM grid covering [0, f_max] Hz over duration T.
-
-    Parameters
-    ----------
-    T : float
-        Observation duration [s].
-    f_max : float
-        Desired maximum frequency coverage [Hz].  The Nyquist frequency
-        will be at least f_max; Nf is rounded up to the next power of 2.
-    Nt : int
-        Number of WDM time bins (power of 2 recommended).
-
-    Returns
-    -------
-    WDMGrid
-    """
-    delta_T = T / Nt
-    delta_F = 1.0 / (2.0 * delta_T)
-    Nf = int(2 ** np.ceil(np.log2(f_max / delta_F)))
-    return WDMGrid(Nf=Nf, Nt=Nt, T=T)
+from fewtrax.utils.tf_bases.wdm import (   # noqa: F401
+    WDMGrid,
+    default_grid,
+    meyer_window,
+    meyer_kernel,
+    _nu,
+)
+from fewtrax.utils.tf_bases.base import direct_tf_mode  # noqa: F401
 
 
 # ---------------------------------------------------------------------------
@@ -271,18 +192,21 @@ def compute_freq_track_batch(
     x_in = float(np.sign(a * x0)) if a != 0.0 else 1.0
 
     valid = np.isfinite(t_traj) & np.isfinite(p_traj) & np.isfinite(e_traj)
-    p_v = jnp.array(p_traj[valid], dtype=jnp.float64)
-    e_v = jnp.array(e_traj[valid], dtype=jnp.float64)
+
+    # Use jnp.where so the shape is always (N_traj,) regardless of how many valid
+    # points there are — boolean indexing produces data-dependent shapes that
+    # cannot be traced by jax.jit or jax.vmap.
+    valid_j = jnp.asarray(valid)
+    p_ref   = float(p_traj[valid][0]) if valid.any() else 10.0
+    p_safe  = jnp.where(valid_j, jnp.asarray(p_traj, jnp.float64), p_ref)
+    e_safe  = jnp.where(valid_j, jnp.asarray(e_traj, jnp.float64), 0.0)
 
     def _freq_one(p, e):
         Om_phi, Om_theta, Om_r = _gff(a_abs, p, e, x_in)
         return (m * Om_phi + k * Om_theta + n * Om_r) / (2.0 * jnp.pi * M_total_s)
 
-    f_valid = np.array(jax.vmap(_freq_one)(p_v, e_v))
-
-    f_mkn = np.full(len(t_traj), np.nan)
-    f_mkn[valid] = f_valid
-    return f_mkn
+    f_all = jax.vmap(_freq_one)(p_safe, e_safe)
+    return np.where(valid, np.array(f_all), np.nan)
 
 
 # ---------------------------------------------------------------------------
@@ -544,203 +468,3 @@ def build_tf_tracks(
     return TFTrackSet(tracks=tracks, grid=grid)
 
 
-# ---------------------------------------------------------------------------
-# Meyer WDM kernel  (JAX, JIT-compilable)
-# ---------------------------------------------------------------------------
-
-def _nu(x: jnp.ndarray) -> jnp.ndarray:
-    """Smooth transition ν: [0,1]→[0,1], ν(0)=0, ν(1)=1 (C∞, all derivatives zero at endpoints).
-
-    Uses the polynomial ν(x) = x⁴(35 − 84x + 70x² − 20x³) which is the
-    unique degree-7 solution to ν(0)=0, ν(1)=1, ν'(0)=ν'(1)=ν''(0)=ν''(1)=0.
-    This ensures the Meyer window has a smooth, flat transition between the
-    passband and the stop band with no Gibbs-like artefacts.
-    """
-    return x ** 4 * (35.0 - x * (84.0 - x * (70.0 - 20.0 * x)))
-
-
-def meyer_window(xi: jnp.ndarray) -> jnp.ndarray:
-    r"""Real Meyer low-pass window amplitude in normalised frequency ξ = Δ/ΔF.
-
-    Piecewise definition:
-
-    .. math::
-
-        K(\xi) = \begin{cases}
-            1 & |\xi| \leq \tfrac{1}{2} \\
-            \cos\!\left(\tfrac{\pi}{2}\,\nu(2|\xi|-1)\right) & \tfrac{1}{2} < |\xi| \leq 1 \\
-            0 & |\xi| > 1
-        \end{cases}
-
-    where :math:`\nu` is the smooth transition function :func:`_nu`.
-
-    The window has compact frequency support (exactly zero beyond one bin width),
-    is smooth (C∞), and satisfies the Parseval condition for the WDM orthonormal
-    basis.
-
-    Parameters
-    ----------
-    xi : jnp.ndarray
-        Normalised frequency offset(s) Δ/ΔF.  Can be any shape.
-
-    Returns
-    -------
-    K : jnp.ndarray, same shape as *xi*, float32
-        Window amplitude in [0, 1].
-    """
-    xi_abs = jnp.abs(xi)
-    # Transition argument: t ∈ [0,1] for ξ ∈ [0.5, 1]
-    t = jnp.clip(2.0 * xi_abs - 1.0, 0.0, 1.0)
-    K = jnp.where(
-        xi_abs <= 0.5,
-        jnp.ones_like(xi_abs),
-        jnp.where(
-            xi_abs <= 1.0,
-            jnp.cos(0.5 * jnp.pi * _nu(t)),
-            jnp.zeros_like(xi_abs),
-        ),
-    )
-    return K.astype(jnp.float32)
-
-
-def meyer_kernel(
-    delta_over_dF: jnp.ndarray,
-    chi: Optional[jnp.ndarray] = None,
-) -> jnp.ndarray:
-    r"""Complex WDM pixel kernel for a (possibly chirped) narrowband signal.
-
-    In the **locally-monochromatic limit** (``chi=None`` or ``chi=0``), a
-    signal at instantaneous frequency :math:`f_n` contributes to WDM pixel
-    :math:`(n,q)` with amplitude
-
-    .. math::
-
-        w_{nq} \approx A(t_n)\,e^{-i\Phi(t_n)}\cdot K\!\left(\frac{q\Delta F - f_n}{\Delta F}\right)
-
-    where :math:`K` is :func:`meyer_window`.
-
-    With a **chirp correction** (:math:`\chi = \dot f\,\Delta T^2 \neq 0`),
-    the Taylor expansion of the phase beyond linear order introduces a
-    frequency-dependent complex phase shift.  To leading order in :math:`\chi`
-    this is
-
-    .. math::
-
-        K(\xi,\chi) \approx K_0(\xi)\cdot e^{-i\pi\chi\xi^2}
-
-    which is exact at :math:`\chi=0` and captures the dominant
-    chirp-induced pixel smearing for :math:`|\chi| \ll 1`.  The correction
-    is negligible (< 1 % amplitude error) when :math:`\pi|\chi| < 0.1`,
-    i.e. when :math:`\pi|\dot f|\Delta T^2 < 0.1`.
-
-    Parameters
-    ----------
-    delta_over_dF : jnp.ndarray
-        Normalised frequency offset :math:`(q\Delta F - f_n)/\Delta F`.
-        Can be any shape.
-    chi : jnp.ndarray or None
-        Dimensionless chirp parameter :math:`\dot f\,\Delta T^2`.  Must be
-        broadcastable with *delta_over_dF*.  If ``None``, the
-        locally-monochromatic kernel (real) is returned.
-
-    Returns
-    -------
-    K : jnp.ndarray, complex64, same shape as *delta_over_dF*
-        Complex pixel kernel.  The real part corresponds to :math:`h_+`
-        and the imaginary part to :math:`-h_\times`.
-    """
-    K0 = meyer_window(delta_over_dF)   # real, [0, 1]
-    if chi is None:
-        return K0.astype(jnp.complex64)
-    # Leading-order Fresnel (chirp) correction
-    phase_corr = jnp.exp(-1j * jnp.pi * jnp.asarray(chi) * delta_over_dF ** 2)
-    return (K0 * phase_corr).astype(jnp.complex64)
-
-
-# ---------------------------------------------------------------------------
-# Direct per-mode WDM deposition  (JAX, JIT-compilable)
-# ---------------------------------------------------------------------------
-
-def direct_wdm_mode(
-    A_n: jnp.ndarray,
-    Phi_n: jnp.ndarray,
-    f_n: jnp.ndarray,
-    fdot_n: jnp.ndarray,
-    grid: WDMGrid,
-    hw: int = 2,
-    chirp_correction: bool = True,
-) -> tuple[jnp.ndarray, jnp.ndarray]:
-    r"""Deposit one harmonic mode onto the WDM grid without a time series.
-
-    For each WDM time pixel :math:`n` and the :math:`2h_w+1` adjacent
-    frequency bins :math:`q_0 \pm h_w`, computes the complex pixel coefficient
-
-    .. math::
-
-        w_{nq} = A(t_n)\,e^{-i\Phi(t_n)}\cdot
-                 K\!\!\left(\frac{q\Delta F - f_n}{\Delta F},\;
-                            \dot f_n\,\Delta T^2\right)
-
-    and returns the bin indices and values for a subsequent scatter-add into
-    the :math:`N_f\times N_t` WDM grid.
-
-    The function is pure JAX and can be JIT-compiled or differentiated.
-    All inputs must be JAX arrays or scalars.
-
-    Parameters
-    ----------
-    A_n : jnp.ndarray, shape (Nt,), complex
-        Complex Teukolsky amplitude at each WDM time-bin centre, including
-        the spin-weighted spherical harmonic :math:`Y_{\ell m}` prefactor.
-    Phi_n : jnp.ndarray, shape (Nt,)
-        Accumulated mode phase :math:`m\Phi_\phi + k\Phi_\theta + n\Phi_r`
-        at each WDM time-bin centre [rad].
-    f_n : jnp.ndarray, shape (Nt,)
-        Instantaneous GW frequency :math:`f_{mkn}(t_n)` [Hz].
-    fdot_n : jnp.ndarray, shape (Nt,)
-        Frequency derivative :math:`\dot f_{mkn}(t_n)` [Hz s⁻¹].
-    grid : WDMGrid
-        WDM grid descriptor.
-    hw : int
-        Half-width in frequency bins.  Contributions are stored for bins
-        :math:`q_0 - h_w, \ldots, q_0 + h_w`.  ``hw=2`` is sufficient
-        for the Meyer window (zero outside 1 bin width) and provides a
-        buffer for the chirp correction.
-    chirp_correction : bool
-        If True, apply the leading-order Fresnel chirp correction
-        :math:`e^{-i\pi\chi\xi^2}`.  Disable to recover the pure
-        locally-monochromatic kernel.
-
-    Returns
-    -------
-    q_idx : jnp.ndarray, shape (Nt, 2*hw+1), int32
-        Frequency bin indices (clipped to ``[0, Nf-1]``).
-    w : jnp.ndarray, shape (Nt, 2*hw+1), complex64
-        Complex WDM coefficients at each (time pixel, frequency neighbour).
-    """
-    Nt = grid.Nt
-    dF = grid.delta_F
-    dT = grid.delta_T
-
-    # Central frequency bin for each time pixel
-    q0 = jnp.round(f_n / dF).astype(jnp.int32)             # (Nt,)
-    dq = jnp.arange(-hw, hw + 1, dtype=jnp.int32)           # (2hw+1,)
-
-    # Neighbouring bin indices, clipped to valid range
-    q = q0[:, None] + dq[None, :]                            # (Nt, 2hw+1)
-    q_clipped = jnp.clip(q, 0, grid.Nf - 1)
-
-    # Normalised frequency offset  ξ = (q·ΔF − f_n) / ΔF
-    xi = (q_clipped.astype(jnp.float32) * dF - f_n[:, None]) / dF  # (Nt, 2hw+1)
-
-    # Chirp parameter  χ = fdot · ΔT²
-    chi = (fdot_n * dT ** 2)[:, None] * jnp.ones((1, 2 * hw + 1))  # (Nt, 2hw+1)
-
-    # Kernel amplitude
-    K = meyer_kernel(xi, chi if chirp_correction else None)   # (Nt, 2hw+1), complex64
-
-    # Phasor  A(t_n) · exp(−i Φ(t_n))
-    phasor = (A_n * jnp.exp(-1j * Phi_n))[:, None]           # (Nt, 1), complex
-
-    w = (phasor * K).astype(jnp.complex64)                   # (Nt, 2hw+1)
-    return q_clipped, w
