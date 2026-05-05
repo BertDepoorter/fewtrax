@@ -47,7 +47,7 @@ ALPHA_AMP: float = 1.0 / 3.0
 BETA_AMP: float = 3.0
 
 # Region B constants
-DPC_REGIONB: float = DELTAPMAX - 0.001
+DPC_REGIONB: float = DELTAPMAX
 PMAX_REGIONB: float = 200.0
 DELTAPMIN_REGIONB: float = 9.0
 EMAX_REGIONB: float = 0.9

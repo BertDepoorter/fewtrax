@@ -13,9 +13,13 @@ from fewtrax.utils.geodesic import (
 from fewtrax.utils.harmonics import spin_weighted_spherical_harmonic
 from fewtrax.utils.jacobian import ELdot_to_pedot_jax, pedot_to_ELdot_jax
 from fewtrax.utils.transforms import to_frequency_domain, to_time_domain
+from fewtrax.utils.tf_bases import (
+    TFGrid, WDMGrid, default_grid, SFTGrid, default_sft_grid,
+    direct_tf_mode, meyer_window, meyer_kernel, sft_kernel, sft_kernel_exact,
+)
 from fewtrax.utils.tf_tracks import (
-    WDMGrid, TFTrack, TFTrackSet,
-    default_grid, analytical_tf_track, sparse_wdm_track, build_tf_tracks,
+    TFTrack, TFTrackSet,
+    analytical_tf_track, sparse_wdm_track, build_tf_tracks,
 )
 from fewtrax.utils.coordinates import (
     kerrecceq_forward_map_A,
@@ -37,12 +41,11 @@ __all__ = [
     "kerrecceq_forward_map",
     "to_frequency_domain",
     "to_time_domain",
-    "WDMGrid",
-    "TFTrack",
-    "TFTrackSet",
-    "default_grid",
-    "analytical_tf_track",
-    "sparse_wdm_track",
-    "build_tf_tracks",
+    "TFGrid", "WDMGrid", "default_grid",
+    "SFTGrid", "default_sft_grid",
+    "direct_tf_mode", "meyer_window", "meyer_kernel",
+    "sft_kernel", "sft_kernel_exact",
+    "TFTrack", "TFTrackSet",
+    "analytical_tf_track", "sparse_wdm_track", "build_tf_tracks",
     "TricubicSplineE3",
 ]

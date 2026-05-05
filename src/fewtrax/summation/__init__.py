@@ -5,5 +5,15 @@ from fewtrax.summation.modes import (
     interpolated_mode_sum,
     ModeSum,
 )
+from fewtrax.summation.tf_sum import (
+    direct_tf_sum,
+    scatter_tf,
+)
 
-__all__ = ["direct_mode_sum", "interpolated_mode_sum", "ModeSum"]
+__all__ = [
+    "direct_mode_sum",
+    "interpolated_mode_sum",
+    "ModeSum",
+    "direct_tf_sum",
+    "scatter_tf",
+]

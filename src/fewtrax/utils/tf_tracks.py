@@ -37,100 +37,22 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Optional, Sequence
 import numpy as np
+import jax.numpy as jnp
 
 from fewtrax.utils.constants import MTSUN_SI
 from fewtrax.utils.geodesic import get_fundamental_frequencies
 
-
 # ---------------------------------------------------------------------------
-# WDM grid descriptor
+# Re-exports from tf_bases (single authoritative definitions)
 # ---------------------------------------------------------------------------
-
-@dataclass(frozen=True)
-class WDMGrid:
-    """Parameters of a WDM time-frequency grid.
-
-    Parameters
-    ----------
-    Nf : int
-        Number of frequency bins.
-    Nt : int
-        Number of time bins.
-    T : float
-        Total duration [s].
-
-    Notes
-    -----
-    Total samples in the underlying time series: N = Nf * Nt.
-    Time bin width:       delta_T = T / Nt         [s]
-    Frequency bin width:  delta_F = 1 / (2 delta_T) [Hz]
-    Nyquist frequency:    f_nyq   = Nf * delta_F    [Hz]
-    """
-
-    Nf: int
-    Nt: int
-    T: float  # observation duration [s]
-
-    @property
-    def delta_T(self) -> float:
-        """WDM time bin width [s]."""
-        return self.T / self.Nt
-
-    @property
-    def delta_F(self) -> float:
-        """WDM frequency bin width [Hz]."""
-        return 1.0 / (2.0 * self.delta_T)
-
-    @property
-    def f_nyq(self) -> float:
-        """Nyquist frequency of the underlying time series [Hz]."""
-        return self.Nf * self.delta_F
-
-    @property
-    def t_bins(self) -> np.ndarray:
-        """WDM time bin centres [s]."""
-        return np.arange(self.Nt, dtype=np.float64) * self.delta_T
-
-    @property
-    def f_bins(self) -> np.ndarray:
-        """WDM frequency bin centres [Hz]."""
-        return np.arange(self.Nf, dtype=np.float64) * self.delta_F
-
-    def freq_to_bin(self, f: np.ndarray) -> np.ndarray:
-        """Convert frequencies [Hz] to nearest integer bin indices."""
-        return np.round(f / self.delta_F).astype(int)
-
-    def __repr__(self) -> str:
-        return (
-            f"WDMGrid(Nf={self.Nf}, Nt={self.Nt}, "
-            f"T={self.T:.3e}s, "
-            f"dT={self.delta_T:.1f}s, "
-            f"dF={self.delta_F*1e6:.2f}μHz, "
-            f"f_nyq={self.f_nyq*1e3:.2f}mHz)"
-        )
-
-
-def default_grid(T: float, f_max: float = 5e-3, Nt: int = 4096) -> WDMGrid:
-    """Construct a WDM grid covering [0, f_max] Hz over duration T.
-
-    Parameters
-    ----------
-    T : float
-        Observation duration [s].
-    f_max : float
-        Desired maximum frequency coverage [Hz].  The Nyquist frequency
-        will be at least f_max; Nf is rounded up to the next power of 2.
-    Nt : int
-        Number of WDM time bins (power of 2 recommended).
-
-    Returns
-    -------
-    WDMGrid
-    """
-    delta_T = T / Nt
-    delta_F = 1.0 / (2.0 * delta_T)
-    Nf = int(2 ** np.ceil(np.log2(f_max / delta_F)))
-    return WDMGrid(Nf=Nf, Nt=Nt, T=T)
+from fewtrax.utils.tf_bases.wdm import (   # noqa: F401
+    WDMGrid,
+    default_grid,
+    meyer_window,
+    meyer_kernel,
+    _nu,
+)
+from fewtrax.utils.tf_bases.base import direct_tf_mode  # noqa: F401
 
 
 # ---------------------------------------------------------------------------
@@ -270,18 +192,21 @@ def compute_freq_track_batch(
     x_in = float(np.sign(a * x0)) if a != 0.0 else 1.0
 
     valid = np.isfinite(t_traj) & np.isfinite(p_traj) & np.isfinite(e_traj)
-    p_v = jnp.array(p_traj[valid], dtype=jnp.float64)
-    e_v = jnp.array(e_traj[valid], dtype=jnp.float64)
+
+    # Use jnp.where so the shape is always (N_traj,) regardless of how many valid
+    # points there are — boolean indexing produces data-dependent shapes that
+    # cannot be traced by jax.jit or jax.vmap.
+    valid_j = jnp.asarray(valid)
+    p_ref   = float(p_traj[valid][0]) if valid.any() else 10.0
+    p_safe  = jnp.where(valid_j, jnp.asarray(p_traj, jnp.float64), p_ref)
+    e_safe  = jnp.where(valid_j, jnp.asarray(e_traj, jnp.float64), 0.0)
 
     def _freq_one(p, e):
         Om_phi, Om_theta, Om_r = _gff(a_abs, p, e, x_in)
         return (m * Om_phi + k * Om_theta + n * Om_r) / (2.0 * jnp.pi * M_total_s)
 
-    f_valid = np.array(jax.vmap(_freq_one)(p_v, e_v))
-
-    f_mkn = np.full(len(t_traj), np.nan)
-    f_mkn[valid] = f_valid
-    return f_mkn
+    f_all = jax.vmap(_freq_one)(p_safe, e_safe)
+    return np.where(valid, np.array(f_all), np.nan)
 
 
 # ---------------------------------------------------------------------------
@@ -541,3 +466,5 @@ def build_tf_tracks(
         for mode in mode_list
     ]
     return TFTrackSet(tracks=tracks, grid=grid)
+
+
