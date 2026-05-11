@@ -37,10 +37,36 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Optional, Sequence
 import numpy as np
+import jax
 import jax.numpy as jnp
 
 from fewtrax.utils.constants import MTSUN_SI
 from fewtrax.utils.geodesic import get_fundamental_frequencies
+
+
+# ---------------------------------------------------------------------------
+# Module-level JIT function for batched frequency computation (B5 fix)
+# ---------------------------------------------------------------------------
+# m, k, n are passed as jnp.int32 scalars (not Python ints captured in a
+# closure).  JAX traces over their values abstractly, so the function is
+# compiled ONCE regardless of which mode (m,k,n) is requested.
+
+@jax.jit
+def _jit_freq_batch(
+    p_safe: jnp.ndarray,
+    e_safe: jnp.ndarray,
+    m: jnp.ndarray,
+    k: jnp.ndarray,
+    n: jnp.ndarray,
+    a_abs: jnp.ndarray,
+    x_in: jnp.ndarray,
+    M_total_s: jnp.ndarray,
+) -> jnp.ndarray:
+    """Vmapped fundamental-frequency computation; compiled once for all modes."""
+    def _one(p, e):
+        Om_phi, Om_theta, Om_r = get_fundamental_frequencies(a_abs, p, e, x_in)
+        return (m * Om_phi + k * Om_theta + n * Om_r) / (2.0 * jnp.pi * M_total_s)
+    return jax.vmap(_one)(p_safe, e_safe)
 
 # ---------------------------------------------------------------------------
 # Re-exports from tf_bases (single authoritative definitions)
@@ -182,11 +208,10 @@ def compute_freq_track_batch(
     Much faster for long trajectories.  Falls back to the loop-based
     version if JAX is unavailable or if the trajectory contains NaNs at
     unpredictable locations.
-    """
-    import jax
-    import jax.numpy as jnp
-    from fewtrax.utils.geodesic import get_fundamental_frequencies as _gff
 
+    Uses the module-level :func:`_jit_freq_batch` which is compiled once
+    for all (m, k, n) combinations — avoiding a per-mode JIT recompile.
+    """
     M_total_s = (M + mu) * MTSUN_SI
     a_abs = abs(a)
     x_in = float(np.sign(a * x0)) if a != 0.0 else 1.0
@@ -201,11 +226,15 @@ def compute_freq_track_batch(
     p_safe  = jnp.where(valid_j, jnp.asarray(p_traj, jnp.float64), p_ref)
     e_safe  = jnp.where(valid_j, jnp.asarray(e_traj, jnp.float64), 0.0)
 
-    def _freq_one(p, e):
-        Om_phi, Om_theta, Om_r = _gff(a_abs, p, e, x_in)
-        return (m * Om_phi + k * Om_theta + n * Om_r) / (2.0 * jnp.pi * M_total_s)
-
-    f_all = jax.vmap(_freq_one)(p_safe, e_safe)
+    f_all = _jit_freq_batch(
+        p_safe, e_safe,
+        jnp.asarray(m, dtype=jnp.int32),
+        jnp.asarray(k, dtype=jnp.int32),
+        jnp.asarray(n, dtype=jnp.int32),
+        jnp.asarray(a_abs,     dtype=jnp.float64),
+        jnp.asarray(x_in,      dtype=jnp.float64),
+        jnp.asarray(M_total_s, dtype=jnp.float64),
+    )
     return np.where(valid, np.array(f_all), np.nan)
 
 
