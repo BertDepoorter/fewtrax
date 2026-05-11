@@ -362,15 +362,27 @@ def bench_autodiff(
     print(f"{mean_s*1e3:.2f} ± {std_s*1e3:.2f} ms")
 
     # --- 4. jax.hessian ---
+    # NOTE: jax.hessian defaults to jacfwd(jacrev(...)), and the outer jacfwd
+    # is incompatible with diffrax's custom_vjp. Use jacrev(jacrev(...)) instead.
     if run_hessian:
         print(f"    jax.hessian (5×5) …", end=" ", flush=True)
-        hess_fn = jax.jit(jax.hessian(loss_fn, argnums=(0, 1, 2, 3, 4)))
-        mean_s, std_s = repeat_timer(
-            lambda: block_jax(hess_fn(M0, mu0, a0, p00, e00)),
-            n_warmup=n_warmup, n_repeat=n_repeat,
+        hess_fn = jax.jit(
+            jax.jacrev(jax.jacrev(loss_fn, argnums=(0, 1, 2, 3, 4)),
+                       argnums=(0, 1, 2, 3, 4))
         )
-        results["hessian"] = (mean_s, std_s)
-        print(f"{mean_s*1e3:.2f} ± {std_s*1e3:.2f} ms")
+        try:
+            mean_s, std_s = repeat_timer(
+                lambda: block_jax(hess_fn(M0, mu0, a0, p00, e00)),
+                n_warmup=n_warmup, n_repeat=n_repeat,
+            )
+            results["hessian"] = (mean_s, std_s)
+            print(f"{mean_s*1e3:.2f} ± {std_s*1e3:.2f} ms")
+        except TypeError as exc:
+            if "custom_vjp" in str(exc) or "forward-mode" in str(exc):
+                results["hessian"] = None
+                print("skipped (solver uses custom_vjp; use DirectAdjoint to enable jacfwd)")
+            else:
+                raise
 
     return results
 
