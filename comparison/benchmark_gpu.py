@@ -51,7 +51,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from utils import find_data_dir, block_jax, print_header, print_table, repeat_timer, get_cpu_memory_mb
 
 from fewtrax.utils.constants import MTSUN_SI
-from fewtrax.utils.geodesic import get_separatrix_fast, get_fundamental_frequencies_fast
+from fewtrax.utils.geodesic import (get_separatrix_fast, get_fundamental_frequencies_fast,
+                                    get_fundamental_frequencies_platform)
 
 
 # ---------------------------------------------------------------------------
@@ -75,6 +76,19 @@ def describe_devices() -> None:
             print(f"  GPU free memory (nvidia-smi): {free} MiB")
     except Exception:
         pass
+
+
+def _gpu_free_mib() -> float:
+    """Return free GPU VRAM in MiB via nvidia-smi, or 0 on failure."""
+    try:
+        import subprocess
+        out = subprocess.check_output(
+            ["nvidia-smi", "--query-gpu=memory.free", "--format=csv,noheader,nounits"],
+            text=True,
+        )
+        return float(out.strip().splitlines()[0])
+    except Exception:
+        return 0.0
 
 
 def get_peak_mem_mib() -> float:
@@ -120,7 +134,7 @@ def build_param_grid(N: int, seed: int = 42, T_yr: float = 0.5) -> dict:
 # This function is fully differentiable w.r.t. θ = (M, μ, a, p₀, e₀) via
 # jax.jacfwd / jax.grad, since:
 #   (1) diffrax propagates derivatives through the ODE automatically,
-#   (2) get_fundamental_frequencies_fast is pure JAX arithmetic.
+#   (2) get_fundamental_frequencies_platform dispatches to GL-64 on GPU / AGM on CPU.
 
 def make_freq_track(traj, m_mode: int, k_mode: int, n_mode: int,
                     T: float, dense_steps: int):
@@ -144,7 +158,7 @@ def make_freq_track(traj, m_mode: int, k_mode: int, n_mode: int,
 
         def _f_at_pe(pe):
             p_, e_ = pe
-            Om_phi, Om_theta, Om_r = get_fundamental_frequencies_fast(
+            Om_phi, Om_theta, Om_r = get_fundamental_frequencies_platform(
                 a_abs, p_, e_, jnp.float64(1.0)
             )
             return jnp.abs(m * Om_phi + k * Om_theta + n * Om_r) / (2.0 * jnp.pi * M_s)
@@ -427,7 +441,7 @@ def bench_mode_identification(traj, theta_ref, f_obs_ref, T, dense_steps, nw, nr
 
     # Pre-compute (Ω_φ, Ω_θ, Ω_r) at each trajectory point — shared across modes
     def _omegas(pe_):
-        return get_fundamental_frequencies_fast(
+        return get_fundamental_frequencies_platform(
             jnp.float64(a_abs), pe_[0], pe_[1], jnp.float64(1.0)
         )
     omegas = jax.vmap(_omegas)(pe)   # 3-tuple of (dense_steps,)
@@ -591,14 +605,23 @@ def main():
           f"a={theta_ref[2]:.3f}")
 
     if not args.skip_autodiff:
-        autodiff_results = bench_autodiff(loss_fn, loss_fn_fwd, theta_ref, nw, nr)
-
-        print()
-        print("  Overhead summary:")
-        print(f"    Reverse-mode (adjoint):  {autodiff_results['overhead_rev']:.2f}× forward eval")
-        print(f"    Forward-mode (5 JVPs):   {autodiff_results['overhead_fwd']:.2f}× forward eval")
-        print(f"  → For gradient descent, prefer reverse-mode (value_and_grad).")
-        print(f"  → For Fisher matrix computation, prefer forward-mode (jacfwd).")
+        try:
+            autodiff_results = bench_autodiff(loss_fn, loss_fn_fwd, theta_ref, nw, nr)
+            print()
+            print("  Overhead summary:")
+            print(f"    Reverse-mode (adjoint):  {autodiff_results['overhead_rev']:.2f}× forward eval")
+            print(f"    Forward-mode (5 JVPs):   {autodiff_results['overhead_fwd']:.2f}× forward eval")
+            print(f"  → For gradient descent, prefer reverse-mode (value_and_grad).")
+            print(f"  → For Fisher matrix computation, prefer forward-mode (jacfwd).")
+        except Exception as exc:
+            msg = str(exc)
+            if "RESOURCE_EXHAUSTED" in msg or "out of memory" in msg.lower():
+                print(f"\n  [SKIPPED — GPU out of memory during autodiff; "
+                      f"free at start: {_gpu_free_mib():.0f} MiB. "
+                      f"Re-run on a node with more free VRAM or pass --skip-autodiff.]")
+            else:
+                raise
+            autodiff_results = {}
     else:
         print("  [skipped]")
         autodiff_results = {}

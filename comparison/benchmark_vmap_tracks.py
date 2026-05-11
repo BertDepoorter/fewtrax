@@ -12,7 +12,7 @@ A. **vmap throughput (phases=True)** — vmapped ``EMRIInspiral(phases=True)``
    trajectories/second, per-trajectory wall time, and peak GPU memory.
 
 B. **vmap throughput (phases=False)** — vmapped ``EMRIInspiral(phases=False)``,
-   which integrates only the 2D (p, e) sub-system.  ~2.5× cheaper per step
+   which integrates only the 2D (p, e) sub-system.  ~2.5x cheaper per step
    for gradient-only workloads (Fisher matrix, frequency-track loss) that
    do not need the accumulated orbital phases.
 
@@ -24,7 +24,7 @@ D. **Autodiff benchmarks** — timing for ``jax.grad``, ``jax.jacfwd``,
    and ``jax.hessian`` of a scalar trajectory loss w.r.t. all five
    intrinsic parameters (M, mu, a, p0, e0).
 
-E. **Local Fisher matrix** — timing for computing the (5×5) trajectory
+E. **Local Fisher matrix** — timing for computing the (5x5) trajectory
    Fisher matrix via forward-mode Jacobian, plus a vmapped batch of
    Fisher matrices.
 
