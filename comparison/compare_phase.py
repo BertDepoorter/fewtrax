@@ -54,6 +54,22 @@ Options
     --plot-dir      Output directory          (default: ./figures)
     --no-plot       Skip plotting
     --no-diagnostic Skip diagnostic even if dephasing > threshold
+
+Grid comparison (activated when --N > 0)
+-----------------------------------------
+    --N             Number of random parameter samples  (default: 0 = disabled)
+    --seed          RNG seed for sampling               (default: 42)
+    --a-min         Minimum spin for grid               (default: 0.0)
+    --a-max         Maximum spin for grid               (default: 0.9)
+    --p0-min        Minimum p0 for grid [M]             (default: 8.0)
+    --p0-max        Maximum p0 for grid [M]             (default: 15.0)
+    --e0-min        Minimum e0 for grid                 (default: 0.0)
+    --e0-max        Maximum e0 for grid                 (default: 0.7)
+
+    When --N is set, M, mu, x0, T, dt are held fixed at their single-run
+    values and a, p0, e0 are sampled uniformly.  Initial phases are set to
+    zero for all grid samples.  A scatter figure is produced; the single-run
+    trajectory comparison is skipped.
 """
 
 from __future__ import annotations
@@ -627,6 +643,160 @@ def plot_diagnostic(
 
 
 # ---------------------------------------------------------------------------
+# Grid / random-sample comparison
+# ---------------------------------------------------------------------------
+
+def run_grid_comparison(
+    params_base: dict,
+    N: int,
+    flux_data,
+    a_range: tuple = (0.0, 0.9),
+    p0_range: tuple = (8.0, 15.0),
+    e0_range: tuple = (0.0, 0.7),
+    dense_steps: int = 500,
+    seed: int = 42,
+) -> list:
+    """Run phase comparison over N randomly sampled (a, p0, e0) parameter sets.
+
+    M, mu, x0, T, dt are taken from *params_base* and held fixed.
+    Initial phases are set to zero for all samples.
+
+    Returns a list of dicts with keys:
+      a, p0, e0, dPp_final, dPt_final, dPr_final, T_actual_yr, status
+    """
+    rng = np.random.default_rng(seed)
+    a_vals  = rng.uniform(a_range[0],  a_range[1],  N)
+    p0_vals = rng.uniform(p0_range[0], p0_range[1], N)
+    e0_vals = rng.uniform(e0_range[0], e0_range[1], N)
+
+    results = []
+    for i in range(N):
+        a  = float(a_vals[i])
+        p0 = float(p0_vals[i])
+        e0 = float(e0_vals[i])
+        params = {
+            **params_base,
+            "a": a, "p0": p0, "e0": e0,
+            "Phi_phi0": 0.0, "Phi_theta0": 0.0, "Phi_r0": 0.0,
+        }
+        print(f"  [{i+1:>{len(str(N))}}/{N}]  a={a:.3f}  p0={p0:.3f}  e0={e0:.3f} … ",
+              end="", flush=True)
+
+        rec: dict = {"a": a, "p0": p0, "e0": e0,
+                     "dPp_final": np.nan, "dPt_final": np.nan, "dPr_final": np.nan,
+                     "T_actual_yr": np.nan}
+
+        try:
+            t_few, p_few, e_few, Pp_few, Pt_few, Pr_few = run_few_trajectory(params)
+            valid_few = np.where(np.isfinite(t_few) & np.isfinite(p_few))[0]
+            if len(valid_few) < 2:
+                print("skip (FEW < 2 valid points)")
+                rec["status"] = "few_failed"
+                results.append(rec)
+                continue
+
+            t_ft, p_ft, e_ft, Pp_ft, Pt_ft, Pr_ft = run_fewtrax_trajectory(
+                params, flux_data, dense_steps=dense_steps
+            )
+
+            cmp = compare_at_few_times(
+                t_few, p_few, e_few, Pp_few, Pt_few, Pr_few,
+                t_ft,  Pp_ft, Pt_ft, Pr_ft,  p_ft,  e_ft,
+            )
+
+            if len(cmp["t"]) == 0:
+                print("skip (no overlap)")
+                rec["status"] = "no_overlap"
+                results.append(rec)
+                continue
+
+            T_actual_yr = float(cmp["t"][-1]) / 3.156e7
+            rec.update(
+                dPp_final=float(cmp["dPp"][-1]),
+                dPt_final=float(cmp["dPt"][-1]),
+                dPr_final=float(cmp["dPr"][-1]),
+                T_actual_yr=T_actual_yr,
+                status="ok",
+            )
+            print(f"ΔΦ_φ = {rec['dPp_final']:+.3e} rad  "
+                  f"(T_eff = {T_actual_yr:.3f} yr)")
+
+        except Exception as exc:
+            print(f"ERROR: {exc}")
+            rec["status"] = f"error: {exc}"
+
+        results.append(rec)
+
+    n_ok  = sum(1 for r in results if r.get("status") == "ok")
+    n_fail = N - n_ok
+    print(f"\n  Grid done: {n_ok}/{N} succeeded, {n_fail} failed/skipped.")
+    return results
+
+
+def plot_grid_scatter(
+    results: list,
+    params_base: dict,
+    out_dir: str = ".",
+) -> None:
+    """3-panel scatter: pairwise projections of (p0, e0, a) coloured by |ΔΦ_φ|."""
+    try:
+        import matplotlib.pyplot as plt
+        import matplotlib.colors as mcolors
+    except ImportError:
+        print("  matplotlib not available; skipping grid scatter.")
+        return
+
+    ok = [r for r in results if r.get("status") == "ok" and np.isfinite(r["dPp_final"])]
+    if not ok:
+        print("  No valid grid results to plot.")
+        return
+
+    a_arr   = np.array([r["a"]         for r in ok])
+    p0_arr  = np.array([r["p0"]        for r in ok])
+    e0_arr  = np.array([r["e0"]        for r in ok])
+    dPp_arr = np.array([r["dPp_final"] for r in ok])
+    T_arr   = np.array([r["T_actual_yr"] for r in ok])
+
+    c_vals  = np.log10(np.abs(dPp_arr) + 1e-10)
+    vmin, vmax = float(np.nanpercentile(c_vals, 5)), float(np.nanpercentile(c_vals, 95))
+    norm = mcolors.Normalize(vmin=vmin, vmax=vmax)
+
+    T_yr = params_base["T"]
+    fig, axes = plt.subplots(1, 3, figsize=(18, 5))
+    fig.suptitle(
+        rf"Phase dephasing grid ($N={len(ok)}$ samples):  "
+        rf"$M={params_base['M']:.0e}$, $\mu={params_base['mu']}$, "
+        rf"$T\leq{T_yr}$ yr  —  colour = $\log_{{10}}|\Delta\Phi_\phi^{{\rm final}}|$ [rad]",
+        fontsize=11,
+    )
+
+    panel_cfg = [
+        (p0_arr, e0_arr, r"$p_0\;[M]$", r"$e_0$"),
+        (a_arr,  e0_arr, r"$a$",          r"$e_0$"),
+        (a_arr,  p0_arr, r"$a$",          r"$p_0\;[M]$"),
+    ]
+
+    sc = None
+    for ax, (xv, yv, xl, yl) in zip(axes, panel_cfg):
+        sc = ax.scatter(xv, yv, c=c_vals, cmap="viridis", norm=norm,
+                        s=40, alpha=0.85, edgecolors="none")
+        ax.set_xlabel(xl, fontsize=11)
+        ax.set_ylabel(yl, fontsize=11)
+        ax.grid(True, alpha=0.25)
+
+    cbar = fig.colorbar(sc, ax=axes.tolist(), shrink=0.75, pad=0.02)
+    cbar.set_label(r"$\log_{10}|\Delta\Phi_\phi^{\rm final}|$ [rad]", fontsize=10)
+
+    plt.tight_layout()
+    T_label  = f"{T_yr:.1f}yr".replace(".", "p")
+    out_path = Path(out_dir) / f"grid_dephasing_{T_label}_N{len(ok)}.png"
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    plt.savefig(out_path, dpi=150)
+    plt.close(fig)
+    print(f"  Saved {out_path}")
+
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
@@ -654,6 +824,21 @@ def main() -> None:
     parser.add_argument("--no-diagnostic", action="store_true",      dest="no_diagnostic")
     parser.add_argument("--force-diagnostic", action="store_true",   dest="force_diagnostic",
                         help="Run frequency diagnostic even if dephasing < threshold")
+
+    grid_grp = parser.add_argument_group(
+        "grid comparison",
+        "Activated when --N > 0; single-run comparison is skipped.",
+    )
+    grid_grp.add_argument("--N",     type=int,   default=0,    metavar="SAMPLES",
+                          help="Random parameter samples (0 = disabled)")
+    grid_grp.add_argument("--seed",  type=int,   default=42,   metavar="SEED")
+    grid_grp.add_argument("--a-min", type=float, default=0.0,  dest="a_min")
+    grid_grp.add_argument("--a-max", type=float, default=0.9,  dest="a_max")
+    grid_grp.add_argument("--p0-min",type=float, default=8.0,  dest="p0_min")
+    grid_grp.add_argument("--p0-max",type=float, default=15.0, dest="p0_max")
+    grid_grp.add_argument("--e0-min",type=float, default=0.0,  dest="e0_min")
+    grid_grp.add_argument("--e0-max",type=float, default=0.7,  dest="e0_max")
+
     args = parser.parse_args()
 
     params = dict(
@@ -678,6 +863,34 @@ def main() -> None:
     from fewtrax.data import load_flux_data
     flux_data = load_flux_data(data_dir)
     print("  Done.")
+
+    # --- Grid comparison mode ---
+    if args.N > 0:
+        print(f"\nGrid comparison mode: N={args.N} random samples  (seed={args.seed})")
+        print(f"  a  ∈ [{args.a_min},  {args.a_max}]")
+        print(f"  p0 ∈ [{args.p0_min}, {args.p0_max}]  [M]")
+        print(f"  e0 ∈ [{args.e0_min}, {args.e0_max}]")
+        print(f"  Fixed: M={params['M']:.1e}, mu={params['mu']}, "
+              f"x0={params['x0']}, T={params['T']} yr")
+        print()
+
+        grid_results = run_grid_comparison(
+            params_base=params,
+            N=args.N,
+            flux_data=flux_data,
+            a_range=(args.a_min,  args.a_max),
+            p0_range=(args.p0_min, args.p0_max),
+            e0_range=(args.e0_min, args.e0_max),
+            dense_steps=args.dense_steps,
+            seed=args.seed,
+        )
+
+        if not args.no_plot:
+            print("\nSaving grid scatter figure …")
+            plot_grid_scatter(grid_results, params, out_dir=args.plot_dir)
+
+        print("\nDone (grid mode).")
+        return
 
     # --- Run FEW ---
     print("\nRunning FEW trajectory …")
