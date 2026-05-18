@@ -102,6 +102,12 @@
 <span class="sd">interpolation module.  The coefficients themselves are stored in the</span>
 <span class="sd">:class:`AmplitudeData` container as raw numpy arrays.</span>
 
+<span class="sd">:class:`AmplitudeDataJAX` is the fully JAX-native alternative, built by</span>
+<span class="sd">:func:`load_amplitude_data_jax`.  It holds a pair of</span>
+<span class="sd">:class:`~fewtrax.utils.splines.BatchedTricubicSplineE3` instances (real and</span>
+<span class="sd">imaginary parts) per region, and is compatible with :func:`jax.jit`,</span>
+<span class="sd">:func:`jax.grad`, and :func:`jax.vmap`.</span>
+
 <span class="sd">Data directory discovery (in order):</span>
 <span class="sd">1. Explicit ``data_dir`` argument.</span>
 <span class="sd">2. ``FEW_DATA_DIR`` environment variable.</span>
@@ -115,10 +121,11 @@
 <span class="kn">import</span><span class="w"> </span><span class="nn">logging</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">dataclasses</span><span class="w"> </span><span class="kn">import</span> <span class="n">dataclass</span>  <span class="c1"># kept for AmplitudeData only</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Optional</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Optional</span>
 
 <span class="kn">import</span><span class="w"> </span><span class="nn">h5py</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">jax.numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">jnp</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">equinox</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">eqx</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">fewtrax.utils.splines</span><span class="w"> </span><span class="kn">import</span> <span class="n">CubicSpline3D</span><span class="p">,</span> <span class="n">TricubicSplineE3</span>
@@ -245,16 +252,31 @@
     <span class="k">return</span> <span class="n">one_me2</span> <span class="o">*</span> <span class="p">(</span><span class="mf">304.0</span> <span class="o">+</span> <span class="mf">121.0</span> <span class="o">*</span> <span class="n">e</span> <span class="o">*</span> <span class="n">e</span><span class="p">)</span> <span class="o">/</span> <span class="p">(</span><span class="mf">15.0</span> <span class="o">*</span> <span class="n">p</span> <span class="o">*</span> <span class="n">p</span> <span class="o">*</span> <span class="n">denom</span><span class="p">)</span>
 
 
+<span class="n">_PN_DENOM_EPS</span> <span class="o">=</span> <span class="mf">1e-14</span>  <span class="c1"># floor for the pex-ratio PN denominator near plunge</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_safe_pn_denom</span><span class="p">(</span><span class="n">denom</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Prevent 1/denom NaN under jax.grad near p → p_sep.</span>
+
+<span class="sd">    The pex-ratio spline cancels this pole physically, but JAX evaluates</span>
+<span class="sd">    both branches of the division, so raw denom→0 produces unbounded</span>
+<span class="sd">    gradients.  A floor of _PN_DENOM_EPS keeps the gradient finite while</span>
+<span class="sd">    leaving the spline-multiplied result unchanged away from the pole.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">jnp</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">jnp</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">denom</span><span class="p">)</span> <span class="o">&gt;</span> <span class="n">_PN_DENOM_EPS</span><span class="p">,</span> <span class="n">denom</span><span class="p">,</span>
+                     <span class="n">_PN_DENOM_EPS</span> <span class="o">*</span> <span class="n">jnp</span><span class="o">.</span><span class="n">sign</span><span class="p">(</span><span class="n">denom</span> <span class="o">+</span> <span class="n">_PN_DENOM_EPS</span><span class="p">))</span>
+
+
 <span class="k">def</span><span class="w"> </span><span class="nf">_pdot_PN_jax</span><span class="p">(</span><span class="n">p</span><span class="p">,</span> <span class="n">e</span><span class="p">,</span> <span class="n">r_isco</span><span class="p">,</span> <span class="n">p_sep</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Leading-order ṗ PN factor (JAX, ODE runtime).&quot;&quot;&quot;</span>
-    <span class="n">denom</span> <span class="o">=</span> <span class="p">(</span><span class="n">p</span> <span class="o">-</span> <span class="n">r_isco</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span> <span class="o">-</span> <span class="p">(</span><span class="n">p_sep</span> <span class="o">-</span> <span class="n">r_isco</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span>
+    <span class="n">denom</span> <span class="o">=</span> <span class="n">_safe_pn_denom</span><span class="p">((</span><span class="n">p</span> <span class="o">-</span> <span class="n">r_isco</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span> <span class="o">-</span> <span class="p">(</span><span class="n">p_sep</span> <span class="o">-</span> <span class="n">r_isco</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span><span class="p">)</span>
     <span class="n">one_me2</span> <span class="o">=</span> <span class="p">(</span><span class="mf">1.0</span> <span class="o">-</span> <span class="n">e</span> <span class="o">**</span> <span class="mi">2</span><span class="p">)</span> <span class="o">**</span> <span class="mf">1.5</span>
     <span class="k">return</span> <span class="mf">8.0</span> <span class="o">*</span> <span class="n">one_me2</span> <span class="o">*</span> <span class="p">(</span><span class="mf">8.0</span> <span class="o">+</span> <span class="mf">7.0</span> <span class="o">*</span> <span class="n">e</span> <span class="o">**</span> <span class="mi">2</span><span class="p">)</span> <span class="o">/</span> <span class="p">(</span><span class="mf">5.0</span> <span class="o">*</span> <span class="n">p</span> <span class="o">*</span> <span class="n">denom</span><span class="p">)</span>
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_edot_PN_jax</span><span class="p">(</span><span class="n">p</span><span class="p">,</span> <span class="n">e</span><span class="p">,</span> <span class="n">r_isco</span><span class="p">,</span> <span class="n">p_sep</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Leading-order ė PN factor (JAX, ODE runtime).&quot;&quot;&quot;</span>
-    <span class="n">denom</span> <span class="o">=</span> <span class="p">(</span><span class="n">p</span> <span class="o">-</span> <span class="n">r_isco</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span> <span class="o">-</span> <span class="p">(</span><span class="n">p_sep</span> <span class="o">-</span> <span class="n">r_isco</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span>
+    <span class="n">denom</span> <span class="o">=</span> <span class="n">_safe_pn_denom</span><span class="p">((</span><span class="n">p</span> <span class="o">-</span> <span class="n">r_isco</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span> <span class="o">-</span> <span class="p">(</span><span class="n">p_sep</span> <span class="o">-</span> <span class="n">r_isco</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span><span class="p">)</span>
     <span class="n">one_me2</span> <span class="o">=</span> <span class="p">(</span><span class="mf">1.0</span> <span class="o">-</span> <span class="n">e</span> <span class="o">**</span> <span class="mi">2</span><span class="p">)</span> <span class="o">**</span> <span class="mf">1.5</span>
     <span class="k">return</span> <span class="n">one_me2</span> <span class="o">*</span> <span class="p">(</span><span class="mf">304.0</span> <span class="o">+</span> <span class="mf">121.0</span> <span class="o">*</span> <span class="n">e</span> <span class="o">**</span> <span class="mi">2</span><span class="p">)</span> <span class="o">/</span> <span class="p">(</span><span class="mf">15.0</span> <span class="o">*</span> <span class="n">p</span> <span class="o">*</span> <span class="n">p</span> <span class="o">*</span> <span class="n">denom</span><span class="p">)</span>
 
@@ -334,6 +356,76 @@
     <span class="n">m_arr</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span>
     <span class="n">k_arr</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span>
     <span class="n">n_arr</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">n_modes</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+        <span class="k">return</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">l_arr</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="AmplitudeDataJAX">
+<a class="viewcode-back" href="../../../api.html#fewtrax.data.loader.AmplitudeDataJAX">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">AmplitudeDataJAX</span><span class="p">(</span><span class="n">eqx</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
+<span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;Fully JAX-native amplitude container using bisplev B-spline coefficients.</span>
+
+<span class="sd">    Stores the same compact B-spline coefficient arrays that FEW writes to the</span>
+<span class="sd">    HDF5 file — reshaped from flat ``(N1 * N2,)`` to ``(N1, N2)`` per mode per</span>
+<span class="sd">    z-slice — together with the corresponding knot vectors.  No grid evaluation</span>
+<span class="sd">    or multispline re-fitting is performed at load time.</span>
+
+<span class="sd">    Amplitude evaluation proceeds as:</span>
+
+<span class="sd">    1. Linear interpolation in ``z`` between the two surrounding z-slices</span>
+<span class="sd">       (matching FEW&#39;s :class:`~fewtrax.amplitude.interp.AmplitudeInterpolator`</span>
+<span class="sd">       exactly).</span>
+<span class="sd">    2. 2-D B-spline evaluation at each z-slice via</span>
+<span class="sd">       :func:`~fewtrax.utils.bspline_jax.eval_bisplev_batched` (de Boor&#39;s</span>
+<span class="sd">       algorithm, all modes in one ``einsum``).</span>
+
+<span class="sd">    Attributes</span>
+<span class="sd">    ----------</span>
+<span class="sd">    coeffs_A : (Nz, n_modes, 2, N1_A, N2_A) float64</span>
+<span class="sd">        B-spline coefficients for Region A.  Axis 2 indexes ``[real, imag]``.</span>
+<span class="sd">        ``N1_A = len(t1_A) - 4``,  ``N2_A = len(t2_A) - 4``.</span>
+<span class="sd">    t1_A : (len_t1_A,) float64</span>
+<span class="sd">        Knot vector for the first bisplev argument (w / eccentricity).</span>
+<span class="sd">    t2_A : (len_t2_A,) float64</span>
+<span class="sd">        Knot vector for the second bisplev argument (u / semi-latus rectum).</span>
+<span class="sd">    z_knots_A : (Nz,) float64</span>
+<span class="sd">        Spin coordinate z-values for the Nz stored slices.</span>
+<span class="sd">    coeffs_B : (Nz, n_modes, 2, N1_B, N2_B) float64 or None</span>
+<span class="sd">        Same for Region B.</span>
+<span class="sd">    t1_B, t2_B, z_knots_B : analogous to Region A, or None when absent.</span>
+<span class="sd">    l_arr, m_arr, k_arr, n_arr : (n_modes,) int</span>
+<span class="sd">        Harmonic mode indices.</span>
+<span class="sd">    _has_B : bool (static)</span>
+<span class="sd">        Whether Region B data are present.</span>
+
+<span class="sd">    Memory</span>
+<span class="sd">    ------</span>
+<span class="sd">    For the default amplitude file (``n_modes = 6993``, ``Nz = 33``,</span>
+<span class="sd">    ``N1_A = N2_A = 33``, ``N1_B = N2_B = 17``)::</span>
+
+<span class="sd">        Region A: 33 × 6993 × 2 × 33 × 33 × 8 B  ≈ 4.0 GB</span>
+<span class="sd">        Region B: 33 × 6993 × 2 × 17 × 17 × 8 B  ≈ 1.1 GB</span>
+<span class="sd">        Total:                                     ≈ 5.1 GB</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">coeffs_A</span><span class="p">:</span> <span class="n">jnp</span><span class="o">.</span><span class="n">ndarray</span>   <span class="c1"># (Nz, n_modes, 2, N1_A, N2_A) float64</span>
+    <span class="n">t1_A</span><span class="p">:</span> <span class="n">jnp</span><span class="o">.</span><span class="n">ndarray</span>       <span class="c1"># (len_t1_A,) — w-knots (first bisplev arg)</span>
+    <span class="n">t2_A</span><span class="p">:</span> <span class="n">jnp</span><span class="o">.</span><span class="n">ndarray</span>       <span class="c1"># (len_t2_A,) — u-knots (second bisplev arg)</span>
+    <span class="n">z_knots_A</span><span class="p">:</span> <span class="n">jnp</span><span class="o">.</span><span class="n">ndarray</span>  <span class="c1"># (Nz,) spin-coordinate z values</span>
+
+    <span class="n">coeffs_B</span><span class="p">:</span> <span class="n">Any</span>           <span class="c1"># (Nz, n_modes, 2, N1_B, N2_B) float64 | None</span>
+    <span class="n">t1_B</span><span class="p">:</span> <span class="n">Any</span>               <span class="c1"># knot vector | None</span>
+    <span class="n">t2_B</span><span class="p">:</span> <span class="n">Any</span>               <span class="c1"># knot vector | None</span>
+    <span class="n">z_knots_B</span><span class="p">:</span> <span class="n">Any</span>          <span class="c1"># (Nz,) | None</span>
+
+    <span class="n">l_arr</span><span class="p">:</span> <span class="n">Any</span>              <span class="c1"># (n_modes,) int</span>
+    <span class="n">m_arr</span><span class="p">:</span> <span class="n">Any</span>
+    <span class="n">k_arr</span><span class="p">:</span> <span class="n">Any</span>
+    <span class="n">n_arr</span><span class="p">:</span> <span class="n">Any</span>
+    <span class="n">_has_B</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="n">eqx</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">static</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 
     <span class="nd">@property</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">n_modes</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
@@ -679,6 +771,167 @@
     <span class="n">k_arr</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="n">t</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">modes</span><span class="p">],</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">int32</span><span class="p">)</span>
     <span class="n">n_arr</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="n">t</span><span class="p">[</span><span class="mi">3</span><span class="p">]</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">modes</span><span class="p">],</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">int32</span><span class="p">)</span>
     <span class="k">return</span> <span class="n">l_arr</span><span class="p">,</span> <span class="n">m_arr</span><span class="p">,</span> <span class="n">k_arr</span><span class="p">,</span> <span class="n">n_arr</span>
+
+
+<span class="c1"># ---------------------------------------------------------------------------</span>
+<span class="c1"># JAX-native amplitude loader</span>
+<span class="c1"># ---------------------------------------------------------------------------</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_reshape_coeffs</span><span class="p">(</span>
+    <span class="n">coeffs_raw</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+    <span class="n">n1</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+    <span class="n">n2</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Reshape flat bisplev coefficients to a 2-D per-mode layout.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    coeffs_raw : (Nz, n_modes, 2, N1*N2) float64</span>
+<span class="sd">        Raw coefficient array from HDF5.  The flat last axis encodes</span>
+<span class="sd">        ``c[i * N2 + j]`` = coefficient for ``B_i(w) * B_j(u)`` in C order.</span>
+<span class="sd">    n1 : int</span>
+<span class="sd">        Number of B-spline basis functions for the first axis (w).</span>
+<span class="sd">        ``n1 = len(w_knots) - 4``.</span>
+<span class="sd">    n2 : int</span>
+<span class="sd">        Number of B-spline basis functions for the second axis (u).</span>
+<span class="sd">        ``n2 = len(u_knots) - 4``.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    np.ndarray, shape (Nz, n_modes, 2, N1, N2) float64</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">Nz</span><span class="p">,</span> <span class="n">n_modes</span><span class="p">,</span> <span class="n">n_ri</span><span class="p">,</span> <span class="n">n_flat</span> <span class="o">=</span> <span class="n">coeffs_raw</span><span class="o">.</span><span class="n">shape</span>
+    <span class="k">assert</span> <span class="n">n_flat</span> <span class="o">==</span> <span class="n">n1</span> <span class="o">*</span> <span class="n">n2</span><span class="p">,</span> <span class="p">(</span>
+        <span class="sa">f</span><span class="s2">&quot;Flat coefficient length </span><span class="si">{</span><span class="n">n_flat</span><span class="si">}</span><span class="s2"> != </span><span class="si">{</span><span class="n">n1</span><span class="si">}</span><span class="s2"> × </span><span class="si">{</span><span class="n">n2</span><span class="si">}</span><span class="s2"> = </span><span class="si">{</span><span class="n">n1</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">n2</span><span class="si">}</span><span class="s2">&quot;</span>
+    <span class="p">)</span>
+    <span class="k">return</span> <span class="n">coeffs_raw</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">Nz</span><span class="p">,</span> <span class="n">n_modes</span><span class="p">,</span> <span class="n">n_ri</span><span class="p">,</span> <span class="n">n1</span><span class="p">,</span> <span class="n">n2</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="load_amplitude_data_jax">
+<a class="viewcode-back" href="../../../api.html#fewtrax.data.loader.load_amplitude_data_jax">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">load_amplitude_data_jax</span><span class="p">(</span>
+    <span class="n">data_dir</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span> <span class="o">|</span> <span class="n">Path</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">filename</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;ZNAmps_l10_m10_n55_DS2Outer.h5&quot;</span><span class="p">,</span>
+    <span class="n">mode_indices</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;AmplitudeDataJAX&quot;</span><span class="p">:</span>
+<span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;Load amplitude data as a fully JAX-native :class:`AmplitudeDataJAX`.</span>
+
+<span class="sd">    Reads the amplitude HDF5 file and converts the stored bisplev B-spline</span>
+<span class="sd">    coefficients directly to JAX arrays — no grid evaluation, no multispline</span>
+<span class="sd">    re-fitting.  The result is an :class:`equinox.Module` compatible with</span>
+<span class="sd">    :func:`jax.jit`, :func:`jax.grad`, and :func:`jax.vmap`.</span>
+
+<span class="sd">    The loaded data uses exactly the same B-spline representation that FEW</span>
+<span class="sd">    evaluates via ``scipy.bisplev``, so amplitude values are bit-identical</span>
+<span class="sd">    to FEW&#39;s output (to float64 precision).</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    data_dir : str or Path, optional</span>
+<span class="sd">        FEW data directory.</span>
+<span class="sd">    filename : str</span>
+<span class="sd">        Amplitude HDF5 file.</span>
+<span class="sd">    mode_indices : (n_sel,) int array, optional</span>
+<span class="sd">        Indices of modes to include.  Reduces memory proportionally.</span>
+<span class="sd">        Default: all modes.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    AmplitudeDataJAX</span>
+
+<span class="sd">    Notes</span>
+<span class="sd">    -----</span>
+<span class="sd">    Load time is dominated by HDF5 I/O and the single ``jnp.asarray`` call</span>
+<span class="sd">    that uploads the coefficient arrays to the JAX device.  No per-mode</span>
+<span class="sd">    fitting loops are needed.  Typical load time on CPU: 5–15 s.</span>
+
+<span class="sd">    Memory — see :class:`AmplitudeDataJAX` for the full breakdown.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">data_path</span> <span class="o">=</span> <span class="n">find_few_data_dir</span><span class="p">(</span><span class="n">data_dir</span><span class="p">)</span>
+    <span class="n">fp</span> <span class="o">=</span> <span class="n">data_path</span> <span class="o">/</span> <span class="n">filename</span>
+    <span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Loading JAX amplitude data from </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">fp</span><span class="p">)</span>
+
+    <span class="k">with</span> <span class="n">h5py</span><span class="o">.</span><span class="n">File</span><span class="p">(</span><span class="n">fp</span><span class="p">,</span> <span class="s2">&quot;r&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">fh</span><span class="p">:</span>
+        <span class="n">lmax</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">fh</span><span class="o">.</span><span class="n">attrs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;lmax&quot;</span><span class="p">,</span> <span class="mi">10</span><span class="p">))</span>
+        <span class="n">mmax</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">fh</span><span class="o">.</span><span class="n">attrs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;mmax&quot;</span><span class="p">,</span> <span class="mi">10</span><span class="p">))</span>
+        <span class="n">nmax</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">fh</span><span class="o">.</span><span class="n">attrs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;nmax&quot;</span><span class="p">,</span> <span class="mi">55</span><span class="p">))</span>
+
+        <span class="n">rA</span> <span class="o">=</span> <span class="n">fh</span><span class="p">[</span><span class="s2">&quot;regionA&quot;</span><span class="p">]</span>
+        <span class="n">raw_A</span> <span class="o">=</span> <span class="n">rA</span><span class="p">[</span><span class="s2">&quot;CoeffsRegionA&quot;</span><span class="p">][()]</span>   <span class="c1"># (Nz, n_modes, 2, N1*N2)</span>
+        <span class="n">t1_A_np</span> <span class="o">=</span> <span class="n">rA</span><span class="p">[</span><span class="s2">&quot;w_knots&quot;</span><span class="p">][()]</span>       <span class="c1"># first bisplev arg = w</span>
+        <span class="n">t2_A_np</span> <span class="o">=</span> <span class="n">rA</span><span class="p">[</span><span class="s2">&quot;u_knots&quot;</span><span class="p">][()]</span>       <span class="c1"># second bisplev arg = u</span>
+        <span class="n">z_knots_A_np</span> <span class="o">=</span> <span class="n">rA</span><span class="p">[</span><span class="s2">&quot;z_knots&quot;</span><span class="p">][()]</span>
+
+        <span class="n">has_B</span> <span class="o">=</span> <span class="s2">&quot;regionB&quot;</span> <span class="ow">in</span> <span class="n">fh</span>
+        <span class="k">if</span> <span class="n">has_B</span><span class="p">:</span>
+            <span class="n">rB</span> <span class="o">=</span> <span class="n">fh</span><span class="p">[</span><span class="s2">&quot;regionB&quot;</span><span class="p">]</span>
+            <span class="n">raw_B</span> <span class="o">=</span> <span class="n">rB</span><span class="p">[</span><span class="s2">&quot;CoeffsRegionB&quot;</span><span class="p">][()]</span>
+            <span class="n">t1_B_np</span> <span class="o">=</span> <span class="n">rB</span><span class="p">[</span><span class="s2">&quot;w_knots&quot;</span><span class="p">][()]</span>
+            <span class="n">t2_B_np</span> <span class="o">=</span> <span class="n">rB</span><span class="p">[</span><span class="s2">&quot;u_knots&quot;</span><span class="p">][()]</span>
+            <span class="n">z_knots_B_np</span> <span class="o">=</span> <span class="n">rB</span><span class="p">[</span><span class="s2">&quot;z_knots&quot;</span><span class="p">][()]</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">raw_B</span> <span class="o">=</span> <span class="n">t1_B_np</span> <span class="o">=</span> <span class="n">t2_B_np</span> <span class="o">=</span> <span class="n">z_knots_B_np</span> <span class="o">=</span> <span class="kc">None</span>
+
+    <span class="n">l_arr</span><span class="p">,</span> <span class="n">m_arr</span><span class="p">,</span> <span class="n">k_arr</span><span class="p">,</span> <span class="n">n_arr</span> <span class="o">=</span> <span class="n">_generate_mode_arrays</span><span class="p">(</span><span class="n">lmax</span><span class="p">,</span> <span class="n">mmax</span><span class="p">,</span> <span class="n">nmax</span><span class="p">)</span>
+    <span class="n">n_modes_file</span> <span class="o">=</span> <span class="n">raw_A</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+    <span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">l_arr</span><span class="p">)</span> <span class="o">==</span> <span class="n">n_modes_file</span><span class="p">,</span> <span class="p">(</span>
+        <span class="sa">f</span><span class="s2">&quot;Mode count mismatch: generated </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">l_arr</span><span class="p">)</span><span class="si">}</span><span class="s2">, file has </span><span class="si">{</span><span class="n">n_modes_file</span><span class="si">}</span><span class="s2">&quot;</span>
+    <span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">mode_indices</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">mode_indices</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">mode_indices</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">int32</span><span class="p">)</span>
+        <span class="n">raw_A</span> <span class="o">=</span> <span class="n">raw_A</span><span class="p">[:,</span> <span class="n">mode_indices</span><span class="p">,</span> <span class="p">:,</span> <span class="p">:]</span>
+        <span class="n">l_arr</span> <span class="o">=</span> <span class="n">l_arr</span><span class="p">[</span><span class="n">mode_indices</span><span class="p">]</span>
+        <span class="n">m_arr</span> <span class="o">=</span> <span class="n">m_arr</span><span class="p">[</span><span class="n">mode_indices</span><span class="p">]</span>
+        <span class="n">k_arr</span> <span class="o">=</span> <span class="n">k_arr</span><span class="p">[</span><span class="n">mode_indices</span><span class="p">]</span>
+        <span class="n">n_arr</span> <span class="o">=</span> <span class="n">n_arr</span><span class="p">[</span><span class="n">mode_indices</span><span class="p">]</span>
+        <span class="k">if</span> <span class="n">has_B</span><span class="p">:</span>
+            <span class="n">raw_B</span> <span class="o">=</span> <span class="n">raw_B</span><span class="p">[:,</span> <span class="n">mode_indices</span><span class="p">,</span> <span class="p">:,</span> <span class="p">:]</span>
+
+    <span class="n">n_modes</span> <span class="o">=</span> <span class="n">raw_A</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+    <span class="n">n1_A</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">t1_A_np</span><span class="p">)</span> <span class="o">-</span> <span class="mi">4</span>   <span class="c1"># N1 = len(w_knots) - 4</span>
+    <span class="n">n2_A</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">t2_A_np</span><span class="p">)</span> <span class="o">-</span> <span class="mi">4</span>   <span class="c1"># N2 = len(u_knots) - 4</span>
+    <span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+        <span class="s2">&quot;JAX amplitude data: </span><span class="si">%d</span><span class="s2"> modes, </span><span class="si">%d</span><span class="s2"> z-slices, &quot;</span>
+        <span class="s2">&quot;Region A coeff grid (</span><span class="si">%d</span><span class="s2"> × </span><span class="si">%d</span><span class="s2">), Region B = </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
+        <span class="n">n_modes</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">z_knots_A_np</span><span class="p">),</span> <span class="n">n1_A</span><span class="p">,</span> <span class="n">n2_A</span><span class="p">,</span> <span class="n">has_B</span><span class="p">,</span>
+    <span class="p">)</span>
+
+    <span class="c1"># Reshape (Nz, n_modes, 2, N1*N2) → (Nz, n_modes, 2, N1, N2)</span>
+    <span class="n">coeffs_A_np</span> <span class="o">=</span> <span class="n">_reshape_coeffs</span><span class="p">(</span><span class="n">raw_A</span><span class="p">,</span> <span class="n">n1_A</span><span class="p">,</span> <span class="n">n2_A</span><span class="p">)</span>
+    <span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;  Region A coefficients: </span><span class="si">%s</span><span class="s2">, </span><span class="si">%.2f</span><span class="s2"> GB&quot;</span><span class="p">,</span>
+             <span class="n">coeffs_A_np</span><span class="o">.</span><span class="n">shape</span><span class="p">,</span>
+             <span class="n">coeffs_A_np</span><span class="o">.</span><span class="n">nbytes</span> <span class="o">/</span> <span class="mf">1e9</span><span class="p">)</span>
+
+    <span class="n">coeffs_B_out</span> <span class="o">=</span> <span class="n">t1_B_out</span> <span class="o">=</span> <span class="n">t2_B_out</span> <span class="o">=</span> <span class="n">z_knots_B_out</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="k">if</span> <span class="n">has_B</span><span class="p">:</span>
+        <span class="n">n1_B</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">t1_B_np</span><span class="p">)</span> <span class="o">-</span> <span class="mi">4</span>
+        <span class="n">n2_B</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">t2_B_np</span><span class="p">)</span> <span class="o">-</span> <span class="mi">4</span>
+        <span class="n">coeffs_B_out</span> <span class="o">=</span> <span class="n">_reshape_coeffs</span><span class="p">(</span><span class="n">raw_B</span><span class="p">,</span> <span class="n">n1_B</span><span class="p">,</span> <span class="n">n2_B</span><span class="p">)</span>
+        <span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;  Region B coefficients: </span><span class="si">%s</span><span class="s2">, </span><span class="si">%.2f</span><span class="s2"> GB&quot;</span><span class="p">,</span>
+                 <span class="n">coeffs_B_out</span><span class="o">.</span><span class="n">shape</span><span class="p">,</span>
+                 <span class="n">coeffs_B_out</span><span class="o">.</span><span class="n">nbytes</span> <span class="o">/</span> <span class="mf">1e9</span><span class="p">)</span>
+        <span class="n">t1_B_out</span> <span class="o">=</span> <span class="n">t1_B_np</span>
+        <span class="n">t2_B_out</span> <span class="o">=</span> <span class="n">t2_B_np</span>
+        <span class="n">z_knots_B_out</span> <span class="o">=</span> <span class="n">z_knots_B_np</span>
+
+    <span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;  Uploading to JAX device …&quot;</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">AmplitudeDataJAX</span><span class="p">(</span>
+        <span class="n">coeffs_A</span><span class="o">=</span><span class="n">jnp</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">coeffs_A_np</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">jnp</span><span class="o">.</span><span class="n">float64</span><span class="p">),</span>
+        <span class="n">t1_A</span><span class="o">=</span><span class="n">jnp</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">t1_A_np</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">jnp</span><span class="o">.</span><span class="n">float64</span><span class="p">),</span>
+        <span class="n">t2_A</span><span class="o">=</span><span class="n">jnp</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">t2_A_np</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">jnp</span><span class="o">.</span><span class="n">float64</span><span class="p">),</span>
+        <span class="n">z_knots_A</span><span class="o">=</span><span class="n">jnp</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">z_knots_A_np</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">jnp</span><span class="o">.</span><span class="n">float64</span><span class="p">),</span>
+        <span class="n">coeffs_B</span><span class="o">=</span><span class="n">jnp</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">coeffs_B_out</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">jnp</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span> <span class="k">if</span> <span class="n">has_B</span> <span class="k">else</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">t1_B</span><span class="o">=</span><span class="n">jnp</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">t1_B_out</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">jnp</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span> <span class="k">if</span> <span class="n">has_B</span> <span class="k">else</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">t2_B</span><span class="o">=</span><span class="n">jnp</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">t2_B_out</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">jnp</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span> <span class="k">if</span> <span class="n">has_B</span> <span class="k">else</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">z_knots_B</span><span class="o">=</span><span class="n">jnp</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">z_knots_B_out</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">jnp</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span> <span class="k">if</span> <span class="n">has_B</span> <span class="k">else</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">l_arr</span><span class="o">=</span><span class="n">jnp</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">l_arr</span><span class="p">),</span>
+        <span class="n">m_arr</span><span class="o">=</span><span class="n">jnp</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">m_arr</span><span class="p">),</span>
+        <span class="n">k_arr</span><span class="o">=</span><span class="n">jnp</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">k_arr</span><span class="p">),</span>
+        <span class="n">n_arr</span><span class="o">=</span><span class="n">jnp</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">n_arr</span><span class="p">),</span>
+        <span class="n">_has_B</span><span class="o">=</span><span class="n">has_B</span><span class="p">,</span>
+    <span class="p">)</span></div>
+
 </pre></div>
 
            </div>

@@ -256,7 +256,7 @@
    "id": "cell-13",
    "metadata": {},
    "outputs": [],
-   "source": "from fewtrax.data import load_flux_data\n\ninsp = EMRIInspiral(flux_data)\n\n# Three-parameter function: (p0, e0, a) → (Φφ_end, Φr_end)\n# With a as a call-time argument, we can now differentiate w.r.t. all three.\n\ndef phases_at_end(params):\n    \"\"\"Returns (Φφ_end, Φr_end) as a function of [p0, e0, a].\"\"\"\n    p0, e0, a = params[0], params[1], params[2]\n    _, p_arr, _, Phi_phi, _, Phi_r = insp(p0=p0, e0=e0, a=a, M=1e6, mu=10.0, T=0.5, dense_steps=150)\n    valid_mask = ~jnp.isnan(p_arr)\n    n_valid = jnp.sum(valid_mask)\n    return jnp.array([Phi_phi[n_valid - 1], Phi_r[n_valid - 1]])\n\njac_fn = eqx.filter_jit(jax.jacobian(phases_at_end))\n\nparams_ref = jnp.array([12.0, 0.4, 0.7])\n\nprint(\"Computing Jacobian ∂(Φφ, Φr)/∂(p0, e0, a)…\")\nt0 = time.perf_counter()\nJ = jac_fn(params_ref)\n_ = J.block_until_ready()\nelapsed = time.perf_counter() - t0\nprint(f\"Computed in {elapsed:.2f} s\")\n\nprint(f\"\\nJacobian matrix:\")\nprint(f\"  ∂Φφ/∂p0 = {float(J[0,0]):.4e} rad/M\")\nprint(f\"  ∂Φφ/∂e0 = {float(J[0,1]):.4e} rad\")\nprint(f\"  ∂Φφ/∂a  = {float(J[0,2]):.4e} rad\")\nprint(f\"  ∂Φr/∂p0 = {float(J[1,0]):.4e} rad/M\")\nprint(f\"  ∂Φr/∂e0 = {float(J[1,1]):.4e} rad\")\nprint(f\"  ∂Φr/∂a  = {float(J[1,2]):.4e} rad\")\n\n# Fisher matrix (phase-only approximation, p0/e0/a subspace)\n# Γ ≈ J^T J (for unit noise)\nFisher = J.T @ J\nCov = jnp.linalg.inv(Fisher)\n\nprint(f\"\\nFisher matrix (phase-only, unit noise):\")\nprint(f\"  Γ(p0,p0) = {float(Fisher[0,0]):.3e}\")\nprint(f\"  Γ(e0,e0) = {float(Fisher[1,1]):.3e}\")\nprint(f\"  Γ(a,a)   = {float(Fisher[2,2]):.3e}\")\nprint(f\"\\nCramer-Rao lower bounds (1σ, phase-only):\")\nprint(f\"  σ(p0) ≥ {float(jnp.sqrt(Cov[0,0])):.3e} M\")\nprint(f\"  σ(e0) ≥ {float(jnp.sqrt(Cov[1,1])):.3e}\")\nprint(f\"  σ(a)  ≥ {float(jnp.sqrt(Cov[2,2])):.3e}\")"
+   "source": "insp = EMRIInspiral(flux_data)\n\n# Three-parameter function: (p0, e0, a) → (Φφ_end, Φr_end)\n# With a as a call-time argument, we can now differentiate w.r.t. all three.\n\ndef phases_at_end(params):\n    \"\"\"Returns (Φφ_end, Φr_end) as a function of [p0, e0, a].\"\"\"\n    p0, e0, a = params[0], params[1], params[2]\n    _, p_arr, _, Phi_phi, _, Phi_r = insp(p0=p0, e0=e0, a=a, M=1e6, mu=10.0, T=0.5, dense_steps=150)\n    valid_mask = ~jnp.isnan(p_arr)\n    n_valid = jnp.sum(valid_mask)\n    return jnp.array([Phi_phi[n_valid - 1], Phi_r[n_valid - 1]])\n\njac_fn = eqx.filter_jit(jax.jacobian(phases_at_end))\n\nparams_ref = jnp.array([12.0, 0.4, 0.7])\n\nprint(\"Computing Jacobian ∂(Φφ, Φr)/∂(p0, e0, a)…\")\nt0 = time.perf_counter()\nJ = jac_fn(params_ref)\n_ = J.block_until_ready()\nelapsed = time.perf_counter() - t0\nprint(f\"Computed in {elapsed:.2f} s\")\n\nprint(f\"\\nJacobian matrix:\")\nprint(f\"  ∂Φφ/∂p0 = {float(J[0,0]):.4e} rad/M\")\nprint(f\"  ∂Φφ/∂e0 = {float(J[0,1]):.4e} rad\")\nprint(f\"  ∂Φφ/∂a  = {float(J[0,2]):.4e} rad\")\nprint(f\"  ∂Φr/∂p0 = {float(J[1,0]):.4e} rad/M\")\nprint(f\"  ∂Φr/∂e0 = {float(J[1,1]):.4e} rad\")\nprint(f\"  ∂Φr/∂a  = {float(J[1,2]):.4e} rad\")\n\n# Fisher matrix (phase-only approximation, p0/e0/a subspace)\n# Γ ≈ J^T J (for unit noise)\nFisher = J.T @ J\nCov = jnp.linalg.inv(Fisher)\n\nprint(f\"\\nFisher matrix (phase-only, unit noise):\")\nprint(f\"  Γ(p0,p0) = {float(Fisher[0,0]):.3e}\")\nprint(f\"  Γ(e0,e0) = {float(Fisher[1,1]):.3e}\")\nprint(f\"  Γ(a,a)   = {float(Fisher[2,2]):.3e}\")\nprint(f\"\\nCramer-Rao lower bounds (1σ, phase-only):\")\nprint(f\"  σ(p0) ≥ {float(jnp.sqrt(Cov[0,0])):.3e} M\")\nprint(f\"  σ(e0) ≥ {float(jnp.sqrt(Cov[1,1])):.3e}\")\nprint(f\"  σ(a)  ≥ {float(jnp.sqrt(Cov[2,2])):.3e}\")"
   },
   {
    "cell_type": "markdown",
@@ -280,39 +280,7 @@
    "cell_type": "markdown",
    "id": "cell-16",
    "metadata": {},
-   "source": [
-    "## 6.7  Outlook: HMC/NUTS Sampling\n",
-    "\n",
-    "The combination of `jax.grad` through the trajectory and `jax.vmap` for parallel chains makes `fewtrax` directly compatible with gradient-based MCMC samplers.\n",
-    "\n",
-    "### With `blackjax`\n",
-    "\n",
-    "```python\n",
-    "import blackjax\n",
-    "\n",
-    "# Log-posterior: log p(θ | d) ∝ -½ (h(θ) - d | h(θ) - d) / Sn\n",
-    "def log_posterior(params):\n",
-    "    p0, e0 = params[\"p0\"], params[\"e0\"]\n",
-    "    hp, hx = wf(M=1e6, mu=10.0, a=0.7, p0=p0, e0=e0, ...)\n",
-    "    residual = hp - data_hp\n",
-    "    return -0.5 * jnp.sum(residual**2 / noise_psd)\n",
-    "\n",
-    "# NUTS sampler — requires ∇ log p(θ | d) automatically via JAX\n",
-    "nuts = blackjax.nuts(log_posterior, step_size=0.01, inverse_mass_matrix=...)\n",
-    "\n",
-    "# Run N chains in parallel with vmap\n",
-    "vmap_nuts_step = jax.vmap(nuts.step)\n",
-    "```\n",
-    "\n",
-    "### Key performance bottleneck\n",
-    "\n",
-    "Currently, `AmplitudeInterpolator.evaluate` uses `scipy.bisplev` in a Python loop — this breaks the JAX computation graph and prevents:\n",
-    "- Differentiating through the amplitude interpolation\n",
-    "- vmapping over parameters that affect amplitude evaluation\n",
-    "- GPU execution of the full pipeline\n",
-    "\n",
-    "Replacing `bisplev` with JAX-native tricubic B-spline interpolation (using `jnp.interp` + coefficient arrays as static data) would unlock full end-to-end differentiability and GPU parallelism."
-   ]
+   "source": "## 6.7  Outlook: HMC/NUTS Sampling\n\nThe combination of `jax.grad` through the trajectory and `jax.vmap` for parallel chains makes `fewtrax` directly compatible with gradient-based MCMC samplers.\n\n### With `blackjax`\n\n```python\nimport blackjax\n\n# Log-posterior: log p(θ | d) ∝ -½ (h(θ) - d | h(θ) - d) / Sn\ndef log_posterior(params):\n    p0, e0 = params[\"p0\"], params[\"e0\"]\n    hp, hx = wf(M=1e6, mu=10.0, a=0.7, p0=p0, e0=e0, ...)\n    residual = hp - data_hp\n    return -0.5 * jnp.sum(residual**2 / noise_psd)\n\n# NUTS sampler — requires ∇ log p(θ | d) automatically via JAX\nnuts = blackjax.nuts(log_posterior, step_size=0.01, inverse_mass_matrix=...)\n\n# Run N chains in parallel with vmap\nvmap_nuts_step = jax.vmap(nuts.step)\n```\n\n### Amplitude backends\n\n`fewtrax` provides two amplitude interpolation backends:\n\n| Backend | JAX support | Notes |\n|---|---|---|\n| `AmplitudeInterpolator` | ✗ (scipy CPU loop) | Legacy; used for validation |\n| `JAXAmplitudeInterpolator` | ✓ (jit/vmap/grad/GPU) | Default in `KerrEccentricEquatorialWaveform` |\n\n`JAXAmplitudeInterpolator` evaluates all modes in a single fused `einsum` via JAX-native tricubic B-spline evaluation, replacing the per-mode `scipy.bisplev` loop.  Construct it with `load_amplitude_data_jax` and `JAXAmplitudeInterpolator` from `fewtrax.amplitude`."
   },
   {
    "cell_type": "code",
@@ -320,28 +288,7 @@
    "id": "cell-17",
    "metadata": {},
    "outputs": [],
-   "source": [
-    "# Summary of JAX transformation support in fewtrax\n",
-    "print(\"JAX transformation support in fewtrax:\")\n",
-    "print()\n",
-    "print(f\"{'Component':<35} {'jit':>6} {'vmap':>6} {'grad':>6} {'GPU':>6}\")\n",
-    "print(\"-\" * 60)\n",
-    "rows = [\n",
-    "    (\"Geodesic functions\",            \"✓\", \"✓\", \"✓\", \"✓\"),\n",
-    "    (\"Separatrix (bisection)\",         \"✓\", \"✓\", \"✓\", \"✓\"),\n",
-    "    (\"Fundamental frequencies\",        \"✓\", \"✓\", \"✓\", \"✓\"),\n",
-    "    (\"EMRIInspiral (diffrax ODE)\",     \"✓\", \"✓\", \"✓\", \"✓\"),\n",
-    "    (\"AmplitudeInterpolator.evaluate\", \"✗\", \"✗\", \"✗\", \"✗\"),\n",
-    "    (\"get_ylms_for_modes\",             \"✓\", \"✓\", \"✓\", \"✓\"),\n",
-    "    (\"direct_mode_sum\",                \"✓\", \"✓\", \"✓\", \"✓\"),\n",
-    "    (\"interpolated_mode_sum\",          \"✓\", \"✓\", \"~\", \"✓\"),\n",
-    "]\n",
-    "for name, jit, vmap, grad, gpu in rows:\n",
-    "    print(f\"{name:<35} {jit:>6} {vmap:>6} {grad:>6} {gpu:>6}\")\n",
-    "print()\n",
-    "print(\"~ = partial support (gradient through spline interpolation, not amplitude)\")\n",
-    "print(\"✗ = not supported (scipy bisplev CPU call)\")"
-   ]
+   "source": "# Summary of JAX transformation support in fewtrax\nprint(\"JAX transformation support in fewtrax:\")\nprint()\nprint(f\"{'Component':<40} {'jit':>6} {'vmap':>6} {'grad':>6} {'GPU':>6}\")\nprint(\"-\" * 65)\nrows = [\n    (\"Geodesic functions\",              \"✓\", \"✓\", \"✓\", \"✓\"),\n    (\"Separatrix (bisection)\",           \"✓\", \"✓\", \"✓\", \"✓\"),\n    (\"Fundamental frequencies\",          \"✓\", \"✓\", \"✓\", \"✓\"),\n    (\"EMRIInspiral (diffrax ODE)\",       \"✓\", \"✓\", \"✓\", \"✓\"),\n    (\"AmplitudeInterpolator.evaluate\",   \"✗\", \"✗\", \"✗\", \"✗\"),\n    (\"JAXAmplitudeInterpolator\",         \"✓\", \"✓\", \"✓\", \"✓\"),\n    (\"get_ylms_for_modes\",               \"✓\", \"✓\", \"✓\", \"✓\"),\n    (\"direct_mode_sum\",                  \"✓\", \"✓\", \"✓\", \"✓\"),\n    (\"interpolated_mode_sum\",            \"✓\", \"✓\", \"~\", \"✓\"),\n]\nfor name, jit, vmap, grad, gpu in rows:\n    print(f\"{name:<40} {jit:>6} {vmap:>6} {grad:>6} {gpu:>6}\")\nprint()\nprint(\"~ = partial support (gradient through spline interpolation, not amplitude)\")\nprint(\"✗ = not supported (scipy bisplev CPU call)\")\nprint(\"  → JAXAmplitudeInterpolator is the default backend in KerrEccentricEquatorialWaveform\")"
   },
   {
    "cell_type": "markdown",

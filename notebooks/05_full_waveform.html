@@ -234,8 +234,8 @@ Samples: N = 1577908  (4383.08 hours)
 |h×|_max = 4.425e-22
 </pre></div></div>
 </div>
-<div class="nbinput docutils container">
-<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[3]:
+<div class="nbinput nblast docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[ ]:
 </pre></div>
 </div>
 <div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">fewtrax.summation.modes</span><span class="w"> </span><span class="kn">import</span> <span class="n">to_frequency_domain</span>
@@ -266,21 +266,13 @@ Samples: N = 1577908  (4383.08 hours)
 
 <span class="n">f_Hz</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">freqs</span><span class="p">)</span>
 <span class="n">axes</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span><span class="o">.</span><span class="n">loglog</span><span class="p">(</span><span class="n">f_Hz</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">jnp</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">h_tilde</span><span class="p">)),</span> <span class="n">lw</span><span class="o">=</span><span class="mf">0.6</span><span class="p">)</span>
-<span class="n">axes</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span><span class="o">.</span><span class="n">set_xlabel</span><span class="p">(</span><span class="s2">&quot;Frequency [mHz]&quot;</span><span class="p">)</span>
+<span class="n">axes</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span><span class="o">.</span><span class="n">set_xlabel</span><span class="p">(</span><span class="s2">&quot;Frequency [Hz]&quot;</span><span class="p">)</span>
 <span class="n">axes</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span><span class="o">.</span><span class="n">set_ylabel</span><span class="p">(</span><span class="sa">r</span><span class="s2">&quot;$|\tilde</span><span class="si">{h}</span><span class="s2">|$&quot;</span><span class="p">)</span>
 <span class="n">axes</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span><span class="o">.</span><span class="n">set_title</span><span class="p">(</span><span class="s2">&quot;Frequency-domain strain&quot;</span><span class="p">)</span>
-<span class="c1"># axes[2].set_xlim([0, 30])</span>
 
 <span class="n">plt</span><span class="o">.</span><span class="n">tight_layout</span><span class="p">()</span>
 <span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
 </pre></div>
-</div>
-</div>
-<div class="nboutput nblast docutils container">
-<div class="prompt empty docutils container">
-</div>
-<div class="output_area docutils container">
-<img alt="../_images/notebooks_05_full_waveform_4_0.png" src="../_images/notebooks_05_full_waveform_4_0.png" />
 </div>
 </div>
 <div class="nbinput docutils container">
@@ -370,8 +362,8 @@ dtype(&#39;complex128&#39;)
 <h2>5.3 Parameter Variation<a class="headerlink" href="#5.3-Parameter-Variation" title="Link to this heading"></a></h2>
 <section id="Effect-of-Spin-a">
 <h3>Effect of Spin <span class="math notranslate nohighlight">\(a\)</span><a class="headerlink" href="#Effect-of-Spin-a" title="Link to this heading"></a></h3>
-<div class="nbinput docutils container">
-<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[15]:
+<div class="nbinput nblast docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[ ]:
 </pre></div>
 </div>
 <div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">fig</span><span class="p">,</span> <span class="n">axes</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplots</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">12</span><span class="p">,</span> <span class="mi">4</span><span class="p">))</span>
@@ -391,81 +383,19 @@ dtype(&#39;complex128&#39;)
     <span class="n">axes</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">semilogy</span><span class="p">(</span><span class="n">t_d</span><span class="p">[</span><span class="n">ok</span><span class="p">],</span> <span class="n">f_m</span><span class="p">[</span><span class="n">ok</span><span class="p">],</span> <span class="n">label</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;$a=</span><span class="si">{</span><span class="n">a_val</span><span class="si">}</span><span class="s2">$&quot;</span><span class="p">)</span>
 
 <span class="n">axes</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">set_xlim</span><span class="p">([</span><span class="mf">1e-6</span><span class="p">,</span> <span class="mf">1e-1</span><span class="p">])</span>
-<span class="n">axes</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">set_xlabel</span><span class="p">(</span><span class="s2">&quot;Frequency [mHz]&quot;</span><span class="p">)</span>
+<span class="n">axes</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">set_xlabel</span><span class="p">(</span><span class="s2">&quot;Frequency [Hz]&quot;</span><span class="p">)</span>
 <span class="n">axes</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">set_ylabel</span><span class="p">(</span><span class="sa">r</span><span class="s2">&quot;$|\tilde</span><span class="si">{h}</span><span class="s2">|$&quot;</span><span class="p">)</span>
 <span class="n">axes</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">set_title</span><span class="p">(</span><span class="s2">&quot;Frequency domain vs spin&quot;</span><span class="p">)</span>
 <span class="n">axes</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">legend</span><span class="p">(</span><span class="n">fontsize</span><span class="o">=</span><span class="mi">8</span><span class="p">)</span>
 
 <span class="n">axes</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">set_xlabel</span><span class="p">(</span><span class="s2">&quot;Time [days]&quot;</span><span class="p">)</span>
-<span class="n">axes</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">set_ylabel</span><span class="p">(</span><span class="s2">&quot;$f_</span><span class="si">{2201}</span><span class="s2">$ [mHz]&quot;</span><span class="p">)</span>
+<span class="n">axes</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">set_ylabel</span><span class="p">(</span><span class="s2">&quot;$f_</span><span class="si">{2201}</span><span class="s2">$ [Hz]&quot;</span><span class="p">)</span>
 <span class="n">axes</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">set_title</span><span class="p">(</span><span class="s2">&quot;(2,2,0,1) frequency track vs spin&quot;</span><span class="p">)</span>
 <span class="n">axes</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">legend</span><span class="p">(</span><span class="n">fontsize</span><span class="o">=</span><span class="mi">8</span><span class="p">)</span>
 
 <span class="n">plt</span><span class="o">.</span><span class="n">tight_layout</span><span class="p">()</span>
 <span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
 </pre></div>
-</div>
-</div>
-<div class="nboutput docutils container">
-<div class="prompt empty docutils container">
-</div>
-<div class="output_area docutils container">
-<div class="highlight"><pre>
-<span class="ansi-red-fg">---------------------------------------------------------------------------</span>
-<span class="ansi-red-fg">KeyboardInterrupt</span>                         Traceback (most recent call last)
-<span class="ansi-cyan-fg">Cell</span><span class="ansi-cyan-fg"> </span><span class="ansi-green-fg">In[15]</span><span class="ansi-green-fg">, line 4</span>
-<span class="ansi-green-fg">      1</span> fig, axes = plt.subplots(<span class="ansi-green-fg">1</span>, <span class="ansi-green-fg">2</span>, figsize=(<span class="ansi-green-fg">12</span>, <span class="ansi-green-fg">4</span>))
-<span class="ansi-green-fg">      3</span> <span class="ansi-bold" style="color: rgb(0,135,0)">for</span> a_val <span class="ansi-bold" style="color: rgb(175,0,255)">in</span> [<span class="ansi-green-fg">0.0</span>, <span class="ansi-green-fg">0.3</span>, <span class="ansi-green-fg">0.7</span>, <span class="ansi-green-fg">0.95</span>]:
-<span class="ansi-green-fg">----&gt; </span><span class="ansi-green-fg">4</span>     hp_a, hx_a = <span class="ansi-yellow-bg">wf</span><span class="ansi-yellow-bg">(</span><span class="ansi-yellow-bg">*</span><span class="ansi-yellow-bg">*</span><span class="ansi-yellow-bg">{</span><span class="ansi-yellow-bg">*</span><span class="ansi-yellow-bg">*</span><span class="ansi-yellow-bg">params</span><span class="ansi-yellow-bg">,</span><span class="ansi-yellow-bg"> </span><span class="ansi-yellow-fg ansi-yellow-bg">&#34;</span><span class="ansi-yellow-fg ansi-yellow-bg">a</span><span class="ansi-yellow-fg ansi-yellow-bg">&#34;</span><span class="ansi-yellow-bg">:</span><span class="ansi-yellow-bg"> </span><span class="ansi-yellow-bg">a_val</span><span class="ansi-yellow-bg">}</span><span class="ansi-yellow-bg">)</span>
-<span class="ansi-green-fg">      5</span>     freqs_a, ht_a = to_frequency_domain(hp_a + <span class="ansi-green-fg">1</span>j * hx_a, dt=<span class="ansi-green-fg">10.0</span>)
-<span class="ansi-green-fg">      7</span>     axes[<span class="ansi-green-fg">0</span>].loglog(np.asarray(freqs_a), np.asarray(jnp.abs(ht_a)),
-<span class="ansi-green-fg">      8</span>                      lw=<span class="ansi-green-fg">0.7</span>, label=<span class="ansi-yellow-fg">f</span><span class="ansi-yellow-fg">&#34;</span><span class="ansi-yellow-fg">$a=</span><span class="ansi-bold" style="color: rgb(175,95,135)">{</span>a_val<span class="ansi-bold" style="color: rgb(175,95,135)">}</span><span class="ansi-yellow-fg">$</span><span class="ansi-yellow-fg">&#34;</span>)
-
-<span class="ansi-cyan-fg">File </span><span class="ansi-green-fg">~/Documents/PhD/LISA/Projects/JAX-waveform/fewtrax/src/fewtrax/waveform/kerr.py:425</span>, in <span class="ansi-cyan-fg">KerrEccentricEquatorialWaveform.__call__</span><span class="ansi-blue-fg">(self, M, mu, a, p0, e0, x0, dist, qS, phiS, qK, phiK, Phi_phi0, Phi_theta0, Phi_r0, T, dt, mode_selection_threshold, return_sparse, return_complex, **kwargs)</span>
-<span class="ansi-green-fg">    415</span> ylms_pos, ylms_neg = get_ylms_for_modes(
-<span class="ansi-green-fg">    416</span>     l_arr, m_arr, theta_obs, phi_obs
-<span class="ansi-green-fg">    417</span> )
-<span class="ansi-green-fg">    419</span> summer = ModeSum(
-<span class="ansi-green-fg">    420</span>     l_arr, m_arr, k_arr, n_arr,
-<span class="ansi-green-fg">    421</span>     ylms_pos, ylms_neg,
-<span class="ansi-green-fg">    422</span>     dist=dist, M=M, mu=mu,
-<span class="ansi-green-fg">    423</span> )
-<span class="ansi-green-fg">--&gt; </span><span class="ansi-green-fg">425</span> t_out, h = <span class="ansi-yellow-bg">summer</span><span class="ansi-yellow-bg">(</span>
-<span class="ansi-green-fg">    426</span> <span class="ansi-yellow-bg">    </span><span class="ansi-yellow-bg">sparse</span><span class="ansi-yellow-bg">[</span><span class="ansi-yellow-fg ansi-yellow-bg">&#34;</span><span class="ansi-yellow-fg ansi-yellow-bg">t</span><span class="ansi-yellow-fg ansi-yellow-bg">&#34;</span><span class="ansi-yellow-bg">]</span><span class="ansi-yellow-bg">,</span>
-<span class="ansi-green-fg">    427</span> <span class="ansi-yellow-bg">    </span><span class="ansi-yellow-bg">sparse</span><span class="ansi-yellow-bg">[</span><span class="ansi-yellow-fg ansi-yellow-bg">&#34;</span><span class="ansi-yellow-fg ansi-yellow-bg">teuk_modes</span><span class="ansi-yellow-fg ansi-yellow-bg">&#34;</span><span class="ansi-yellow-bg">]</span><span class="ansi-yellow-bg">,</span>
-<span class="ansi-green-fg">    428</span> <span class="ansi-yellow-bg">    </span><span class="ansi-yellow-bg">sparse</span><span class="ansi-yellow-bg">[</span><span class="ansi-yellow-fg ansi-yellow-bg">&#34;</span><span class="ansi-yellow-fg ansi-yellow-bg">Phi_phi</span><span class="ansi-yellow-fg ansi-yellow-bg">&#34;</span><span class="ansi-yellow-bg">]</span><span class="ansi-yellow-bg">,</span>
-<span class="ansi-green-fg">    429</span> <span class="ansi-yellow-bg">    </span><span class="ansi-yellow-bg">sparse</span><span class="ansi-yellow-bg">[</span><span class="ansi-yellow-fg ansi-yellow-bg">&#34;</span><span class="ansi-yellow-fg ansi-yellow-bg">Phi_theta</span><span class="ansi-yellow-fg ansi-yellow-bg">&#34;</span><span class="ansi-yellow-bg">]</span><span class="ansi-yellow-bg">,</span>
-<span class="ansi-green-fg">    430</span> <span class="ansi-yellow-bg">    </span><span class="ansi-yellow-bg">sparse</span><span class="ansi-yellow-bg">[</span><span class="ansi-yellow-fg ansi-yellow-bg">&#34;</span><span class="ansi-yellow-fg ansi-yellow-bg">Phi_r</span><span class="ansi-yellow-fg ansi-yellow-bg">&#34;</span><span class="ansi-yellow-bg">]</span><span class="ansi-yellow-bg">,</span>
-<span class="ansi-green-fg">    431</span> <span class="ansi-yellow-bg">    </span><span class="ansi-yellow-bg">dt</span><span class="ansi-yellow-bg">=</span><span class="ansi-yellow-bg">dt</span><span class="ansi-yellow-bg">,</span>
-<span class="ansi-green-fg">    432</span> <span class="ansi-yellow-bg">)</span>
-<span class="ansi-green-fg">    434</span> <span style="color: rgb(95,135,135)"># Source-frame sign convention (FEW rotates by π after summation)</span>
-<span class="ansi-green-fg">    435</span> h = h * (-<span class="ansi-green-fg">1.0</span>)
-
-<span class="ansi-cyan-fg">File </span><span class="ansi-green-fg">~/Documents/PhD/LISA/Projects/JAX-waveform/fewtrax/src/fewtrax/summation/modes.py:366</span>, in <span class="ansi-cyan-fg">ModeSum.__call__</span><span class="ansi-blue-fg">(self, t_traj, teuk_modes, Phi_phi, Phi_theta, Phi_r, dt, dense)</span>
-<span class="ansi-green-fg">    358</span>     h = direct_mode_sum(
-<span class="ansi-green-fg">    359</span>         jnp.asarray(teuk_modes),
-<span class="ansi-green-fg">    360</span>         <span style="color: rgb(0,135,0)">self</span>.ylms_pos, <span style="color: rgb(0,135,0)">self</span>.ylms_neg,
-<span class="ansi-green-fg">    361</span>         Phi_phi, Phi_theta, Phi_r,
-<span class="ansi-green-fg">    362</span>         <span style="color: rgb(0,135,0)">self</span>.l_arr, <span style="color: rgb(0,135,0)">self</span>.m_arr, <span style="color: rgb(0,135,0)">self</span>.k_arr, <span style="color: rgb(0,135,0)">self</span>.n_arr,
-<span class="ansi-green-fg">    363</span>     )
-<span class="ansi-green-fg">    364</span>     t_out = t_traj
-<span class="ansi-green-fg">--&gt; </span><span class="ansi-green-fg">366</span> <span class="ansi-bold" style="color: rgb(0,135,0)">return</span> t_out, <span class="ansi-yellow-bg">h</span><span class="ansi-yellow-bg"> </span><span class="ansi-yellow-bg">*</span><span class="ansi-yellow-bg"> </span><span class="ansi-yellow-bg" style="color: rgb(0,135,0)">self</span><span class="ansi-yellow-bg">.</span><span class="ansi-yellow-bg">_amp</span>
-
-<span class="ansi-cyan-fg">File </span><span class="ansi-green-fg">~/Documents/PhD/LISA/Projects/JAX-waveform/fewtrax/.venv/lib/python3.13/site-packages/jax/_src/numpy/array_methods.py:604</span>, in <span class="ansi-cyan-fg">_defer_to_unrecognized_arg.&lt;locals&gt;.deferring_binary_op</span><span class="ansi-blue-fg">(self, other)</span>
-<span class="ansi-green-fg">    602</span> <span class="ansi-bold" style="color: rgb(0,135,0)">def</span><span style="color: rgb(188,188,188)"> </span><span class="ansi-blue-fg">_defer_to_unrecognized_arg</span>(opchar, binary_op, swap=<span class="ansi-bold" style="color: rgb(0,135,0)">False</span>):
-<span class="ansi-green-fg">    603</span>   <span style="color: rgb(95,135,135)"># Ensure that other array types have the chance to override arithmetic.</span>
-<span class="ansi-green-fg">--&gt; </span><span class="ansi-green-fg">604</span>   <span class="ansi-bold" style="color: rgb(0,135,0)">def</span><span style="color: rgb(188,188,188)"> </span><span class="ansi-blue-fg">deferring_binary_op</span>(<span style="color: rgb(0,135,0)">self</span>, other):
-<span class="ansi-green-fg">    605</span>     <span class="ansi-bold" style="color: rgb(0,135,0)">if</span> <span style="color: rgb(0,135,0)">hasattr</span>(other, <span class="ansi-yellow-fg">&#39;</span><span class="ansi-yellow-fg">__jax_array__</span><span class="ansi-yellow-fg">&#39;</span>):
-<span class="ansi-green-fg">    606</span>       other = other.__jax_array__()
-
-<span class="ansi-red-fg">KeyboardInterrupt</span>:
-</pre></div></div>
-</div>
-<div class="nboutput nblast docutils container">
-<div class="prompt empty docutils container">
-</div>
-<div class="output_area docutils container">
-<img alt="../_images/notebooks_05_full_waveform_10_1.png" src="../_images/notebooks_05_full_waveform_10_1.png" />
 </div>
 </div>
 </section>
@@ -483,7 +413,7 @@ dtype(&#39;complex128&#39;)
                                          <span class="n">e0</span><span class="o">=</span><span class="n">e0_val</span><span class="p">,</span> <span class="n">T</span><span class="o">=</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;T&quot;</span><span class="p">])</span>
     <span class="n">t_d</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">t_tr</span><span class="p">)</span> <span class="o">/</span> <span class="mi">86400</span>
     <span class="n">f</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">f_tr</span><span class="p">)</span>
-    <span class="n">ok</span>  <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">isfinite</span><span class="p">(</span><span class="n">f</span><span class="p">)</span> <span class="o">&amp;</span> <span class="p">(</span><span class="n">f_m</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">)</span>
+    <span class="n">ok</span>  <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">isfinite</span><span class="p">(</span><span class="n">f</span><span class="p">)</span> <span class="o">&amp;</span> <span class="p">(</span><span class="n">f</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">)</span>
     <span class="n">ax</span><span class="o">.</span><span class="n">semilogy</span><span class="p">(</span><span class="n">t_d</span><span class="p">[</span><span class="n">ok</span><span class="p">],</span> <span class="n">f</span><span class="p">[</span><span class="n">ok</span><span class="p">],</span> <span class="n">label</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;$e_0=</span><span class="si">{</span><span class="n">e0_val</span><span class="si">}</span><span class="s2">$&quot;</span><span class="p">)</span>
 
 <span class="n">ax</span><span class="o">.</span><span class="n">set_xlabel</span><span class="p">(</span><span class="s2">&quot;Time [days]&quot;</span><span class="p">)</span>

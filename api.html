@@ -74,11 +74,15 @@
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="#fewtrax.trajectory.inspiral.run_inspiral"><code class="docutils literal notranslate"><span class="pre">run_inspiral()</span></code></a></li>
-<li class="toctree-l2"><a class="reference internal" href="#design-notes">Design notes</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#design-notes-legacy-backend">Design notes (legacy backend)</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#fewtrax.amplitude.interp.AmplitudeInterpolator"><code class="docutils literal notranslate"><span class="pre">AmplitudeInterpolator</span></code></a><ul>
 <li class="toctree-l3"><a class="reference internal" href="#fewtrax.amplitude.interp.AmplitudeInterpolator.evaluate"><code class="docutils literal notranslate"><span class="pre">AmplitudeInterpolator.evaluate()</span></code></a></li>
 <li class="toctree-l3"><a class="reference internal" href="#fewtrax.amplitude.interp.AmplitudeInterpolator.get_mode_power"><code class="docutils literal notranslate"><span class="pre">AmplitudeInterpolator.get_mode_power()</span></code></a></li>
 <li class="toctree-l3"><a class="reference internal" href="#fewtrax.amplitude.interp.AmplitudeInterpolator.select_modes"><code class="docutils literal notranslate"><span class="pre">AmplitudeInterpolator.select_modes()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#fewtrax.amplitude.interp.JAXAmplitudeInterpolator"><code class="docutils literal notranslate"><span class="pre">JAXAmplitudeInterpolator</span></code></a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#fewtrax.amplitude.interp.JAXAmplitudeInterpolator.evaluate_trajectory"><code class="docutils literal notranslate"><span class="pre">JAXAmplitudeInterpolator.evaluate_trajectory()</span></code></a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="#utilities">Utilities</a></li>
@@ -91,9 +95,20 @@
 <li class="toctree-l3"><a class="reference internal" href="#fewtrax.data.loader.AmplitudeData.coeffs_B"><code class="docutils literal notranslate"><span class="pre">AmplitudeData.coeffs_B</span></code></a></li>
 </ul>
 </li>
+<li class="toctree-l2"><a class="reference internal" href="#fewtrax.data.loader.AmplitudeDataJAX"><code class="docutils literal notranslate"><span class="pre">AmplitudeDataJAX</span></code></a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#fewtrax.data.loader.AmplitudeDataJAX.coeffs_A"><code class="docutils literal notranslate"><span class="pre">AmplitudeDataJAX.coeffs_A</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#fewtrax.data.loader.AmplitudeDataJAX.t1_A"><code class="docutils literal notranslate"><span class="pre">AmplitudeDataJAX.t1_A</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#fewtrax.data.loader.AmplitudeDataJAX.t2_A"><code class="docutils literal notranslate"><span class="pre">AmplitudeDataJAX.t2_A</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#fewtrax.data.loader.AmplitudeDataJAX.z_knots_A"><code class="docutils literal notranslate"><span class="pre">AmplitudeDataJAX.z_knots_A</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#fewtrax.data.loader.AmplitudeDataJAX.coeffs_B"><code class="docutils literal notranslate"><span class="pre">AmplitudeDataJAX.coeffs_B</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#fewtrax.data.loader.AmplitudeDataJAX._has_B"><code class="docutils literal notranslate"><span class="pre">AmplitudeDataJAX._has_B</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#fewtrax.data.loader.AmplitudeDataJAX.Memory"><code class="docutils literal notranslate"><span class="pre">AmplitudeDataJAX.Memory</span></code></a></li>
+</ul>
+</li>
 <li class="toctree-l2"><a class="reference internal" href="#fewtrax.data.loader.find_few_data_dir"><code class="docutils literal notranslate"><span class="pre">find_few_data_dir()</span></code></a></li>
 <li class="toctree-l2"><a class="reference internal" href="#fewtrax.data.loader.load_flux_data"><code class="docutils literal notranslate"><span class="pre">load_flux_data()</span></code></a></li>
 <li class="toctree-l2"><a class="reference internal" href="#fewtrax.data.loader.load_amplitude_data"><code class="docutils literal notranslate"><span class="pre">load_amplitude_data()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#fewtrax.data.loader.load_amplitude_data_jax"><code class="docutils literal notranslate"><span class="pre">load_amplitude_data_jax()</span></code></a></li>
 <li class="toctree-l2"><a class="reference internal" href="#mathematical-background">Mathematical background</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#fewtrax.utils.geodesic.ellipk"><code class="docutils literal notranslate"><span class="pre">ellipk()</span></code></a></li>
 <li class="toctree-l2"><a class="reference internal" href="#fewtrax.utils.geodesic.ellipe"><code class="docutils literal notranslate"><span class="pre">ellipe()</span></code></a></li>
@@ -196,7 +211,7 @@ directly inside <code class="docutils literal notranslate"><span class="pre">jax
 </section>
 <dl class="py class">
 <dt class="sig sig-object py" id="fewtrax.waveform.kerr.KerrEccentricEquatorialWaveform">
-<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">fewtrax.waveform.kerr.</span></span><span class="sig-name descname"><span class="pre">KerrEccentricEquatorialWaveform</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data_dir</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">amp_filename</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'ZNAmps_l10_m10_n55_DS2Outer.h5'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mode_selection_threshold</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1e-05</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dense_steps</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">100</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">preload_amplitude</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/fewtrax/waveform/kerr.html#KerrEccentricEquatorialWaveform"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#fewtrax.waveform.kerr.KerrEccentricEquatorialWaveform" title="Link to this definition"></a></dt>
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">fewtrax.waveform.kerr.</span></span><span class="sig-name descname"><span class="pre">KerrEccentricEquatorialWaveform</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data_dir</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">amp_filename</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'ZNAmps_l10_m10_n55_DS2Outer.h5'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mode_selection_threshold</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1e-05</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dense_steps</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">100</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">preload_amplitude</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_jax_amps</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/fewtrax/waveform/kerr.html#KerrEccentricEquatorialWaveform"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#fewtrax.waveform.kerr.KerrEccentricEquatorialWaveform" title="Link to this definition"></a></dt>
 <dd><p>EMRI waveform generator for the KerrEccentricEquatorial model.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
@@ -536,14 +551,22 @@ non-negative.</p>
 </dd></dl>
 
 <p id="module-fewtrax.amplitude.interp">Teukolsky mode amplitude interpolation from FEW precomputed grids.</p>
-<p>The amplitude HDF5 file stores bicubic B-spline coefficients
-in <code class="docutils literal notranslate"><span class="pre">scipy.interpolate.bisplev</span></code> format (one set per z-slice per mode).
-This module evaluates those coefficients at query trajectory points using
-<code class="docutils literal notranslate"><span class="pre">scipy.interpolate.bisplev</span></code> and linear interpolation in the spin
-coordinate z, returning complex mode amplitudes as a numpy array.</p>
-<p>The result is then passed to the JAX summation module.</p>
-<section id="design-notes">
-<h2>Design notes<a class="headerlink" href="#design-notes" title="Link to this heading"></a></h2>
+<p>Two backends are available:</p>
+<dl class="simple">
+<dt><a class="reference internal" href="#fewtrax.amplitude.interp.AmplitudeInterpolator" title="fewtrax.amplitude.interp.AmplitudeInterpolator"><code class="xref py py-class docutils literal notranslate"><span class="pre">AmplitudeInterpolator</span></code></a></dt><dd><p>Legacy numpy/scipy backend.  Evaluates the raw bisplev B-spline
+coefficients stored in the HDF5 file using <code class="docutils literal notranslate"><span class="pre">scipy.interpolate.bisplev</span></code>
+in a Python loop over trajectory points and modes.  CPU-only, not
+JAX-traceable, kept for validation and backward compatibility.</p>
+</dd>
+<dt><a class="reference internal" href="#fewtrax.amplitude.interp.JAXAmplitudeInterpolator" title="fewtrax.amplitude.interp.JAXAmplitudeInterpolator"><code class="xref py py-class docutils literal notranslate"><span class="pre">JAXAmplitudeInterpolator</span></code></a></dt><dd><p>Fully JAX-native backend.  Uses <code class="xref py py-class docutils literal notranslate"><span class="pre">BatchedTricubicSplineE3</span></code>
+splines built by <a class="reference internal" href="#fewtrax.data.loader.load_amplitude_data_jax" title="fewtrax.data.loader.load_amplitude_data_jax"><code class="xref py py-func docutils literal notranslate"><span class="pre">load_amplitude_data_jax()</span></code></a>.
+A single <code class="docutils literal notranslate"><span class="pre">einsum</span></code> replaces the <code class="docutils literal notranslate"><span class="pre">N_traj</span> <span class="pre">×</span> <span class="pre">N_modes</span></code> bisplev loop,
+evaluating all modes in parallel.  Supports <code class="xref py py-func docutils literal notranslate"><span class="pre">jax.jit()</span></code>,
+<code class="xref py py-func docutils literal notranslate"><span class="pre">jax.grad()</span></code>, and <code class="xref py py-func docutils literal notranslate"><span class="pre">jax.vmap()</span></code> for batched waveform generation.</p>
+</dd>
+</dl>
+<section id="design-notes-legacy-backend">
+<h2>Design notes (legacy backend)<a class="headerlink" href="#design-notes-legacy-backend" title="Link to this heading"></a></h2>
 <ul class="simple">
 <li><p>The amplitude evaluation is intentionally <strong>numpy-based</strong> rather than
 JAX-based.  The spline coefficient arrays are large (several GB for all
@@ -608,6 +631,68 @@ reduce the number of modes passed to the summation step.</p></li>
 </dd>
 <dt class="field-even">Return type<span class="colon">:</span></dt>
 <dd class="field-even"><p><span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">ndarray</span></code></span></p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="fewtrax.amplitude.interp.JAXAmplitudeInterpolator">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">fewtrax.amplitude.interp.</span></span><span class="sig-name descname"><span class="pre">JAXAmplitudeInterpolator</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">amp_data</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/fewtrax/amplitude/interp.html#JAXAmplitudeInterpolator"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#fewtrax.amplitude.interp.JAXAmplitudeInterpolator" title="Link to this definition"></a></dt>
+<dd><p>Fully JAX-native Teukolsky amplitude evaluator.</p>
+<p>Wraps an <a class="reference internal" href="#fewtrax.data.loader.AmplitudeDataJAX" title="fewtrax.data.loader.AmplitudeDataJAX"><code class="xref py py-class docutils literal notranslate"><span class="pre">AmplitudeDataJAX</span></code></a> container and
+provides a <code class="xref py py-meth docutils literal notranslate"><span class="pre">__call__()</span></code> that evaluates complex mode amplitudes
+<span class="math notranslate nohighlight">\(A_{\ell mkn}(a, p, e)\)</span> for all modes in a single fused
+<code class="docutils literal notranslate"><span class="pre">einsum</span></code>, replacing the <code class="docutils literal notranslate"><span class="pre">N_{\rm</span> <span class="pre">traj}</span> <span class="pre">\times</span> <span class="pre">N_{\rm</span> <span class="pre">modes}</span></code>
+<code class="docutils literal notranslate"><span class="pre">scipy.bisplev</span></code> Python loop in <a class="reference internal" href="#fewtrax.amplitude.interp.AmplitudeInterpolator" title="fewtrax.amplitude.interp.AmplitudeInterpolator"><code class="xref py py-class docutils literal notranslate"><span class="pre">AmplitudeInterpolator</span></code></a>.</p>
+<p>All public methods are <code class="xref py py-func docutils literal notranslate"><span class="pre">jax.jit()</span></code>-able, <code class="xref py py-func docutils literal notranslate"><span class="pre">jax.vmap()</span></code>-able, and
+support <code class="xref py py-func docutils literal notranslate"><span class="pre">jax.grad()</span></code> / <code class="xref py py-func docutils literal notranslate"><span class="pre">jax.jacfwd()</span></code>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>amp_data</strong> (<span class="sphinx_autodoc_typehints-type"><a class="reference internal" href="#fewtrax.data.loader.AmplitudeDataJAX" title="fewtrax.data.loader.AmplitudeDataJAX"><code class="xref py py-class docutils literal notranslate"><span class="pre">AmplitudeDataJAX</span></code></a></span>) – Pre-built JAX amplitude container; construct with
+<a class="reference internal" href="#fewtrax.data.loader.load_amplitude_data_jax" title="fewtrax.data.loader.load_amplitude_data_jax"><code class="xref py py-func docutils literal notranslate"><span class="pre">load_amplitude_data_jax()</span></code></a>.</p>
+</dd>
+</dl>
+<p class="rubric">Examples</p>
+<p>Single-point evaluation:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">interp</span> <span class="o">=</span> <span class="n">JAXAmplitudeInterpolator</span><span class="p">(</span><span class="n">amp_data</span><span class="p">)</span>
+<span class="n">amps</span> <span class="o">=</span> <span class="n">interp</span><span class="p">(</span><span class="n">a</span><span class="o">=</span><span class="mf">0.9</span><span class="p">,</span> <span class="n">p</span><span class="o">=</span><span class="mf">10.0</span><span class="p">,</span> <span class="n">e</span><span class="o">=</span><span class="mf">0.3</span><span class="p">)</span>   <span class="c1"># (n_modes,) complex128</span>
+</pre></div>
+</div>
+<p>Trajectory evaluation (vectorised over time steps):</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">amps_traj</span> <span class="o">=</span> <span class="n">interp</span><span class="o">.</span><span class="n">evaluate_trajectory</span><span class="p">(</span><span class="n">a</span><span class="o">=</span><span class="mf">0.9</span><span class="p">,</span> <span class="n">p</span><span class="o">=</span><span class="n">p_arr</span><span class="p">,</span> <span class="n">e</span><span class="o">=</span><span class="n">e_arr</span><span class="p">)</span>
+<span class="c1"># (N_traj, n_modes) complex128</span>
+</pre></div>
+</div>
+<p>Batched waveform generation (vmap over initial conditions):</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">batch_eval</span> <span class="o">=</span> <span class="n">jax</span><span class="o">.</span><span class="n">vmap</span><span class="p">(</span>
+    <span class="k">lambda</span> <span class="n">a</span><span class="p">,</span> <span class="n">p0</span><span class="p">,</span> <span class="n">e0</span><span class="p">:</span> <span class="n">interp</span><span class="o">.</span><span class="n">evaluate_trajectory</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">traj_p</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">p0</span><span class="p">,</span> <span class="n">e0</span><span class="p">),</span> <span class="o">...</span><span class="p">)</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+<dl class="py method">
+<dt class="sig sig-object py" id="fewtrax.amplitude.interp.JAXAmplitudeInterpolator.evaluate_trajectory">
+<span class="sig-name descname"><span class="pre">evaluate_trajectory</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">a</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">p</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">e</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">pLSO</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/fewtrax/amplitude/interp.html#JAXAmplitudeInterpolator.evaluate_trajectory"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#fewtrax.amplitude.interp.JAXAmplitudeInterpolator.evaluate_trajectory" title="Link to this definition"></a></dt>
+<dd><p>Evaluate amplitudes along a trajectory.</p>
+<p>Uses <code class="xref py py-func docutils literal notranslate"><span class="pre">jax.vmap()</span></code> over trajectory points, so the spline
+coefficients are read once and the polynomial evaluation is
+vectorised across all time steps.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>a</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Dimensionless spin (fixed along a trajectory).</p></li>
+<li><p><strong>p</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">Array</span></code></span>) – Semi-latus rectum and eccentricity at each ODE step.</p></li>
+<li><p><strong>e</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">Array</span></code></span>) – Semi-latus rectum and eccentricity at each ODE step.</p></li>
+<li><p><strong>pLSO</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-data docutils literal notranslate"><span class="pre">Optional</span></code>[<code class="xref py py-class docutils literal notranslate"><span class="pre">Array</span></code>]</span>) – Pre-computed separatrix at each step.  When omitted it is
+computed internally via <a class="reference internal" href="#fewtrax.utils.geodesic.get_separatrix_fast" title="fewtrax.utils.geodesic.get_separatrix_fast"><code class="xref py py-func docutils literal notranslate"><span class="pre">get_separatrix_fast()</span></code></a>.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Mode amplitudes at each trajectory point.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">Array</span></code></span></p>
 </dd>
 </dl>
 </dd></dl>
@@ -781,6 +866,11 @@ coefficients (<code class="docutils literal notranslate"><span class="pre">multi
 using <code class="docutils literal notranslate"><span class="pre">scipy.interpolate.bisplev</span></code>, which can be called from the amplitude
 interpolation module.  The coefficients themselves are stored in the
 <a class="reference internal" href="#fewtrax.data.loader.AmplitudeData" title="fewtrax.data.loader.AmplitudeData"><code class="xref py py-class docutils literal notranslate"><span class="pre">AmplitudeData</span></code></a> container as raw numpy arrays.</p>
+<p><a class="reference internal" href="#fewtrax.data.loader.AmplitudeDataJAX" title="fewtrax.data.loader.AmplitudeDataJAX"><code class="xref py py-class docutils literal notranslate"><span class="pre">AmplitudeDataJAX</span></code></a> is the fully JAX-native alternative, built by
+<a class="reference internal" href="#fewtrax.data.loader.load_amplitude_data_jax" title="fewtrax.data.loader.load_amplitude_data_jax"><code class="xref py py-func docutils literal notranslate"><span class="pre">load_amplitude_data_jax()</span></code></a>.  It holds a pair of
+<code class="xref py py-class docutils literal notranslate"><span class="pre">BatchedTricubicSplineE3</span></code> instances (real and
+imaginary parts) per region, and is compatible with <code class="xref py py-func docutils literal notranslate"><span class="pre">jax.jit()</span></code>,
+<code class="xref py py-func docutils literal notranslate"><span class="pre">jax.grad()</span></code>, and <code class="xref py py-func docutils literal notranslate"><span class="pre">jax.vmap()</span></code>.</p>
 <p>Data directory discovery (in order):
 1. Explicit <code class="docutils literal notranslate"><span class="pre">data_dir</span></code> argument.
 2. <code class="docutils literal notranslate"><span class="pre">FEW_DATA_DIR</span></code> environment variable.
@@ -899,6 +989,136 @@ arrays and evaluated at query points using <code class="docutils literal notrans
 
 </dd></dl>
 
+<dl class="py class">
+<dt class="sig sig-object py" id="fewtrax.data.loader.AmplitudeDataJAX">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">fewtrax.data.loader.</span></span><span class="sig-name descname"><span class="pre">AmplitudeDataJAX</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">coeffs_A</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">t1_A</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">t2_A</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">z_knots_A</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">coeffs_B</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">t1_B</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">t2_B</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">z_knots_B</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">l_arr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">m_arr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">k_arr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_arr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">_has_B</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/fewtrax/data/loader.html#AmplitudeDataJAX"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#fewtrax.data.loader.AmplitudeDataJAX" title="Link to this definition"></a></dt>
+<dd><p>Fully JAX-native amplitude container using bisplev B-spline coefficients.</p>
+<p>Stores the same compact B-spline coefficient arrays that FEW writes to the
+HDF5 file — reshaped from flat <code class="docutils literal notranslate"><span class="pre">(N1</span> <span class="pre">*</span> <span class="pre">N2,)</span></code> to <code class="docutils literal notranslate"><span class="pre">(N1,</span> <span class="pre">N2)</span></code> per mode per
+z-slice — together with the corresponding knot vectors.  No grid evaluation
+or multispline re-fitting is performed at load time.</p>
+<p>Amplitude evaluation proceeds as:</p>
+<ol class="arabic simple">
+<li><p>Linear interpolation in <code class="docutils literal notranslate"><span class="pre">z</span></code> between the two surrounding z-slices
+(matching FEW’s <a class="reference internal" href="#fewtrax.amplitude.interp.AmplitudeInterpolator" title="fewtrax.amplitude.interp.AmplitudeInterpolator"><code class="xref py py-class docutils literal notranslate"><span class="pre">AmplitudeInterpolator</span></code></a>
+exactly).</p></li>
+<li><p>2-D B-spline evaluation at each z-slice via
+<code class="xref py py-func docutils literal notranslate"><span class="pre">eval_bisplev_batched()</span></code> (de Boor’s
+algorithm, all modes in one <code class="docutils literal notranslate"><span class="pre">einsum</span></code>).</p></li>
+</ol>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="fewtrax.data.loader.AmplitudeDataJAX.coeffs_A">
+<span class="sig-name descname"><span class="pre">coeffs_A</span></span><a class="headerlink" href="#fewtrax.data.loader.AmplitudeDataJAX.coeffs_A" title="Link to this definition"></a></dt>
+<dd><p>B-spline coefficients for Region A.  Axis 2 indexes <code class="docutils literal notranslate"><span class="pre">[real,</span> <span class="pre">imag]</span></code>.
+<code class="docutils literal notranslate"><span class="pre">N1_A</span> <span class="pre">=</span> <span class="pre">len(t1_A)</span> <span class="pre">-</span> <span class="pre">4</span></code>,  <code class="docutils literal notranslate"><span class="pre">N2_A</span> <span class="pre">=</span> <span class="pre">len(t2_A)</span> <span class="pre">-</span> <span class="pre">4</span></code>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>(Nz, n_modes, 2, N1_A, N2_A) float64</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="fewtrax.data.loader.AmplitudeDataJAX.t1_A">
+<span class="sig-name descname"><span class="pre">t1_A</span></span><a class="headerlink" href="#fewtrax.data.loader.AmplitudeDataJAX.t1_A" title="Link to this definition"></a></dt>
+<dd><p>Knot vector for the first bisplev argument (w / eccentricity).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>(len_t1_A,) float64</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="fewtrax.data.loader.AmplitudeDataJAX.t2_A">
+<span class="sig-name descname"><span class="pre">t2_A</span></span><a class="headerlink" href="#fewtrax.data.loader.AmplitudeDataJAX.t2_A" title="Link to this definition"></a></dt>
+<dd><p>Knot vector for the second bisplev argument (u / semi-latus rectum).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>(len_t2_A,) float64</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="fewtrax.data.loader.AmplitudeDataJAX.z_knots_A">
+<span class="sig-name descname"><span class="pre">z_knots_A</span></span><a class="headerlink" href="#fewtrax.data.loader.AmplitudeDataJAX.z_knots_A" title="Link to this definition"></a></dt>
+<dd><p>Spin coordinate z-values for the Nz stored slices.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>(Nz,) float64</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="fewtrax.data.loader.AmplitudeDataJAX.coeffs_B">
+<span class="sig-name descname"><span class="pre">coeffs_B</span></span><a class="headerlink" href="#fewtrax.data.loader.AmplitudeDataJAX.coeffs_B" title="Link to this definition"></a></dt>
+<dd><p>Same for Region B.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>(Nz, n_modes, 2, N1_B, N2_B) float64 or None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py">
+<span class="sig-name descname"><span class="pre">t1_B,</span> <span class="pre">t2_B,</span> <span class="pre">z_knots_B</span></span></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>analogous to Region A, or None when absent.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py">
+<span class="sig-name descname"><span class="pre">l_arr,</span> <span class="pre">m_arr,</span> <span class="pre">k_arr,</span> <span class="pre">n_arr</span></span></dt>
+<dd><p>Harmonic mode indices.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>(n_modes,) int</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="fewtrax.data.loader.AmplitudeDataJAX._has_B">
+<span class="sig-name descname"><span class="pre">_has_B</span></span><a class="headerlink" href="#fewtrax.data.loader.AmplitudeDataJAX._has_B" title="Link to this definition"></a></dt>
+<dd><p>Whether Region B data are present.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>bool (static)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="fewtrax.data.loader.AmplitudeDataJAX.Memory">
+<span class="sig-name descname"><span class="pre">Memory</span></span><a class="headerlink" href="#fewtrax.data.loader.AmplitudeDataJAX.Memory" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py">
+<span class="sig-name descname"><span class="pre">------</span></span></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py">
+<span class="sig-name descname"><span class="pre">For</span> <span class="pre">the</span> <span class="pre">default</span> <span class="pre">amplitude</span> <span class="pre">file</span> <span class="pre">(``n_modes</span> <span class="pre">=</span> <span class="pre">6993``,</span> <span class="pre">``Nz</span> <span class="pre">=</span> <span class="pre">33``,</span></span></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py">
+<span class="sig-name descname"><span class="pre">``N1_A</span> <span class="pre">=</span> <span class="pre">N2_A</span> <span class="pre">=</span> <span class="pre">33``,</span> <span class="pre">``N1_B</span> <span class="pre">=</span> <span class="pre">N2_B</span> <span class="pre">=</span> <span class="pre">17``)::</span></span></dt>
+<dd><p>Region A: 33 × 6993 × 2 × 33 × 33 × 8 B  ≈ 4.0 GB
+Region B: 33 × 6993 × 2 × 17 × 17 × 8 B  ≈ 1.1 GB
+Total:                                     ≈ 5.1 GB</p>
+</dd></dl>
+
+</dd></dl>
+
 <dl class="py function">
 <dt class="sig sig-object py" id="fewtrax.data.loader.find_few_data_dir">
 <span class="sig-prename descclassname"><span class="pre">fewtrax.data.loader.</span></span><span class="sig-name descname"><span class="pre">find_few_data_dir</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data_dir</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/fewtrax/data/loader.html#find_few_data_dir"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#fewtrax.data.loader.find_few_data_dir" title="Link to this definition"></a></dt>
@@ -964,6 +1184,37 @@ points in <a class="reference internal" href="#fewtrax.amplitude.interp.Amplitud
 <dd class="field-even"><p><span class="sphinx_autodoc_typehints-type"><a class="reference internal" href="#fewtrax.data.loader.AmplitudeData" title="fewtrax.data.loader.AmplitudeData"><code class="xref py py-class docutils literal notranslate"><span class="pre">AmplitudeData</span></code></a></span></p>
 </dd>
 </dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="fewtrax.data.loader.load_amplitude_data_jax">
+<span class="sig-prename descclassname"><span class="pre">fewtrax.data.loader.</span></span><span class="sig-name descname"><span class="pre">load_amplitude_data_jax</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data_dir</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">filename</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'ZNAmps_l10_m10_n55_DS2Outer.h5'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mode_indices</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/fewtrax/data/loader.html#load_amplitude_data_jax"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#fewtrax.data.loader.load_amplitude_data_jax" title="Link to this definition"></a></dt>
+<dd><p>Load amplitude data as a fully JAX-native <a class="reference internal" href="#fewtrax.data.loader.AmplitudeDataJAX" title="fewtrax.data.loader.AmplitudeDataJAX"><code class="xref py py-class docutils literal notranslate"><span class="pre">AmplitudeDataJAX</span></code></a>.</p>
+<p>Reads the amplitude HDF5 file and converts the stored bisplev B-spline
+coefficients directly to JAX arrays — no grid evaluation, no multispline
+re-fitting.  The result is an <code class="xref py py-class docutils literal notranslate"><span class="pre">equinox.Module</span></code> compatible with
+<code class="xref py py-func docutils literal notranslate"><span class="pre">jax.jit()</span></code>, <code class="xref py py-func docutils literal notranslate"><span class="pre">jax.grad()</span></code>, and <code class="xref py py-func docutils literal notranslate"><span class="pre">jax.vmap()</span></code>.</p>
+<p>The loaded data uses exactly the same B-spline representation that FEW
+evaluates via <code class="docutils literal notranslate"><span class="pre">scipy.bisplev</span></code>, so amplitude values are bit-identical
+to FEW’s output (to float64 precision).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>data_dir</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-data docutils literal notranslate"><span class="pre">Union</span></code>[<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>, <code class="xref py py-class docutils literal notranslate"><span class="pre">Path</span></code>, <code class="xref py py-obj docutils literal notranslate"><span class="pre">None</span></code>]</span>) – FEW data directory.</p></li>
+<li><p><strong>filename</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code></span>) – Amplitude HDF5 file.</p></li>
+<li><p><strong>mode_indices</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-data docutils literal notranslate"><span class="pre">Optional</span></code>[<code class="xref py py-class docutils literal notranslate"><span class="pre">ndarray</span></code>]</span>) – Indices of modes to include.  Reduces memory proportionally.
+Default: all modes.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><span class="sphinx_autodoc_typehints-type"><a class="reference internal" href="#fewtrax.data.loader.AmplitudeDataJAX" title="fewtrax.data.loader.AmplitudeDataJAX"><code class="xref py py-class docutils literal notranslate"><span class="pre">AmplitudeDataJAX</span></code></a></span></p>
+</dd>
+</dl>
+<p class="rubric">Notes</p>
+<p>Load time is dominated by HDF5 I/O and the single <code class="docutils literal notranslate"><span class="pre">jnp.asarray</span></code> call
+that uploads the coefficient arrays to the JAX device.  No per-mode
+fitting loops are needed.  Typical load time on CPU: 5–15 s.</p>
+<p>Memory — see <a class="reference internal" href="#fewtrax.data.loader.AmplitudeDataJAX" title="fewtrax.data.loader.AmplitudeDataJAX"><code class="xref py py-class docutils literal notranslate"><span class="pre">AmplitudeDataJAX</span></code></a> for the full breakdown.</p>
 </dd></dl>
 
 <p id="module-fewtrax.utils.geodesic">Kerr geodesic utilities implemented in JAX.</p>
@@ -1317,8 +1568,6 @@ harmonics for a list of <span class="math notranslate nohighlight">\((\ell, m)\)
 <dd class="field-odd"><p><span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">complex</span></code></span></p>
 </dd>
 </dl>
-<p class="rubric">Notes</p>
-<p>Expressions are hardcoded for <span class="math notranslate nohighlight">\(\ell = 2 \ldots 10\)</span>.</p>
 </dd></dl>
 
 <dl class="py function">
