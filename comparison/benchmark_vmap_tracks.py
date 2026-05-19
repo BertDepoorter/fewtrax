@@ -132,6 +132,21 @@ def build_param_grid(
     )
 
 
+def build_fdot_param_grid(N: int, seed: int = 77) -> dict[str, np.ndarray]:
+    """Draw N random EMRI parameter sets for backward f/fdot/fddot integration.
+
+    ``e_f`` is the eccentricity at plunge — kept modest ([0.02, 0.40]) so that
+    the separatrix is safely inside the flux-table domain for all spins.
+    """
+    rng = np.random.default_rng(seed)
+    return dict(
+        M   = 10.0 ** rng.uniform(np.log10(5e5), np.log10(5e6), N),
+        mu  = rng.uniform(5.0, 50.0, N),
+        a   = rng.uniform(0.05, 0.90, N),
+        e_f = rng.uniform(0.02, 0.40, N),
+    )
+
+
 # ---------------------------------------------------------------------------
 # Vmapped trajectory runners
 # ---------------------------------------------------------------------------
@@ -483,6 +498,94 @@ def bench_fisher(
 
 
 # ---------------------------------------------------------------------------
+# f / fdot / fddot backward benchmark
+# ---------------------------------------------------------------------------
+
+def bench_f_fdot_fddot_back(
+    flux_data,
+    grid: dict,
+    batch_sizes: list[int],
+    n_warmup: int,
+    n_repeat: int,
+    T: float = 2.0,
+    N_alpha: int = 1262,
+    max_steps: int = 256,
+    atol: float = 1e-10,
+    rtol: float = 1e-10,
+) -> list[dict]:
+    """Benchmark vmapped ``EMRIInspiral.get_f_fdot_fddot_back``.
+
+    Integrates backward from the plunge for ``T`` years, on a fixed
+    ``N_alpha``-point time grid.  The dense Dopri8 interpolant is
+    differentiated three times via ``jax.grad`` to recover f, ḟ, f̈
+    without additional ODE solves.
+
+    Memory note
+    -----------
+    ``SaveAt(dense=True)`` allocates k-coefficient buffers of shape
+    ``(N_batch, max_steps, 14, 5)`` in float64.  Estimated size::
+
+        N_batch * max_steps * 560 bytes
+
+    For max_steps=256: 64 → 9 MB, 1024 → 143 MB, 8096 → 1.1 GB,
+    65000 → 9.1 GB, 131066 → 18.3 GB.
+    Reduce ``max_steps`` or split into sub-batches if memory is limited.
+    """
+    from fewtrax.trajectory.inspiral import EMRIInspiral
+    from fewtrax.utils.constants import YEAR_SI
+
+    # Fixed time grid shared across all batch lanes
+    t_alpha = jnp.linspace(0.0, T * YEAR_SI, N_alpha, dtype=jnp.float64)
+
+    def _track(a, e_f, M, mu):
+        return EMRIInspiral.get_f_fdot_fddot_back(
+            flux_data, M=M, mu=mu, a=a, e_f=e_f, T=T,
+            t_alpha=t_alpha, max_steps=max_steps, atol=atol, rtol=rtol,
+        )
+
+    batched_fn = jax.jit(jax.vmap(_track))
+
+    results = []
+    for N in batch_sizes:
+        a_b   = jnp.array(grid["a"][:N],   dtype=jnp.float64)
+        e_f_b = jnp.array(grid["e_f"][:N], dtype=jnp.float64)
+        M_b   = jnp.array(grid["M"][:N],   dtype=jnp.float64)
+        mu_b  = jnp.array(grid["mu"][:N],  dtype=jnp.float64)
+
+        # Estimated k-buffer memory for this batch [MiB]
+        k_buf_mib = N * max_steps * 14 * 5 * 8 / 1024**2
+
+        mem_before = get_jax_memory_mb()
+
+        def fn():
+            out = batched_fn(a_b, e_f_b, M_b, mu_b)
+            block_jax(out)
+
+        # Reduce repeats for very large batches to avoid excessive runtime
+        nr = min(n_repeat, max(1, 3 if N <= 8096 else 1))
+        nw = min(n_warmup, 1)
+        mean_s, std_s = repeat_timer(fn, n_warmup=nw, n_repeat=nr)
+
+        mem_after  = get_peak_memory_mb()
+        throughput = N / mean_s
+
+        results.append(dict(
+            N=N, mean_s=mean_s, std_s=std_s,
+            throughput=throughput,
+            mem_peak_mb=mem_after,
+            k_buf_mib=k_buf_mib,
+        ))
+        print(
+            f"  N={N:7d}: {mean_s*1e3:10.1f} ± {std_s*1e3:7.1f} ms"
+            f"  ({throughput:9.1f} tracks/s)"
+            f"  k-buf≈{k_buf_mib:6.0f} MiB"
+            f"  mem_peak={mem_after:.0f} MiB"
+        )
+
+    return results
+
+
+# ---------------------------------------------------------------------------
 # Plots
 # ---------------------------------------------------------------------------
 
@@ -490,6 +593,7 @@ def make_plots(
     fast_results: list[dict],
     autodiff_results: dict | None,
     fisher_results: dict | None,
+    fdot_results: list[dict] | None,
     grid: dict,
     out_dir: Path,
     traj_sample=None,
@@ -653,6 +757,39 @@ def make_plots(
         plt.close(fig)
         print(f"    Saved: {out_dir / 'fisher_throughput.png'}")
 
+    # ---- 7. f/fdot/fddot backward benchmark throughput ----
+    if fdot_results:
+        Ns_fd  = [r["N"] for r in fdot_results]
+        tps_fd = [r["throughput"] for r in fdot_results]
+        t_ms_fd  = [r["mean_s"] * 1e3 for r in fdot_results]
+        std_ms_fd = [r["std_s"] * 1e3 for r in fdot_results]
+
+        fig, axes = plt.subplots(1, 2, figsize=(12, 4))
+
+        axes[0].errorbar(Ns_fd, t_ms_fd, yerr=std_ms_fd, marker="o",
+                         color="C4", capsize=3)
+        axes[0].set_xlabel("Batch size N")
+        axes[0].set_ylabel("Wall time [ms]")
+        axes[0].set_title("get_f_fdot_fddot_back — wall time vs batch size")
+        axes[0].set_xscale("log"); axes[0].set_yscale("log")
+        axes[0].grid(True, which="both", alpha=0.3)
+
+        axes[1].plot(Ns_fd, tps_fd, "C4-o")
+        axes[1].set_xlabel("Batch size N")
+        axes[1].set_ylabel("Throughput [tracks/s]")
+        axes[1].set_title("get_f_fdot_fddot_back — throughput vs batch size")
+        axes[1].set_xscale("log")
+        axes[1].grid(True, which="both", alpha=0.3)
+
+        fig.suptitle(
+            "vmapped backward integration + jax.grad³  "
+            "(f, ḟ, f̈ on N_alpha-point grid)"
+        )
+        fig.tight_layout()
+        fig.savefig(out_dir / "fdot_throughput.png", dpi=150)
+        plt.close(fig)
+        print(f"    Saved: {out_dir / 'fdot_throughput.png'}")
+
 
 # ---------------------------------------------------------------------------
 # Main
@@ -679,6 +816,15 @@ def main():
                         help="Skip Fisher matrix benchmarks")
     parser.add_argument("--skip-hessian", action="store_true",
                         help="Skip hessian (expensive for large dense_steps)")
+    parser.add_argument("--skip-fdot", action="store_true",
+                        help="Skip f/fdot/fddot backward integration benchmarks")
+    parser.add_argument("--T-fdot",        type=float, default=2.0,
+                        help="Backward integration duration for fdot benchmark [yr] (default: 2.0)")
+    parser.add_argument("--N-alpha",       type=int,   default=1262,
+                        help="Time-grid points for fdot benchmark (default: 1262)")
+    parser.add_argument("--max-steps-fdot", type=int,  default=256,
+                        help="ODE max_steps for dense solve; governs k-buffer memory "
+                             "(default: 256 ≈ 4× typical steps for 2-yr integration)")
     parser.add_argument("--no-plots",    action="store_true",
                         help="Do not save plot files")
     parser.add_argument("--plot-dir",    type=str,   default="benchmark_plots",
@@ -803,6 +949,57 @@ def main():
             n_warmup=nw, n_repeat=nr,
         )
 
+    # --- D. f/fdot/fddot backward integration benchmark ---
+    fdot_results = None
+    if not args.skip_fdot:
+        fdot_batch_sizes = [64, 1024, 8096, 65000, 131066]
+        N_fdot_max = max(fdot_batch_sizes)
+
+        print_header(
+            "D. get_f_fdot_fddot_back — vmapped backward ODE + jax.grad³"
+        )
+        print(f"   T={args.T_fdot} yr backward  |  N_alpha={args.N_alpha} pts"
+              f"  |  max_steps={args.max_steps_fdot}")
+        print(f"   k-buffer per trajectory ≈"
+              f" {args.max_steps_fdot * 14 * 5 * 8 / 1024:.0f} KB  "
+              f"(N_batch × max_steps × 14 × 5 × 8 bytes)")
+        print(f"   Batch sizes: {fdot_batch_sizes}")
+        print(f"   WARNING: N≥65000 requires >9 GB of k-buffer memory "
+              f"(reduce --max-steps-fdot if needed)")
+        print()
+
+        print(f"  Building fdot parameter grid  (N={N_fdot_max}, seed=77) …",
+              end=" ", flush=True)
+        fdot_grid = build_fdot_param_grid(N_fdot_max, seed=77)
+        print("done")
+        print(f"  a   range : [{fdot_grid['a'].min():.3f},  {fdot_grid['a'].max():.3f}]")
+        print(f"  e_f range : [{fdot_grid['e_f'].min():.3f}, {fdot_grid['e_f'].max():.3f}]")
+        print(f"  M   range : [{fdot_grid['M'].min():.2e}, {fdot_grid['M'].max():.2e}] Msun")
+        print(f"  mu  range : [{fdot_grid['mu'].min():.1f}, {fdot_grid['mu'].max():.1f}] Msun")
+        print()
+
+        fdot_results = bench_f_fdot_fddot_back(
+            flux_data, fdot_grid,
+            batch_sizes=fdot_batch_sizes,
+            n_warmup=nw, n_repeat=nr,
+            T=args.T_fdot, N_alpha=args.N_alpha,
+            max_steps=args.max_steps_fdot,
+        )
+
+        print()
+        fd_headers = ["N_batch", "wall time [ms]", "throughput [tracks/s]", "k-buf [MiB]"]
+        fd_widths  = [10, 22, 24, 14]
+        fd_rows = [
+            (
+                str(r["N"]),
+                f"{r['mean_s']*1e3:.1f} ± {r['std_s']*1e3:.1f}",
+                f"{r['throughput']:.1f}",
+                f"{r['k_buf_mib']:.0f}",
+            )
+            for r in fdot_results
+        ]
+        print_table(fd_rows, fd_headers, fd_widths)
+
     # --- Compute sample trajectory for plot ---
     traj_sample = None
     if not args.no_plots:
@@ -831,7 +1028,7 @@ def main():
         out_dir = Path(args.plot_dir)
         make_plots(
             fast_results,
-            autodiff_results, fisher_results,
+            autodiff_results, fisher_results, fdot_results,
             grid, out_dir, traj_sample,
         )
         print(f"  All plots written to {out_dir}/")
