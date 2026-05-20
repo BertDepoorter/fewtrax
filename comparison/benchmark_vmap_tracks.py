@@ -515,8 +515,12 @@ def _make_chunked_fdot_fn(single_fn, chunk_size: int):
     chunk_fn = jax.vmap(single_fn)
 
     def run(a, e_f, M, mu):
-        N   = a.shape[0]
-        pad = (-N) % chunk_size
+        N = a.shape[0]
+        if N <= chunk_size:
+            # Small batch: direct vmap, padding would clip since pad >= N
+            return chunk_fn(a, e_f, M, mu)
+
+        pad = (-N) % chunk_size  # pad < chunk_size <= N, so a[:pad] is always valid
         if pad > 0:
             a   = jnp.concatenate([a,   a[:pad]])
             e_f = jnp.concatenate([e_f, e_f[:pad]])
