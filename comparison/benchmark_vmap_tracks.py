@@ -501,6 +501,42 @@ def bench_fisher(
 # f / fdot / fddot backward benchmark
 # ---------------------------------------------------------------------------
 
+def _make_chunked_fdot_fn(single_fn, chunk_size: int):
+    """Return a JIT-compiled function that processes N trajectories in chunks.
+
+    Internally reshapes the batch into ``(n_chunks, chunk_size)`` and uses
+    ``jax.lax.map`` to sequentially apply ``jax.vmap(single_fn)`` to each
+    chunk.  Peak k-buffer memory is therefore proportional to ``chunk_size``,
+    not to the total batch size ``N``.
+
+    The leading dimension of ``N`` is padded to the next multiple of
+    ``chunk_size`` before the reshape; padding rows are trimmed from the output.
+    """
+    chunk_fn = jax.vmap(single_fn)
+
+    def run(a, e_f, M, mu):
+        N   = a.shape[0]
+        pad = (-N) % chunk_size
+        if pad > 0:
+            a   = jnp.concatenate([a,   a[:pad]])
+            e_f = jnp.concatenate([e_f, e_f[:pad]])
+            M   = jnp.concatenate([M,   M[:pad]])
+            mu  = jnp.concatenate([mu,  mu[:pad]])
+
+        n_chunks = (N + pad) // chunk_size
+        reshape  = lambda x: x.reshape(n_chunks, chunk_size)
+        xs = (reshape(a), reshape(e_f), reshape(M), reshape(mu))
+
+        # lax.map applies chunk_fn sequentially; constant memory per iteration
+        out = jax.lax.map(lambda c: chunk_fn(c[0], c[1], c[2], c[3]), xs)
+
+        # out is (n_chunks, chunk_size, ...); flatten and trim padding
+        out = jax.tree.map(lambda x: x.reshape(-1, *x.shape[2:])[:N], out)
+        return out
+
+    return jax.jit(run)
+
+
 def bench_f_fdot_fddot_back(
     flux_data,
     grid: dict,
@@ -510,6 +546,7 @@ def bench_f_fdot_fddot_back(
     T: float = 2.0,
     N_alpha: int = 1262,
     max_steps: int = 256,
+    chunk_size: int = 1024,
     atol: float = 1e-10,
     rtol: float = 1e-10,
 ) -> list[dict]:
@@ -520,16 +557,12 @@ def bench_f_fdot_fddot_back(
     differentiated three times via ``jax.grad`` to recover f, ḟ, f̈
     without additional ODE solves.
 
-    Memory note
-    -----------
-    ``SaveAt(dense=True)`` allocates k-coefficient buffers of shape
-    ``(N_batch, max_steps, 14, 5)`` in float64.  Estimated size::
+    Large batches are processed via ``jax.lax.map`` over chunks of
+    ``chunk_size`` trajectories, bounding peak k-buffer memory to::
 
-        N_batch * max_steps * 560 bytes
+        chunk_size × max_steps × 560 bytes
 
-    For max_steps=256: 64 → 9 MB, 1024 → 143 MB, 8096 → 1.1 GB,
-    65000 → 9.1 GB, 131066 → 18.3 GB.
-    Reduce ``max_steps`` or split into sub-batches if memory is limited.
+    For chunk_size=1024, max_steps=256: ≈ 143 MiB per chunk.
     """
     from fewtrax.trajectory.inspiral import EMRIInspiral
     from fewtrax.utils.constants import YEAR_SI
@@ -543,7 +576,7 @@ def bench_f_fdot_fddot_back(
             t_alpha=t_alpha, max_steps=max_steps, atol=atol, rtol=rtol,
         )
 
-    batched_fn = jax.jit(jax.vmap(_track))
+    batched_fn = _make_chunked_fdot_fn(_track, chunk_size)
 
     results = []
     for N in batch_sizes:
@@ -552,8 +585,10 @@ def bench_f_fdot_fddot_back(
         M_b   = jnp.array(grid["M"][:N],   dtype=jnp.float64)
         mu_b  = jnp.array(grid["mu"][:N],  dtype=jnp.float64)
 
-        # Estimated k-buffer memory for this batch [MiB]
-        k_buf_mib = N * max_steps * 14 * 5 * 8 / 1024**2
+        # k-buffer is bounded by chunk_size, not N
+        effective_chunk = min(chunk_size, N)
+        k_buf_mib = effective_chunk * max_steps * 14 * 5 * 8 / 1024**2
+        n_chunks  = (N + chunk_size - 1) // chunk_size
 
         mem_before = get_jax_memory_mb()
 
@@ -574,11 +609,13 @@ def bench_f_fdot_fddot_back(
             throughput=throughput,
             mem_peak_mb=mem_after,
             k_buf_mib=k_buf_mib,
+            n_chunks=n_chunks,
         ))
         print(
-            f"  N={N:7d}: {mean_s*1e3:10.1f} ± {std_s*1e3:7.1f} ms"
+            f"  N={N:7d} ({n_chunks}×{chunk_size}): "
+            f"{mean_s*1e3:10.1f} ± {std_s*1e3:7.1f} ms"
             f"  ({throughput:9.1f} tracks/s)"
-            f"  k-buf≈{k_buf_mib:6.0f} MiB"
+            f"  k-buf/chunk≈{k_buf_mib:6.0f} MiB"
             f"  mem_peak={mem_after:.0f} MiB"
         )
 
@@ -822,9 +859,12 @@ def main():
                         help="Backward integration duration for fdot benchmark [yr] (default: 2.0)")
     parser.add_argument("--N-alpha",       type=int,   default=1262,
                         help="Time-grid points for fdot benchmark (default: 1262)")
-    parser.add_argument("--max-steps-fdot", type=int,  default=256,
+    parser.add_argument("--max-steps-fdot", type=int,  default=100,
                         help="ODE max_steps for dense solve; governs k-buffer memory "
                              "(default: 256 ≈ 4× typical steps for 2-yr integration)")
+    parser.add_argument("--fdot-chunk-size", type=int, default=1024,
+                        help="Sub-batch size for lax.map chunking in fdot benchmark; "
+                             "peak k-buffer ∝ chunk_size × max_steps (default: 4096)")
     parser.add_argument("--no-plots",    action="store_true",
                         help="Do not save plot files")
     parser.add_argument("--plot-dir",    type=str,   default="benchmark_plots",
@@ -959,13 +999,12 @@ def main():
             "D. get_f_fdot_fddot_back — vmapped backward ODE + jax.grad³"
         )
         print(f"   T={args.T_fdot} yr backward  |  N_alpha={args.N_alpha} pts"
-              f"  |  max_steps={args.max_steps_fdot}")
-        print(f"   k-buffer per trajectory ≈"
-              f" {args.max_steps_fdot * 14 * 5 * 8 / 1024:.0f} KB  "
-              f"(N_batch × max_steps × 14 × 5 × 8 bytes)")
+              f"  |  max_steps={args.max_steps_fdot}"
+              f"  |  chunk_size={args.fdot_chunk_size}")
+        k_per_chunk_mib = args.fdot_chunk_size * args.max_steps_fdot * 14 * 5 * 8 / 1024**2
+        print(f"   k-buffer per chunk ≈ {k_per_chunk_mib:.0f} MiB  "
+              f"(chunk_size × max_steps × 14 × 5 × 8 bytes)")
         print(f"   Batch sizes: {fdot_batch_sizes}")
-        print(f"   WARNING: N≥65000 requires >9 GB of k-buffer memory "
-              f"(reduce --max-steps-fdot if needed)")
         print()
 
         print(f"  Building fdot parameter grid  (N={N_fdot_max}, seed=77) …",
@@ -984,6 +1023,7 @@ def main():
             n_warmup=nw, n_repeat=nr,
             T=args.T_fdot, N_alpha=args.N_alpha,
             max_steps=args.max_steps_fdot,
+            chunk_size=args.fdot_chunk_size,
         )
 
         print()
