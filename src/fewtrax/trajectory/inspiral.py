@@ -915,7 +915,7 @@ class EMRIInspiral(eqx.Module):
         a_ = jnp.asarray(a, dtype=jnp.float64)
         e_f_ = jnp.asarray(e_f, dtype=jnp.float64)
         M_s = jnp.asarray((M + mu) * MTSUN_SI, dtype=jnp.float64)
-        T_geo = jnp.asarray(T * YEAR_SI / float(M_s), dtype=jnp.float64)
+        T_geo = jnp.asarray(T * YEAR_SI / M_s, dtype=jnp.float64)
         mu_over_M = jnp.asarray(M * mu / (M + mu) ** 2, dtype=jnp.float64)
         r_isco = get_separatrix_fast(
             jnp.abs(a_), jnp.zeros((), jnp.float64), _x_sign(a_, x0)
