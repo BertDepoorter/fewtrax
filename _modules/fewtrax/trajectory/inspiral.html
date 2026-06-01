@@ -931,6 +931,132 @@
         <span class="k">if</span> <span class="n">with_amplitudes</span><span class="p">:</span>
             <span class="k">return</span> <span class="n">t_s</span><span class="p">,</span> <span class="n">freqs</span><span class="p">,</span> <span class="n">amps</span>
         <span class="k">return</span> <span class="n">t_s</span><span class="p">,</span> <span class="n">freqs</span></div>
+
+
+<div class="viewcode-block" id="EMRIInspiral.get_f_fdot_fddot_back">
+<a class="viewcode-back" href="../../../api.html#fewtrax.trajectory.inspiral.EMRIInspiral.get_f_fdot_fddot_back">[docs]</a>
+    <span class="nd">@classmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_f_fdot_fddot_back</span><span class="p">(</span>
+        <span class="bp">cls</span><span class="p">,</span>
+        <span class="n">flux_data</span><span class="p">:</span> <span class="s2">&quot;FluxData&quot;</span><span class="p">,</span>
+        <span class="n">M</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
+        <span class="n">mu</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
+        <span class="n">a</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
+        <span class="n">e_f</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
+        <span class="n">T</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
+        <span class="n">t_alpha</span><span class="p">:</span> <span class="n">jnp</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+        <span class="n">x0</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1.0</span><span class="p">,</span>
+        <span class="n">max_steps</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">512</span><span class="p">,</span>
+        <span class="n">atol</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1e-10</span><span class="p">,</span>
+        <span class="n">rtol</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1e-10</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">jnp</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">jnp</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">jnp</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]:</span>
+<span class="w">        </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;Gravitational-wave frequency and its time derivatives on a fixed grid.</span>
+
+<span class="sd">        Solves the backward inspiral ODE once with dense (polynomial) output,</span>
+<span class="sd">        then evaluates f, ḟ, f̈ at every point in ``t_alpha`` by differentiating</span>
+<span class="sd">        the Dopri8 dense interpolant with ``jax.grad`` — no additional ODE</span>
+<span class="sd">        solves are required.</span>
+
+<span class="sd">        The backward ODE anchors the track to the plunge event rather than to</span>
+<span class="sd">        uncertain initial conditions, and is numerically more stable near</span>
+<span class="sd">        merger.  The sign convention follows</span>
+<span class="sd">        :math:`d\Phi_\phi/d\tau = -\Omega_\phi` (backward time reversal), so</span>
+
+<span class="sd">        .. math::</span>
+
+<span class="sd">            f        &amp;= -\frac{d\Phi_\phi/d\tau}{2\pi M_s} \\</span>
+<span class="sd">            \dot{f}  &amp;= +\frac{d^2\Phi_\phi/d\tau^2}{2\pi M_s^2} \\</span>
+<span class="sd">            \ddot{f} &amp;= -\frac{d^3\Phi_\phi/d\tau^3}{2\pi M_s^3}</span>
+
+<span class="sd">        where :math:`\tau` is geometric backward time (:math:`M` units) and</span>
+<span class="sd">        :math:`M_s = (M + \mu)\,G/c^3` is the total mass in seconds.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        flux_data : FluxData</span>
+<span class="sd">            Pre-loaded flux interpolators.</span>
+<span class="sd">        M, mu : float</span>
+<span class="sd">            Primary and secondary masses [:math:`M_\odot`].</span>
+<span class="sd">        a : float</span>
+<span class="sd">            Dimensionless BH spin.</span>
+<span class="sd">        e_f : float</span>
+<span class="sd">            Eccentricity at plunge (sets the backward-ODE initial condition).</span>
+<span class="sd">        T : float</span>
+<span class="sd">            Duration of backward integration [years].  The ODE integrates</span>
+<span class="sd">            from :math:`\tau = 0` (plunge) to :math:`\tau = T \cdot {\rm yr}`.</span>
+<span class="sd">        t_alpha : array-like, shape (N,)</span>
+<span class="sd">            Physical time grid [s].  ``t_alpha[0] = 0`` is the start of the</span>
+<span class="sd">            observation window; ``t_alpha[-1]`` is the plunge moment.</span>
+<span class="sd">            Must satisfy ``t_alpha[-1] \le T \cdot {\rm YEAR\_SI}``.</span>
+<span class="sd">        x0 : float</span>
+<span class="sd">            Inclination cosine (+1 prograde, −1 retrograde).</span>
+<span class="sd">        max_steps : int</span>
+<span class="sd">            Maximum ODE internal steps.</span>
+<span class="sd">        atol, rtol : float</span>
+<span class="sd">            Adaptive step-size tolerances.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        f : jnp.ndarray, shape (N,)</span>
+<span class="sd">            Instantaneous GW frequency [Hz].</span>
+<span class="sd">        fdot : jnp.ndarray, shape (N,)</span>
+<span class="sd">            First physical time derivative df/dt [Hz/s].</span>
+<span class="sd">        fddot : jnp.ndarray, shape (N,)</span>
+<span class="sd">            Second physical time derivative d²f/dt² [Hz/s²].</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">instance</span> <span class="o">=</span> <span class="bp">cls</span><span class="p">(</span><span class="n">flux_data</span><span class="p">,</span> <span class="n">phases</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+        <span class="n">a_</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">jnp</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
+        <span class="n">e_f_</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">e_f</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">jnp</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
+        <span class="n">M_s</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">asarray</span><span class="p">((</span><span class="n">M</span> <span class="o">+</span> <span class="n">mu</span><span class="p">)</span> <span class="o">*</span> <span class="n">MTSUN_SI</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">jnp</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
+        <span class="n">T_geo</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">T</span> <span class="o">*</span> <span class="n">YEAR_SI</span> <span class="o">/</span> <span class="n">M_s</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">jnp</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
+        <span class="n">mu_over_M</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">M</span> <span class="o">*</span> <span class="n">mu</span> <span class="o">/</span> <span class="p">(</span><span class="n">M</span> <span class="o">+</span> <span class="n">mu</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">jnp</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
+        <span class="n">r_isco</span> <span class="o">=</span> <span class="n">get_separatrix_fast</span><span class="p">(</span>
+            <span class="n">jnp</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">a_</span><span class="p">),</span> <span class="n">jnp</span><span class="o">.</span><span class="n">zeros</span><span class="p">((),</span> <span class="n">jnp</span><span class="o">.</span><span class="n">float64</span><span class="p">),</span> <span class="n">_x_sign</span><span class="p">(</span><span class="n">a_</span><span class="p">,</span> <span class="n">x0</span><span class="p">)</span>
+        <span class="p">)</span>
+        <span class="n">ode_args</span> <span class="o">=</span> <span class="p">(</span><span class="n">mu_over_M</span><span class="p">,</span> <span class="n">a_</span><span class="p">,</span> <span class="n">x0</span><span class="p">,</span> <span class="n">r_isco</span><span class="p">)</span>
+
+        <span class="n">p_sep</span> <span class="o">=</span> <span class="n">get_separatrix_fast</span><span class="p">(</span><span class="n">jnp</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">a_</span><span class="p">),</span> <span class="n">e_f_</span><span class="p">,</span> <span class="n">_x_sign</span><span class="p">(</span><span class="n">a_</span><span class="p">,</span> <span class="n">x0</span><span class="p">))</span>
+        <span class="n">y0</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">array</span><span class="p">(</span>
+            <span class="p">[</span><span class="n">p_sep</span> <span class="o">+</span> <span class="n">SEPARATRIX_BUFFER</span><span class="p">,</span> <span class="n">e_f_</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">],</span> <span class="n">dtype</span><span class="o">=</span><span class="n">jnp</span><span class="o">.</span><span class="n">float64</span>
+        <span class="p">)</span>
+
+        <span class="n">sol</span> <span class="o">=</span> <span class="n">diffrax</span><span class="o">.</span><span class="n">diffeqsolve</span><span class="p">(</span>
+            <span class="n">diffrax</span><span class="o">.</span><span class="n">ODETerm</span><span class="p">(</span><span class="k">lambda</span> <span class="n">t</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="n">args</span><span class="p">:</span> <span class="o">-</span><span class="n">instance</span><span class="o">.</span><span class="n">_ode_rhs</span><span class="p">(</span><span class="n">t</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="n">args</span><span class="p">)),</span>
+            <span class="n">diffrax</span><span class="o">.</span><span class="n">Dopri8</span><span class="p">(),</span>
+            <span class="n">t0</span><span class="o">=</span><span class="n">jnp</span><span class="o">.</span><span class="n">zeros</span><span class="p">((),</span> <span class="n">jnp</span><span class="o">.</span><span class="n">float64</span><span class="p">),</span>
+            <span class="n">t1</span><span class="o">=</span><span class="n">T_geo</span><span class="p">,</span>
+            <span class="n">dt0</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+            <span class="n">y0</span><span class="o">=</span><span class="n">y0</span><span class="p">,</span>
+            <span class="n">saveat</span><span class="o">=</span><span class="n">diffrax</span><span class="o">.</span><span class="n">SaveAt</span><span class="p">(</span><span class="n">dense</span><span class="o">=</span><span class="kc">True</span><span class="p">),</span>
+            <span class="n">stepsize_controller</span><span class="o">=</span><span class="n">diffrax</span><span class="o">.</span><span class="n">PIDController</span><span class="p">(</span><span class="n">rtol</span><span class="o">=</span><span class="n">rtol</span><span class="p">,</span> <span class="n">atol</span><span class="o">=</span><span class="n">atol</span><span class="p">),</span>
+            <span class="n">max_steps</span><span class="o">=</span><span class="n">max_steps</span><span class="p">,</span>
+            <span class="n">args</span><span class="o">=</span><span class="n">ode_args</span><span class="p">,</span>
+        <span class="p">)</span>
+
+        <span class="c1"># Map t_alpha [s] → backward geometric time τ [M]:</span>
+        <span class="c1">#   τ = 0  at plunge      (t_alpha[-1])</span>
+        <span class="c1">#   τ = T_geo  at start   (t_alpha[0])</span>
+        <span class="n">t_alpha_</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">t_alpha</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">jnp</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
+        <span class="n">tau_query</span> <span class="o">=</span> <span class="p">(</span><span class="n">t_alpha_</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">-</span> <span class="n">t_alpha_</span><span class="p">)</span> <span class="o">/</span> <span class="n">M_s</span>
+
+        <span class="k">def</span><span class="w"> </span><span class="nf">_phi_phi_at</span><span class="p">(</span><span class="n">tau</span><span class="p">):</span>
+            <span class="k">return</span> <span class="n">sol</span><span class="o">.</span><span class="n">interpolation</span><span class="o">.</span><span class="n">evaluate</span><span class="p">(</span><span class="n">tau</span><span class="p">)[</span><span class="mi">2</span><span class="p">]</span>
+
+        <span class="n">two_pi_Ms</span> <span class="o">=</span> <span class="mf">2.0</span> <span class="o">*</span> <span class="n">jnp</span><span class="o">.</span><span class="n">pi</span> <span class="o">*</span> <span class="n">M_s</span>
+
+        <span class="k">def</span><span class="w"> </span><span class="nf">_get_derivs</span><span class="p">(</span><span class="n">tau</span><span class="p">):</span>
+            <span class="n">d1</span> <span class="o">=</span> <span class="n">jax</span><span class="o">.</span><span class="n">grad</span><span class="p">(</span><span class="n">_phi_phi_at</span><span class="p">)(</span><span class="n">tau</span><span class="p">)</span>
+            <span class="n">d2</span> <span class="o">=</span> <span class="n">jax</span><span class="o">.</span><span class="n">grad</span><span class="p">(</span><span class="n">jax</span><span class="o">.</span><span class="n">grad</span><span class="p">(</span><span class="n">_phi_phi_at</span><span class="p">))(</span><span class="n">tau</span><span class="p">)</span>
+            <span class="n">d3</span> <span class="o">=</span> <span class="n">jax</span><span class="o">.</span><span class="n">grad</span><span class="p">(</span><span class="n">jax</span><span class="o">.</span><span class="n">grad</span><span class="p">(</span><span class="n">jax</span><span class="o">.</span><span class="n">grad</span><span class="p">(</span><span class="n">_phi_phi_at</span><span class="p">)))(</span><span class="n">tau</span><span class="p">)</span>
+            <span class="k">return</span> <span class="p">(</span>
+                <span class="o">-</span><span class="n">d1</span> <span class="o">/</span> <span class="n">two_pi_Ms</span><span class="p">,</span>            <span class="c1"># f      [Hz]</span>
+                <span class="n">d2</span> <span class="o">/</span> <span class="p">(</span><span class="n">two_pi_Ms</span> <span class="o">*</span> <span class="n">M_s</span><span class="p">),</span>     <span class="c1"># fdot   [Hz/s]</span>
+                <span class="o">-</span><span class="n">d3</span> <span class="o">/</span> <span class="p">(</span><span class="n">two_pi_Ms</span> <span class="o">*</span> <span class="n">M_s</span><span class="o">**</span><span class="mi">2</span><span class="p">),</span> <span class="c1"># fddot  [Hz/s²]</span>
+            <span class="p">)</span>
+
+        <span class="n">f</span><span class="p">,</span> <span class="n">fdot</span><span class="p">,</span> <span class="n">fddot</span> <span class="o">=</span> <span class="n">jax</span><span class="o">.</span><span class="n">vmap</span><span class="p">(</span><span class="n">_get_derivs</span><span class="p">)(</span><span class="n">tau_query</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">f</span><span class="p">,</span> <span class="n">fdot</span><span class="p">,</span> <span class="n">fddot</span></div>
 </div>
 
 
