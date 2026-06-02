@@ -2,24 +2,31 @@
 
 This is the main performance target of the package: computing vmapped,
 individually differentiable EMRI frequency tracks over a large random grid
-of intrinsic parameters.  All benchmarks use the full 5D solve
-(p, e, Φ_φ, Φ_θ, Φ_r) with ``phases=True``.
+of intrinsic parameters.
 
 What is measured
 ----------------
-A. **vmap throughput** — vmapped ``EMRIInspiral(phases=True)`` over batches
-   drawn from a random (seeded) parameter grid.  Reports trajectories/second,
-   per-trajectory wall time, and peak GPU memory.
+A. **vmap throughput (phases=True)** — vmapped ``EMRIInspiral(phases=True)``
+   over batches drawn from a random (seeded) parameter grid.  Returns the
+   full 5D trajectory (p, e, Φ_φ, Φ_θ, Φ_r) and reports
+   trajectories/second, per-trajectory wall time, and peak GPU memory.
 
-B. **Autodiff benchmarks** — timing for ``jax.grad``, ``jax.jacfwd``,
-   ``jax.jacrev``, and ``jax.hessian`` of a scalar trajectory loss w.r.t.
-   all five intrinsic parameters (M, mu, a, p0, e0).
+B. **vmap throughput (phases=False)** — vmapped ``EMRIInspiral(phases=False)``,
+   which integrates only the 2D (p, e) sub-system.  ~2.5x cheaper per step
+   for gradient-only workloads (Fisher matrix, frequency-track loss) that
+   do not need the accumulated orbital phases.
 
-   grad/jacrev use ``RecursiveCheckpointAdjoint`` (memory-efficient).
-   jacfwd/hessian use ``DirectAdjoint`` (enables forward-mode AD).
+C. **Consistency** — per-trajectory RMS difference in (p, e) between the
+   phases=True and phases=False solves.  Both share the same 2D ODE kernel,
+   so the difference should be at machine precision.
 
-C. **Local Fisher matrix** — timing for the (5×5) trajectory Fisher matrix
-   via forward-mode Jacobian (``DirectAdjoint``), plus a vmapped batch.
+D. **Autodiff benchmarks** — timing for ``jax.grad``, ``jax.jacfwd``,
+   and ``jax.hessian`` of a scalar trajectory loss w.r.t. all five
+   intrinsic parameters (M, mu, a, p0, e0).
+
+E. **Local Fisher matrix** — timing for computing the (5x5) trajectory
+   Fisher matrix via forward-mode Jacobian, plus a vmapped batch of
+   Fisher matrices.
 
 Intrinsic parameter ranges (random grid, fixed seed):
 
@@ -34,7 +41,7 @@ Usage
     python benchmark_vmap_tracks.py [/path/to/few/data]
     python benchmark_vmap_tracks.py --n-batch 512 --n-repeat 5
     python benchmark_vmap_tracks.py --seed 1234 --no-plots
-    python benchmark_vmap_tracks.py --skip-autodiff --skip-fisher
+    python benchmark_vmap_tracks.py --skip-exact --skip-autodiff
 """
 
 from __future__ import annotations
@@ -47,7 +54,6 @@ from pathlib import Path
 import numpy as np
 import jax
 import jax.numpy as jnp
-import diffrax
 
 jax.config.update("jax_enable_x64", True)
 
@@ -132,21 +138,6 @@ def build_param_grid(
     )
 
 
-def build_fdot_param_grid(N: int, seed: int = 77) -> dict[str, np.ndarray]:
-    """Draw N random EMRI parameter sets for backward f/fdot/fddot integration.
-
-    ``e_f`` is the eccentricity at plunge — kept modest ([0.02, 0.40]) so that
-    the separatrix is safely inside the flux-table domain for all spins.
-    """
-    rng = np.random.default_rng(seed)
-    return dict(
-        M   = 10.0 ** rng.uniform(np.log10(5e5), np.log10(5e6), N),
-        mu  = rng.uniform(5.0, 50.0, N),
-        a   = rng.uniform(0.05, 0.90, N),
-        e_f = rng.uniform(0.02, 0.40, N),
-    )
-
-
 # ---------------------------------------------------------------------------
 # Vmapped trajectory runners
 # ---------------------------------------------------------------------------
@@ -218,6 +209,58 @@ def bench_batch(
 
 
 # ---------------------------------------------------------------------------
+# Consistency: phases=True vs phases=False
+# ---------------------------------------------------------------------------
+
+def check_accuracy(
+    traj_5d,
+    traj_2d,
+    grid: dict,
+    N: int = 32,
+    dense_steps: int = 200,
+    T: float = 0.5,
+) -> dict:
+    """Verify (p, e) consistency between phases=True and phases=False solves.
+
+    Both share the identical 2D ODE kernel for (p, e), so differences should
+    be at machine precision (< 1e-10 relative).  Large discrepancies would
+    indicate a regression in one of the two solve paths.
+    """
+    print(f"\n  Consistency check: phases=True vs phases=False "
+          f"(N={N}, dense_steps={dense_steps}) …", end=" ", flush=True)
+
+    batched_5d = make_batched_traj(traj_5d, dense_steps=dense_steps, T=T)
+    batched_2d = make_batched_traj(traj_2d, dense_steps=dense_steps, T=T)
+
+    p0 = jnp.array(grid["p0"][:N], dtype=jnp.float64)
+    e0 = jnp.array(grid["e0"][:N], dtype=jnp.float64)
+    a  = jnp.array(grid["a"][:N],  dtype=jnp.float64)
+    M  = jnp.array(grid["M"][:N],  dtype=jnp.float64)
+    mu = jnp.array(grid["mu"][:N], dtype=jnp.float64)
+
+    out_5d = batched_5d(p0, e0, a, M, mu)
+    out_2d = batched_2d(p0, e0, a, M, mu)
+
+    # phases=True returns (t, p, e, Phi_phi, Phi_theta, Phi_r); phases=False (t, p, e)
+    t_r, p_r, e_r = (np.asarray(x) for x in out_5d[:3])
+    t_f, p_f, e_f = (np.asarray(x) for x in out_2d[:3])
+
+    dp_rms = np.sqrt(np.mean((p_f - p_r)**2, axis=1))
+    de_rms = np.sqrt(np.mean((e_f - e_r)**2, axis=1))
+
+    print("done")
+    print(f"    Δp (rms) : mean={dp_rms.mean():.3e}  max={dp_rms.max():.3e}")
+    print(f"    Δe (rms) : mean={de_rms.mean():.3e}  max={de_rms.max():.3e}")
+
+    return dict(
+        dp_rms=dp_rms, de_rms=de_rms,
+        p_5d=p_r, e_5d=e_r,
+        p_2d=p_f, e_2d=e_f,
+        t=t_r,
+    )
+
+
+# ---------------------------------------------------------------------------
 # Autodiff benchmarks
 # ---------------------------------------------------------------------------
 
@@ -263,16 +306,8 @@ def bench_autodiff(
     n_warmup: int = 2,
     n_repeat: int = 5,
     run_hessian: bool = True,
-    traj_fwd=None,
 ) -> dict:
-    """Time grad, jacfwd, hessian w.r.t. (M, mu, a, p0, e0).
-
-    ``traj`` is used for grad / jacrev (RecursiveCheckpointAdjoint).
-    ``traj_fwd``, if provided, is used for jacfwd and hessian
-    (DirectAdjoint — required for forward-mode and double reverse-mode).
-    Falls back to ``traj`` if ``traj_fwd`` is None.
-    """
-    traj_fwd = traj_fwd if traj_fwd is not None else traj
+    """Time grad, jacfwd, hessian w.r.t. (M, mu, a, p0, e0)."""
 
     # Pick the first valid grid point
     M0  = jnp.float64(grid["M"][0])
@@ -281,10 +316,8 @@ def bench_autodiff(
     p00 = jnp.float64(grid["p0"][0])
     e00 = jnp.float64(grid["e0"][0])
 
-    loss_fn      = _make_traj_scalar_loss(traj, T, dense_steps)
-    output_fn    = _make_traj_vector_loss(traj, T, dense_steps)
-    loss_fn_fwd  = _make_traj_scalar_loss(traj_fwd, T, dense_steps)
-    output_fn_fwd = _make_traj_vector_loss(traj_fwd, T, dense_steps)
+    loss_fn   = _make_traj_scalar_loss(traj, T, dense_steps)
+    output_fn = _make_traj_vector_loss(traj, T, dense_steps)
 
     results = {}
 
@@ -299,25 +332,22 @@ def bench_autodiff(
     print(f"{mean_s*1e3:.2f} ± {std_s*1e3:.2f} ms")
 
     # --- 2. jax.jacfwd (vector output → 5-param Jacobian) ---
-    # Requires DirectAdjoint (traj_fwd); RecursiveCheckpointAdjoint uses custom_vjp
-    # which has no custom_jvp rule and therefore blocks forward-mode AD.
+    # NOTE: jacfwd uses forward-mode autodiff (JVP), which is incompatible with
+    # diffrax's default RecursiveCheckpointAdjoint (custom_vjp, no custom_jvp).
+    # Switch to adjoint=diffrax.DirectAdjoint() in _solve_fast to enable this.
     print(f"    jax.jacfwd (N_out={3*dense_steps}) …", end=" ", flush=True)
     try:
-        jac_fn = jax.jit(jax.jacfwd(output_fn_fwd, argnums=(0, 1, 2, 3, 4)))
+        jac_fn = jax.jit(jax.jacfwd(output_fn, argnums=(0, 1, 2, 3, 4)))
         mean_s, std_s = repeat_timer(
             lambda: block_jax(jac_fn(M0, mu0, a0, p00, e00)),
             n_warmup=n_warmup, n_repeat=n_repeat,
         )
         results["jacfwd"] = (mean_s, std_s)
         print(f"{mean_s*1e3:.2f} ± {std_s*1e3:.2f} ms")
-    except (TypeError, ValueError) as exc:
-        exc_s = str(exc)
-        if "custom_vjp" in exc_s or "forward-mode" in exc_s:
+    except TypeError as exc:
+        if "custom_vjp" in str(exc) or "forward-mode" in str(exc):
             results["jacfwd"] = None
             print("skipped (solver uses custom_vjp; use DirectAdjoint to enable jacfwd)")
-        elif "while_loop" in exc_s or "Reverse-mode" in exc_s:
-            results["jacfwd"] = None
-            print("skipped (ODE solver uses dynamic while_loop; pass DirectAdjoint to enable)")
         else:
             raise
 
@@ -332,12 +362,12 @@ def bench_autodiff(
     print(f"{mean_s*1e3:.2f} ± {std_s*1e3:.2f} ms")
 
     # --- 4. jax.hessian ---
-    # Uses DirectAdjoint (traj_fwd) via jacfwd(jacrev(...)). RecursiveCheckpointAdjoint
-    # blocks forward-mode (custom_vjp) and double reverse-mode (dynamic while_loop).
+    # NOTE: jax.hessian defaults to jacfwd(jacrev(...)), and the outer jacfwd
+    # is incompatible with diffrax's custom_vjp. Use jacrev(jacrev(...)) instead.
     if run_hessian:
         print(f"    jax.hessian (5×5) …", end=" ", flush=True)
         hess_fn = jax.jit(
-            jax.jacfwd(jax.jacrev(loss_fn_fwd, argnums=(0, 1, 2, 3, 4)),
+            jax.jacrev(jax.jacrev(loss_fn, argnums=(0, 1, 2, 3, 4)),
                        argnums=(0, 1, 2, 3, 4))
         )
         try:
@@ -347,14 +377,10 @@ def bench_autodiff(
             )
             results["hessian"] = (mean_s, std_s)
             print(f"{mean_s*1e3:.2f} ± {std_s*1e3:.2f} ms")
-        except (TypeError, ValueError) as exc:
-            exc_s = str(exc)
-            if "custom_vjp" in exc_s or "forward-mode" in exc_s:
+        except TypeError as exc:
+            if "custom_vjp" in str(exc) or "forward-mode" in str(exc):
                 results["hessian"] = None
                 print("skipped (solver uses custom_vjp; use DirectAdjoint to enable jacfwd)")
-            elif "while_loop" in exc_s or "Reverse-mode" in exc_s:
-                results["hessian"] = None
-                print("skipped (ODE solver uses dynamic while_loop; pass DirectAdjoint to enable)")
             else:
                 raise
 
@@ -498,143 +524,15 @@ def bench_fisher(
 
 
 # ---------------------------------------------------------------------------
-# f / fdot / fddot backward benchmark
-# ---------------------------------------------------------------------------
-
-def _make_chunked_fdot_fn(single_fn, chunk_size: int):
-    """Return a JIT-compiled function that processes N trajectories in chunks.
-
-    Internally reshapes the batch into ``(n_chunks, chunk_size)`` and uses
-    ``jax.lax.map`` to sequentially apply ``jax.vmap(single_fn)`` to each
-    chunk.  Peak k-buffer memory is therefore proportional to ``chunk_size``,
-    not to the total batch size ``N``.
-
-    The leading dimension of ``N`` is padded to the next multiple of
-    ``chunk_size`` before the reshape; padding rows are trimmed from the output.
-    """
-    chunk_fn = jax.vmap(single_fn)
-
-    def run(a, e_f, M, mu):
-        N = a.shape[0]
-        if N <= chunk_size:
-            # Small batch: direct vmap, padding would clip since pad >= N
-            return chunk_fn(a, e_f, M, mu)
-
-        pad = (-N) % chunk_size  # pad < chunk_size <= N, so a[:pad] is always valid
-        if pad > 0:
-            a   = jnp.concatenate([a,   a[:pad]])
-            e_f = jnp.concatenate([e_f, e_f[:pad]])
-            M   = jnp.concatenate([M,   M[:pad]])
-            mu  = jnp.concatenate([mu,  mu[:pad]])
-
-        n_chunks = (N + pad) // chunk_size
-        reshape  = lambda x: x.reshape(n_chunks, chunk_size)
-        xs = (reshape(a), reshape(e_f), reshape(M), reshape(mu))
-
-        # lax.map applies chunk_fn sequentially; constant memory per iteration
-        out = jax.lax.map(lambda c: chunk_fn(c[0], c[1], c[2], c[3]), xs)
-
-        # out is (n_chunks, chunk_size, ...); flatten and trim padding
-        out = jax.tree.map(lambda x: x.reshape(-1, *x.shape[2:])[:N], out)
-        return out
-
-    return jax.jit(run)
-
-
-def bench_f_fdot_fddot_back(
-    flux_data,
-    grid: dict,
-    batch_sizes: list[int],
-    n_warmup: int,
-    n_repeat: int,
-    T: float = 2.0,
-    N_alpha: int = 1262,
-    max_steps: int = 256,
-    chunk_size: int = 1024,
-    atol: float = 1e-10,
-    rtol: float = 1e-10,
-) -> list[dict]:
-    """Benchmark vmapped ``EMRIInspiral.get_f_fdot_fddot_back``.
-
-    Integrates backward from the plunge for ``T`` years, on a fixed
-    ``N_alpha``-point time grid.  The dense Dopri8 interpolant is
-    differentiated three times via ``jax.grad`` to recover f, ḟ, f̈
-    without additional ODE solves.
-
-    Large batches are processed via ``jax.lax.map`` over chunks of
-    ``chunk_size`` trajectories, bounding peak k-buffer memory to::
-
-        chunk_size × max_steps × 560 bytes
-
-    For chunk_size=1024, max_steps=256: ≈ 143 MiB per chunk.
-    """
-    from fewtrax.trajectory.inspiral import EMRIInspiral
-    from fewtrax.utils.constants import YEAR_SI
-
-    # Fixed time grid shared across all batch lanes
-    t_alpha = jnp.linspace(0.0, T * YEAR_SI, N_alpha, dtype=jnp.float64)
-
-    def _track(a, e_f, M, mu):
-        return EMRIInspiral.get_f_fdot_fddot_back(
-            flux_data, M=M, mu=mu, a=a, e_f=e_f, T=T,
-            t_alpha=t_alpha, max_steps=max_steps, atol=atol, rtol=rtol,
-        )
-
-    batched_fn = _make_chunked_fdot_fn(_track, chunk_size)
-
-    results = []
-    for N in batch_sizes:
-        a_b   = jnp.array(grid["a"][:N],   dtype=jnp.float64)
-        e_f_b = jnp.array(grid["e_f"][:N], dtype=jnp.float64)
-        M_b   = jnp.array(grid["M"][:N],   dtype=jnp.float64)
-        mu_b  = jnp.array(grid["mu"][:N],  dtype=jnp.float64)
-
-        # k-buffer is bounded by chunk_size, not N
-        effective_chunk = min(chunk_size, N)
-        k_buf_mib = effective_chunk * max_steps * 14 * 5 * 8 / 1024**2
-        n_chunks  = (N + chunk_size - 1) // chunk_size
-
-        mem_before = get_jax_memory_mb()
-
-        def fn():
-            out = batched_fn(a_b, e_f_b, M_b, mu_b)
-            block_jax(out)
-
-        # Reduce repeats for very large batches to avoid excessive runtime
-        nr = min(n_repeat, max(1, 3 if N <= 8096 else 1))
-        nw = min(n_warmup, 1)
-        mean_s, std_s = repeat_timer(fn, n_warmup=nw, n_repeat=nr)
-
-        mem_after  = get_peak_memory_mb()
-        throughput = N / mean_s
-
-        results.append(dict(
-            N=N, mean_s=mean_s, std_s=std_s,
-            throughput=throughput,
-            mem_peak_mb=mem_after,
-            k_buf_mib=k_buf_mib,
-            n_chunks=n_chunks,
-        ))
-        print(
-            f"  N={N:7d} ({n_chunks}×{chunk_size}): "
-            f"{mean_s*1e3:10.1f} ± {std_s*1e3:7.1f} ms"
-            f"  ({throughput:9.1f} tracks/s)"
-            f"  k-buf/chunk≈{k_buf_mib:6.0f} MiB"
-            f"  mem_peak={mem_after:.0f} MiB"
-        )
-
-    return results
-
-
-# ---------------------------------------------------------------------------
 # Plots
 # ---------------------------------------------------------------------------
 
 def make_plots(
     fast_results: list[dict],
+    exact_results: list[dict],
+    accuracy: dict | None,
     autodiff_results: dict | None,
     fisher_results: dict | None,
-    fdot_results: list[dict] | None,
     grid: dict,
     out_dir: Path,
     traj_sample=None,
@@ -648,24 +546,36 @@ def make_plots(
     PARAM_LABELS = ["M", "μ", "a", "p₀", "e₀"]
 
     # ---- 1. Throughput scaling ----
-    Ns     = [r["N"] for r in fast_results]
-    t_ms   = [r["mean_s"] * 1e3 for r in fast_results]
-    std_ms = [r["std_s"] * 1e3 for r in fast_results]
-    tps    = [r["throughput"] for r in fast_results]
-
     fig, axes = plt.subplots(1, 2, figsize=(12, 4))
     ax_t, ax_m = axes
-    ax_t.errorbar(Ns, t_ms, yerr=std_ms, marker="o", color="C0", capsize=3,
-                  label="EMRIInspiral (phases=True)")
-    ax_t.set_xlabel("Batch size N"); ax_t.set_ylabel("Wall time [ms]")
-    ax_t.set_title("vmap wall time vs batch size")
-    ax_t.set_xscale("log"); ax_t.set_yscale("log")
-    ax_t.legend(); ax_t.grid(True, which="both", alpha=0.3)
 
-    ax_m.plot(Ns, tps, "C0-s", label="EMRIInspiral (phases=True)")
-    ax_m.set_xlabel("Batch size N"); ax_m.set_ylabel("Throughput [traj/s]")
+    for res, color, ls, label in [
+        (fast_results,  "C0", "-",  "EMRIInspiral (phases=True)"),
+        (exact_results, "C1", "--", "EMRIInspiral (phases=False)"),
+    ]:
+        if not res:
+            continue
+        Ns  = [r["N"] for r in res]
+        tps = [r["throughput"] for r in res]
+        t_ms = [r["mean_s"] * 1e3 for r in res]
+        std_ms = [r["std_s"] * 1e3 for r in res]
+        ax_t.errorbar(Ns, t_ms, yerr=std_ms, marker="o", color=color, ls=ls, label=label, capsize=3)
+        ax_m.plot(Ns, tps, marker="s", color=color, ls=ls, label=label)
+
+    ax_t.set_xlabel("Batch size N")
+    ax_t.set_ylabel("Wall time [ms]")
+    ax_t.set_title("vmap wall time vs batch size")
+    ax_t.set_xscale("log")
+    ax_t.set_yscale("log")
+    ax_t.legend()
+    ax_t.grid(True, which="both", alpha=0.3)
+
+    ax_m.set_xlabel("Batch size N")
+    ax_m.set_ylabel("Throughput [traj/s]")
     ax_m.set_title("vmap throughput vs batch size")
-    ax_m.set_xscale("log"); ax_m.legend(); ax_m.grid(True, which="both", alpha=0.3)
+    ax_m.set_xscale("log")
+    ax_m.legend()
+    ax_m.grid(True, which="both", alpha=0.3)
 
     fig.tight_layout()
     fig.savefig(out_dir / "throughput_scaling.png", dpi=150)
@@ -676,10 +586,17 @@ def make_plots(
     mem_vals = [r["mem_peak_mb"] for r in fast_results]
     if any(np.isfinite(m) for m in mem_vals):
         fig, ax = plt.subplots(figsize=(7, 4))
-        ax.plot(Ns, mem_vals, "C0-o", label="phases=True")
-        ax.set_xlabel("Batch size N"); ax.set_ylabel("Peak JAX memory [MiB]")
+        ax.plot([r["N"] for r in fast_results], mem_vals, "C0-o", label="phases=True")
+        if exact_results:
+            ax.plot([r["N"] for r in exact_results],
+                    [r["mem_peak_mb"] for r in exact_results],
+                    "C1--s", label="phases=False")
+        ax.set_xlabel("Batch size N")
+        ax.set_ylabel("Peak JAX memory [MiB]")
         ax.set_title("GPU memory vs batch size")
-        ax.set_xscale("log"); ax.legend(); ax.grid(True, alpha=0.3)
+        ax.set_xscale("log")
+        ax.legend()
+        ax.grid(True, alpha=0.3)
         fig.tight_layout()
         fig.savefig(out_dir / "memory_scaling.png", dpi=150)
         plt.close(fig)
@@ -689,17 +606,19 @@ def make_plots(
     if traj_sample is not None:
         t_yr = traj_sample["t"] / (365.25 * 86400)
         fig, axes = plt.subplots(2, 2, figsize=(12, 8))
-        for key, ylabel, ax in [
-            ("p",       "p [M]",      axes[0, 0]),
-            ("e",       "e",          axes[0, 1]),
-            ("Phi_phi", "Φ_φ [rad]",  axes[1, 0]),
-            ("Phi_r",   "Φ_r [rad]",  axes[1, 1]),
-        ]:
+        for i, (key, ylabel, ax) in enumerate([
+            ("p",       "p [M]",          axes[0, 0]),
+            ("e",       "e",              axes[0, 1]),
+            ("Phi_phi", "Φ_φ [rad]",      axes[1, 0]),
+            ("Phi_r",   "Φ_r [rad]",      axes[1, 1]),
+        ]):
             data = traj_sample.get(key)
             if data is None:
                 continue
             ax.plot(t_yr, data, "C0-", lw=0.8)
-            ax.set_xlabel("t [yr]"); ax.set_ylabel(ylabel); ax.grid(True, alpha=0.3)
+            ax.set_xlabel("t [yr]")
+            ax.set_ylabel(ylabel)
+            ax.grid(True, alpha=0.3)
 
         fig.suptitle(f"Sample trajectory  (M={traj_sample['M']:.2e}, "
                      f"μ={traj_sample['mu']:.1f}, a={traj_sample['a']:.2f}, "
@@ -709,7 +628,26 @@ def make_plots(
         plt.close(fig)
         print(f"    Saved: {out_dir / 'sample_trajectory.png'}")
 
-    # ---- 4. Autodiff timings bar chart ----
+    # ---- 4. Accuracy histograms ----
+    if accuracy is not None:
+        fig, axes = plt.subplots(1, 2, figsize=(10, 4))
+        for ax, data, title, xlabel in [
+            (axes[0], accuracy["dp_rms"], "Δp RMS per trajectory", "Δp [M]"),
+            (axes[1], accuracy["de_rms"], "Δe RMS per trajectory", "Δe"),
+        ]:
+            ax.hist(np.log10(data + 1e-20), bins=20, color="C2", edgecolor="k", lw=0.3)
+            ax.set_xlabel(f"log₁₀({xlabel})")
+            ax.set_ylabel("count")
+            ax.set_title(title)
+            ax.grid(True, alpha=0.3)
+
+        fig.suptitle("Consistency: phases=True vs phases=False (p, e)")
+        fig.tight_layout()
+        fig.savefig(out_dir / "accuracy_histograms.png", dpi=150)
+        plt.close(fig)
+        print(f"    Saved: {out_dir / 'accuracy_histograms.png'}")
+
+    # ---- 5. Autodiff timings bar chart ----
     if autodiff_results:
         labels_map = {
             "grad":    "grad\n(scalar)",
@@ -736,7 +674,7 @@ def make_plots(
         plt.close(fig)
         print(f"    Saved: {out_dir / 'autodiff_timings.png'}")
 
-    # ---- 5. Fisher matrix heatmap ----
+    # ---- 6. Fisher matrix heatmap ----
     if fisher_results and "fisher_matrix" in fisher_results:
         F = fisher_results["fisher_matrix"]
         # Normalise rows/cols by diagonal for display
@@ -783,7 +721,7 @@ def make_plots(
         plt.close(fig)
         print(f"    Saved: {out_dir / 'fisher_eigenvalues.png'}")
 
-    # ---- 6. vmapped Fisher throughput ----
+    # ---- 7. vmapped Fisher throughput ----
     if fisher_results and "vmap_fisher" in fisher_results:
         vr = fisher_results["vmap_fisher"]
         fig, ax = plt.subplots(figsize=(7, 4))
@@ -797,39 +735,6 @@ def make_plots(
         fig.savefig(out_dir / "fisher_throughput.png", dpi=150)
         plt.close(fig)
         print(f"    Saved: {out_dir / 'fisher_throughput.png'}")
-
-    # ---- 7. f/fdot/fddot backward benchmark throughput ----
-    if fdot_results:
-        Ns_fd  = [r["N"] for r in fdot_results]
-        tps_fd = [r["throughput"] for r in fdot_results]
-        t_ms_fd  = [r["mean_s"] * 1e3 for r in fdot_results]
-        std_ms_fd = [r["std_s"] * 1e3 for r in fdot_results]
-
-        fig, axes = plt.subplots(1, 2, figsize=(12, 4))
-
-        axes[0].errorbar(Ns_fd, t_ms_fd, yerr=std_ms_fd, marker="o",
-                         color="C4", capsize=3)
-        axes[0].set_xlabel("Batch size N")
-        axes[0].set_ylabel("Wall time [ms]")
-        axes[0].set_title("get_f_fdot_fddot_back — wall time vs batch size")
-        axes[0].set_xscale("log"); axes[0].set_yscale("log")
-        axes[0].grid(True, which="both", alpha=0.3)
-
-        axes[1].plot(Ns_fd, tps_fd, "C4-o")
-        axes[1].set_xlabel("Batch size N")
-        axes[1].set_ylabel("Throughput [tracks/s]")
-        axes[1].set_title("get_f_fdot_fddot_back — throughput vs batch size")
-        axes[1].set_xscale("log")
-        axes[1].grid(True, which="both", alpha=0.3)
-
-        fig.suptitle(
-            "vmapped backward integration + jax.grad³  "
-            "(f, ḟ, f̈ on N_alpha-point grid)"
-        )
-        fig.tight_layout()
-        fig.savefig(out_dir / "fdot_throughput.png", dpi=150)
-        plt.close(fig)
-        print(f"    Saved: {out_dir / 'fdot_throughput.png'}")
 
 
 # ---------------------------------------------------------------------------
@@ -851,24 +756,16 @@ def main():
                         help="dense_steps per trajectory (default: 100)")
     parser.add_argument("--max-batch",   type=int,   default=1024,
                         help="Largest batch size to test (default: 1024)")
+    parser.add_argument("--skip-exact",  action="store_true",
+                        help="Skip the base EMRIInspiral benchmark")
+    parser.add_argument("--skip-accuracy", action="store_true",
+                        help="Skip fast-vs-exact accuracy check")
     parser.add_argument("--skip-autodiff", action="store_true",
                         help="Skip autodiff benchmarks (grad/hessian/jacfwd)")
     parser.add_argument("--skip-fisher", action="store_true",
                         help="Skip Fisher matrix benchmarks")
     parser.add_argument("--skip-hessian", action="store_true",
                         help="Skip hessian (expensive for large dense_steps)")
-    parser.add_argument("--skip-fdot", action="store_true",
-                        help="Skip f/fdot/fddot backward integration benchmarks")
-    parser.add_argument("--T-fdot",        type=float, default=2.0,
-                        help="Backward integration duration for fdot benchmark [yr] (default: 2.0)")
-    parser.add_argument("--N-alpha",       type=int,   default=1262,
-                        help="Time-grid points for fdot benchmark (default: 1262)")
-    parser.add_argument("--max-steps-fdot", type=int,  default=100,
-                        help="ODE max_steps for dense solve; governs k-buffer memory "
-                             "(default: 256 ≈ 4× typical steps for 2-yr integration)")
-    parser.add_argument("--fdot-chunk-size", type=int, default=1024,
-                        help="Sub-batch size for lax.map chunking in fdot benchmark; "
-                             "peak k-buffer ∝ chunk_size × max_steps (default: 4096)")
     parser.add_argument("--no-plots",    action="store_true",
                         help="Do not save plot files")
     parser.add_argument("--plot-dir",    type=str,   default="benchmark_plots",
@@ -899,12 +796,13 @@ def main():
     from fewtrax.data import load_flux_data
     from fewtrax.trajectory import EMRIInspiral
     flux_data = load_flux_data(data_dir)
-    # phases=True: full 5D solve (p, e, Φ_φ, Φ_θ, Φ_r) — RecursiveCheckpointAdjoint
-    # is memory-efficient and supports grad/jacrev; used for vmap throughput benchmarks.
+    # phases=True: full 5D solve (p, e, Φ_φ, Φ_θ, Φ_r) — needed for waveforms
     traj_5d = EMRIInspiral(flux_data, phases=True)
-    # DirectAdjoint: exposes a custom_jvp rule, enabling jacfwd and hessian.
-    # Used for autodiff benchmarks and Fisher matrix computation (which use jacfwd).
-    traj_direct = EMRIInspiral(flux_data, phases=True, adjoint=diffrax.DirectAdjoint())
+    # phases=False: 2D (p, e) only — cheaper for gradient workloads
+    traj_2d = EMRIInspiral(flux_data, phases=False)
+    # Aliases used by benchmarking helpers (fast=2D, exact=5D for throughput plots)
+    traj_fast  = traj_5d  # primary benchmark target (full waveform pipeline)
+    traj_exact = traj_2d  # secondary benchmark target (grad-only workloads)
 
     # --- Build parameter grid ---
     N_max = max(args.max_batch, 64) + 16
@@ -922,7 +820,7 @@ def main():
     max_bs = args.max_batch
     batch_sizes = sorted({1, 4, 16, 64, 256, max_bs} & {n for n in range(1, max_bs + 1)})
 
-    # --- A. EMRIInspiral (phases=True) — vmapped throughput ---
+    # --- A. EMRIInspiral (phases=True) benchmark ---
     print_header("A. EMRIInspiral (phases=True) — vmapped batch throughput")
     print("   Full 5D solve: (p, e, Φ_φ, Φ_θ, Φ_r)")
     fast_results = bench_batch(
@@ -930,28 +828,61 @@ def main():
         dense_steps=args.dense, T=args.T, label="5D",
     )
 
+    # --- B. EMRIInspiral (phases=False) benchmark ---
+    exact_results = []
+    if not args.skip_exact:
+        print_header("B. EMRIInspiral (phases=False) — vmapped batch throughput")
+        print("   2D solve: (p, e) only — cheaper for gradient-only workloads")
+        exact_results = bench_batch(
+            traj_2d, grid, batch_sizes, nw, nr,
+            dense_steps=args.dense, T=args.T, label="2D",
+        )
+
     # --- Throughput summary table ---
     print_header("Throughput summary")
-    headers = ["N_batch", "5D [ms]", "5D [traj/s]"]
-    widths  = [10, 20, 16]
-    rows = [
-        (
-            str(r["N"]),
-            f"{r['mean_s']*1e3:.1f} ± {r['std_s']*1e3:.1f}",
-            f"{r['throughput']:.1f}",
-        )
-        for r in fast_results
-    ]
+    headers = ["N_batch", "5D [ms]", "5D [traj/s]",
+               "2D [ms]", "2D [traj/s]", "speedup (2D/5D)"]
+    widths  = [10, 14, 14, 14, 14, 16]
+    rows = []
+    for fr in fast_results:
+        N = fr["N"]
+        er = next((r for r in exact_results if r["N"] == N), None)
+        if er:
+            sp  = f"{er['throughput'] / fr['throughput']:.2f}×"
+            ex_ms  = f"{er['mean_s']*1e3:.1f} ± {er['std_s']*1e3:.1f}"
+            ex_tps = f"{er['throughput']:.1f}"
+        else:
+            sp = "—"; ex_ms = "—"; ex_tps = "—"
+        rows.append((
+            str(N),
+            f"{fr['mean_s']*1e3:.1f} ± {fr['std_s']*1e3:.1f}",
+            f"{fr['throughput']:.1f}",
+            ex_ms, ex_tps, sp,
+        ))
     print_table(rows, headers, widths)
-    peak_5d = max(r["throughput"] for r in fast_results)
-    print(f"\n  Peak throughput  (phases=True, 5D): {peak_5d:.1f} traj/s")
 
-    # --- B. Autodiff benchmarks ---
+    peak_5d = max(r["throughput"] for r in fast_results)
+    print(f"\n  Peak throughput  (phases=True,  5D): {peak_5d:.1f} traj/s")
+    if exact_results:
+        peak_2d = max(r["throughput"] for r in exact_results)
+        print(f"  Peak throughput  (phases=False, 2D): {peak_2d:.1f} traj/s")
+        print(f"  2D / 5D speedup:                     {peak_2d/peak_5d:.2f}×")
+
+    # --- C. Consistency ---
+    accuracy = None
+    if not args.skip_accuracy and not args.skip_exact:
+        print_header("C. Consistency: phases=True vs phases=False (p, e)")
+        accuracy = check_accuracy(
+            traj_5d, traj_2d, grid,
+            N=min(32, args.max_batch),
+            dense_steps=max(args.dense, 200),
+            T=args.T,
+        )
+
+    # --- D. Autodiff benchmarks ---
     autodiff_results = None
     if not args.skip_autodiff:
-        print_header("B. Autodiff benchmarks  (EMRIInspiral phases=True, single trajectory)")
-        print(f"   grad/jacrev use RecursiveCheckpointAdjoint; "
-              f"jacfwd/hessian use DirectAdjoint")
+        print_header("D. Autodiff benchmarks  (EMRIInspiral phases=True, single trajectory)")
         print(f"   Parameters: M, μ, a, p₀, e₀  |  T={args.T} yr  "
               f"|  dense_steps={args.dense}")
         autodiff_results = bench_autodiff(
@@ -959,7 +890,6 @@ def main():
             T=args.T, dense_steps=args.dense,
             n_warmup=nw, n_repeat=nr,
             run_hessian=not args.skip_hessian,
-            traj_fwd=traj_direct,
         )
 
         # Summary table
@@ -970,7 +900,7 @@ def main():
             "grad":    "jax.grad   (scalar→5 grads)",
             "jacfwd":  f"jax.jacfwd (→{3*args.dense}×5 Jac, fwd)",
             "jacrev":  f"jax.jacrev (→{3*args.dense}×5 Jac, rev)",
-            "hessian": "jax.hessian (5×5, jacfwd∘jacrev)",
+            "hessian": "jax.hessian (5×5 Hess)",
         }
         ad_rows = [
             (ad_labels[k], f"{v[0]*1e3:.2f}", f"{v[1]*1e3:.2f}")
@@ -979,70 +909,18 @@ def main():
         ]
         print_table(ad_rows, ad_headers, ad_widths)
 
-    # --- C. Fisher matrix benchmarks ---
+    # --- E. Fisher matrix benchmarks ---
     fisher_results = None
     if not args.skip_fisher:
-        print_header("C. Local Fisher matrix  (trajectory inner product, θ = M,μ,a,p₀,e₀)")
-        print(f"   Uses DirectAdjoint (jacfwd)  |  "
-              f"dense_steps={args.dense}  |  T={args.T} yr")
+        print_header("E. Local Fisher matrix  (trajectory inner product, θ = M,μ,a,p₀,e₀)")
+        print(f"   dense_steps={args.dense}  |  T={args.T} yr")
         fisher_batch_sizes = sorted({1, 16, 64, 256} & {n for n in range(1, max_bs + 1)})
         fisher_results = bench_fisher(
-            traj_direct, grid,
+            traj_5d, grid,
             T=args.T, dense_steps=args.dense,
             batch_sizes=fisher_batch_sizes,
             n_warmup=nw, n_repeat=nr,
         )
-
-    # --- D. f/fdot/fddot backward integration benchmark ---
-    fdot_results = None
-    if not args.skip_fdot:
-        fdot_batch_sizes = [64, 1024, 8096, 65000, 131066]
-        N_fdot_max = max(fdot_batch_sizes)
-
-        print_header(
-            "D. get_f_fdot_fddot_back — vmapped backward ODE + jax.grad³"
-        )
-        print(f"   T={args.T_fdot} yr backward  |  N_alpha={args.N_alpha} pts"
-              f"  |  max_steps={args.max_steps_fdot}"
-              f"  |  chunk_size={args.fdot_chunk_size}")
-        k_per_chunk_mib = args.fdot_chunk_size * args.max_steps_fdot * 14 * 5 * 8 / 1024**2
-        print(f"   k-buffer per chunk ≈ {k_per_chunk_mib:.0f} MiB  "
-              f"(chunk_size × max_steps × 14 × 5 × 8 bytes)")
-        print(f"   Batch sizes: {fdot_batch_sizes}")
-        print()
-
-        print(f"  Building fdot parameter grid  (N={N_fdot_max}, seed=77) …",
-              end=" ", flush=True)
-        fdot_grid = build_fdot_param_grid(N_fdot_max, seed=77)
-        print("done")
-        print(f"  a   range : [{fdot_grid['a'].min():.3f},  {fdot_grid['a'].max():.3f}]")
-        print(f"  e_f range : [{fdot_grid['e_f'].min():.3f}, {fdot_grid['e_f'].max():.3f}]")
-        print(f"  M   range : [{fdot_grid['M'].min():.2e}, {fdot_grid['M'].max():.2e}] Msun")
-        print(f"  mu  range : [{fdot_grid['mu'].min():.1f}, {fdot_grid['mu'].max():.1f}] Msun")
-        print()
-
-        fdot_results = bench_f_fdot_fddot_back(
-            flux_data, fdot_grid,
-            batch_sizes=fdot_batch_sizes,
-            n_warmup=nw, n_repeat=nr,
-            T=args.T_fdot, N_alpha=args.N_alpha,
-            max_steps=args.max_steps_fdot,
-            chunk_size=args.fdot_chunk_size,
-        )
-
-        print()
-        fd_headers = ["N_batch", "wall time [ms]", "throughput [tracks/s]", "k-buf [MiB]"]
-        fd_widths  = [10, 22, 24, 14]
-        fd_rows = [
-            (
-                str(r["N"]),
-                f"{r['mean_s']*1e3:.1f} ± {r['std_s']*1e3:.1f}",
-                f"{r['throughput']:.1f}",
-                f"{r['k_buf_mib']:.0f}",
-            )
-            for r in fdot_results
-        ]
-        print_table(fd_rows, fd_headers, fd_widths)
 
     # --- Compute sample trajectory for plot ---
     traj_sample = None
@@ -1071,8 +949,8 @@ def main():
         print_header("Saving plots")
         out_dir = Path(args.plot_dir)
         make_plots(
-            fast_results,
-            autodiff_results, fisher_results, fdot_results,
+            fast_results, exact_results, accuracy,
+            autodiff_results, fisher_results,
             grid, out_dir, traj_sample,
         )
         print(f"  All plots written to {out_dir}/")

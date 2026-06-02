@@ -47,7 +47,12 @@ ALPHA_AMP: float = 1.0 / 3.0
 BETA_AMP: float = 3.0
 
 # Region B constants
-DPC_REGIONB: float = DELTAPMAX
+# DPC_REGIONB matches FEW's amplitude-map ``pc = pLSO + DPC_REGIONB`` exactly.
+# FEW defines it as ``DELTAPMAX - DELTAPMIN`` = 9.0 (NOT ``DELTAPMAX`` = 9.001);
+# using ``DELTAPMAX`` here shifts U_of_p in Region B by ~5e-5 at the trajectory,
+# which propagates into a ~3e-4 median relative error in the JAX-port
+# amplitudes compared to FEW's bisplev output.
+DPC_REGIONB: float = DELTAPMAX - DELTAPMIN
 PMAX_REGIONB: float = 200.0
 DELTAPMIN_REGIONB: float = 9.0
 EMAX_REGIONB: float = 0.9
