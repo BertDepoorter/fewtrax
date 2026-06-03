@@ -172,7 +172,9 @@
     <span class="k">def</span><span class="w"> </span><span class="nf">_forward_map_B</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">a_abs</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">p</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">e</span><span class="p">:</span> <span class="nb">float</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Map (a, p, e) → (u, w, z) in Region B (amplitude coordinates).&quot;&quot;&quot;</span>
         <span class="n">pLSO</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">_separatrix_numpy</span><span class="p">(</span><span class="n">a_abs</span><span class="p">,</span> <span class="n">e</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">))</span>
-        <span class="n">DELTAPMIN_B</span> <span class="o">=</span> <span class="mf">9.001</span>
+        <span class="c1"># Match FEW&#39;s `pc = pLSO + DPC_REGIONB` where DPC_REGIONB = 9.0</span>
+        <span class="c1"># (i.e. DELTAPMAX - DELTAPMIN, not DELTAPMAX).</span>
+        <span class="n">DELTAPMIN_B</span> <span class="o">=</span> <span class="mf">9.0</span>
         <span class="n">PMAX_B</span> <span class="o">=</span> <span class="mf">200.0</span>
         <span class="n">pc</span> <span class="o">=</span> <span class="n">pLSO</span> <span class="o">+</span> <span class="n">DELTAPMIN_B</span>
         <span class="n">u</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">clip</span><span class="p">(</span>
@@ -552,6 +554,137 @@
     <span class="c1"># Trajectory evaluation</span>
     <span class="c1"># ------------------------------------------------------------------</span>
 
+    <span class="c1"># ------------------------------------------------------------------</span>
+    <span class="c1"># FEW-compatible mode selection (JAX-native, one jitted kernel)</span>
+    <span class="c1"># ------------------------------------------------------------------</span>
+
+<div class="viewcode-block" id="JAXAmplitudeInterpolator.select_modes_few">
+<a class="viewcode-back" href="../../../api.html#fewtrax.amplitude.interp.JAXAmplitudeInterpolator.select_modes_few">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">select_modes_few</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">a</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
+        <span class="n">p</span><span class="p">:</span> <span class="n">jnp</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+        <span class="n">e</span><span class="p">:</span> <span class="n">jnp</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+        <span class="n">ylms_pos</span><span class="p">:</span> <span class="n">jnp</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+        <span class="n">ylms_neg</span><span class="p">:</span> <span class="n">jnp</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+        <span class="n">threshold</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1e-5</span><span class="p">,</span>
+        <span class="n">include_minus_mkn</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+        <span class="n">teuk_modes</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">jnp</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]:</span>
+<span class="w">        </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;FEW-compatible mode selection performed entirely on the GPU.</span>
+
+<span class="sd">        Reproduces ``few.utils.modeselector.ModeSelector.__call__`` (default</span>
+<span class="sd">        threshold path) of FEW **2.0.0** one-to-one.  The 2.0.0 algorithm</span>
+<span class="sd">        is different from earlier FEW releases — there is no Δt weighting,</span>
+<span class="sd">        and the cumulative cutoff is applied per trajectory point with the</span>
+<span class="sd">        final kept set being the union across all time steps:</span>
+
+<span class="sd">        1. Build the extended power array of shape</span>
+<span class="sd">           ``(N_traj, n_m + n_m_pos)`` by concatenating the m≥0 column</span>
+<span class="sd">           block ``|A · Y_{l,+m}|²`` with the m&gt;0 column block</span>
+<span class="sd">           ``|A* · Y_{l,-m}|²`` (one column per ``(-m, -k, -n)`` partner).</span>
+<span class="sd">        2. For each row (time step) sort descending and apply</span>
+<span class="sd">           ``cumsum &lt; total · (1 − threshold)``.  The first mode that</span>
+<span class="sd">           pushes the cumsum past the budget is retained.</span>
+<span class="sd">        3. The final kept set is the union of all per-time-step kept</span>
+<span class="sd">           indices.  Partner indices land in ``[n_m, n_m + n_m_pos)`` and</span>
+<span class="sd">           are remapped to their +m positions ``index − n_m_pos`` (FEW&#39;s</span>
+<span class="sd">           CUDA kernel keeps +m and -m together by construction).</span>
+
+<span class="sd">        The whole power-build + per-row argsort + cumsum runs in one</span>
+<span class="sd">        ``eqx.filter_jit`` kernel and yields the ``(N_traj, n_modes)``</span>
+<span class="sd">        amplitude table as a by-product, so the caller does not need a</span>
+<span class="sd">        second amplitude pass.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        a : float</span>
+<span class="sd">            Dimensionless BH spin.</span>
+<span class="sd">        p, e : (N_traj,) jnp.ndarray</span>
+<span class="sd">            Sparse trajectory.  ``t`` is *not* required — FEW 2.0.0 does</span>
+<span class="sd">            not weight by Δt.</span>
+<span class="sd">        ylms_pos : (n_modes,) complex</span>
+<span class="sd">            Spin-weighted spherical harmonic :math:`Y_{l_i, +m_i}` for each</span>
+<span class="sd">            mode in ``self.amp_data.l_arr`` / ``m_arr``.  Easiest source::</span>
+
+<span class="sd">                ylms_pos = ylm_gen(amp_data.l_arr,  amp_data.m_arr, θ, φ)</span>
+
+<span class="sd">        ylms_neg : (n_modes,) complex</span>
+<span class="sd">            :math:`Y_{l_i, -m_i}` for each mode.  The ``m_i = 0`` entries</span>
+<span class="sd">            are unused (FEW does not pair m=0 modes with a -m partner).</span>
+<span class="sd">            Easiest source::</span>
+
+<span class="sd">                ylms_neg = ylm_gen(amp_data.l_arr, -amp_data.m_arr, θ, φ)</span>
+
+<span class="sd">        threshold : float</span>
+<span class="sd">            FEW mode-selection threshold (``mode_selection_threshold``).</span>
+<span class="sd">        include_minus_mkn : bool</span>
+<span class="sd">            Accepted only for API parity.  FEW 2.0.0 always builds the</span>
+<span class="sd">            extended power including the -mkn partner in the threshold</span>
+<span class="sd">            path; setting this to ``False`` does not change the result.</span>
+<span class="sd">        teuk_modes : (N_traj, n_modes) complex, optional</span>
+<span class="sd">            Pre-computed amplitudes to score, in the same mode order as</span>
+<span class="sd">            ``self.amp_data.l_arr``.  When supplied the JAX amplitude pass</span>
+<span class="sd">            is skipped, so the selection becomes byte-for-byte</span>
+<span class="sd">            reproducible against FEW (whose amplitudes come from</span>
+<span class="sd">            scipy/cupy ``bisplev``).  Use this to feed</span>
+<span class="sd">            ``model.amplitude_generator(a, p, e, x0)`` when you need to</span>
+<span class="sd">            match ``ModeSelector`` exactly; omit it for the all-JAX fast</span>
+<span class="sd">            path.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        keep_inds : (n_keep,) np.ndarray int</span>
+<span class="sd">            Sorted-ascending indices into the mode arrays of</span>
+<span class="sd">            ``self.amp_data``.</span>
+<span class="sd">        teuk_all : (N_traj, n_modes) np.ndarray complex128</span>
+<span class="sd">            All amplitudes evaluated on the sparse trajectory.  Use</span>
+<span class="sd">            ``teuk_all[:, keep_inds]`` to feed the mode-summation step</span>
+<span class="sd">            without re-evaluating the amplitudes.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">del</span> <span class="n">include_minus_mkn</span>  <span class="c1"># FEW 2.0.0 threshold path ignores this flag</span>
+
+        <span class="n">m_np</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">amp_data</span><span class="o">.</span><span class="n">m_arr</span><span class="p">)</span>
+        <span class="n">num_m0</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">m_np</span> <span class="o">==</span> <span class="mi">0</span><span class="p">))</span>                       <span class="c1"># static</span>
+        <span class="n">num_m_zero_up</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">m_np</span><span class="o">.</span><span class="n">size</span><span class="p">)</span>                        <span class="c1"># = n_modes (static)</span>
+        <span class="n">num_m_1_up</span> <span class="o">=</span> <span class="n">num_m_zero_up</span> <span class="o">-</span> <span class="n">num_m0</span>                   <span class="c1"># static</span>
+
+        <span class="n">yp_j</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">ylms_pos</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">jnp</span><span class="o">.</span><span class="n">complex128</span><span class="p">)</span>
+        <span class="n">yn_j</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">ylms_neg</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">jnp</span><span class="o">.</span><span class="n">complex128</span><span class="p">)</span>
+
+        <span class="c1">#if teuk_modes is None:</span>
+        <span class="c1">#    a_j = jnp.asarray(a, dtype=jnp.float64)</span>
+        <span class="c1">#    p_j = jnp.asarray(p, dtype=jnp.float64)</span>
+        <span class="c1">#    e_j = jnp.asarray(e, dtype=jnp.float64)</span>
+        <span class="c1">#    teuk_all_j, inds_sort, keep_mask = _few_eval_and_score_jit(</span>
+        <span class="c1">#        self, a_j, p_j, e_j, yp_j, yn_j, num_m0, float(threshold),</span>
+        <span class="c1">#    )</span>
+        <span class="c1">#    teuk_all = np.asarray(teuk_all_j)</span>
+        <span class="c1">#else:</span>
+        <span class="n">teuk_in_j</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">teuk_modes</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">jnp</span><span class="o">.</span><span class="n">complex128</span><span class="p">)</span>
+        <span class="n">inds_sort</span><span class="p">,</span> <span class="n">keep_mask</span> <span class="o">=</span> <span class="n">_few_score_modes_jit</span><span class="p">(</span><span class="n">teuk_in_j</span><span class="p">,</span> <span class="n">yp_j</span><span class="p">,</span> <span class="n">yn_j</span><span class="p">,</span> <span class="n">num_m0</span><span class="p">,</span> <span class="nb">float</span><span class="p">(</span><span class="n">threshold</span><span class="p">))</span>
+        <span class="n">teuk_all</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">teuk_modes</span><span class="p">)</span>
+
+        <span class="c1"># Collect kept indices across all time steps (FEW&#39;s union step),</span>
+        <span class="c1"># remap partner indices to their +m positions, deduplicate.</span>
+        <span class="n">inds_sort_np</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">inds_sort</span><span class="p">)</span>
+        <span class="n">keep_mask_np</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">keep_mask</span><span class="p">)</span>
+        <span class="n">temp</span> <span class="o">=</span> <span class="n">inds_sort_np</span><span class="p">[</span><span class="n">keep_mask_np</span><span class="p">]</span>                     <span class="c1"># 1-D</span>
+
+        <span class="c1"># This reorders the modes accordingly to FEW positive and negative</span>
+        <span class="c1"># Mode ordering is [m=0 modes, m&gt;0 modes], so the -m partner of a m&gt;0 mode is at index</span>
+        <span class="c1"># index - num_m_1_up.  The m=0 modes have no partners and are left unchanged.</span>
+        <span class="n">temp_remapped</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span>
+            <span class="n">temp</span> <span class="o">&lt;</span> <span class="n">num_m_zero_up</span><span class="p">,</span>
+            <span class="n">temp</span><span class="p">,</span>
+            <span class="n">temp</span> <span class="o">-</span> <span class="n">num_m_1_up</span><span class="p">,</span>
+        <span class="p">)</span>
+
+        <span class="c1"># Keep the unique modes</span>
+        <span class="n">keep_inds</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">unique</span><span class="p">(</span><span class="n">temp_remapped</span><span class="p">)</span>                  <span class="c1"># sorted ascending</span>
+        <span class="k">return</span> <span class="n">keep_inds</span><span class="p">,</span> <span class="n">teuk_all</span></div>
+
+
 <div class="viewcode-block" id="JAXAmplitudeInterpolator.evaluate_trajectory">
 <a class="viewcode-back" href="../../../api.html#fewtrax.amplitude.interp.JAXAmplitudeInterpolator.evaluate_trajectory">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">evaluate_trajectory</span><span class="p">(</span>
@@ -594,6 +727,83 @@
         <span class="p">)(</span><span class="n">p</span><span class="p">,</span> <span class="n">e</span><span class="p">,</span> <span class="n">pLSO</span><span class="p">)</span></div>
 </div>
 
+
+
+<span class="c1"># ---------------------------------------------------------------------------</span>
+<span class="c1"># Module-level jit kernels for FEW-compatible mode selection (FEW 2.0.0)</span>
+<span class="c1"># ---------------------------------------------------------------------------</span>
+
+<span class="nd">@eqx</span><span class="o">.</span><span class="n">filter_jit</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">_few_score_modes_jit</span><span class="p">(</span>
+    <span class="n">teuk_all</span><span class="p">:</span> <span class="n">jnp</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+    <span class="n">ylms_pos</span><span class="p">:</span> <span class="n">jnp</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+    <span class="n">ylms_neg</span><span class="p">:</span> <span class="n">jnp</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+    <span class="n">num_m0</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+    <span class="n">threshold</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
+<span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;FEW-2.0.0 scoring of (already evaluated) mode amplitudes.</span>
+
+<span class="sd">    Builds the extended Ylm-weighted power array</span>
+
+<span class="sd">        P[t, j] = |A[t, j] · Y_+m[j]|²            for j ∈ [0, n_m)</span>
+<span class="sd">        P[t, n_m + k] = |A*[t, n_m0 + k] · Y_-m[n_m0 + k]|²   for k ∈ [0, n_m_pos)</span>
+
+<span class="sd">    where ``num_m0`` is the count of m = 0 modes (so the m &gt; 0 modes occupy</span>
+<span class="sd">    the contiguous slice ``[num_m0, n_m)`` thanks to FEW&#39;s ``m0sort``</span>
+<span class="sd">    ordering, which fewtrax replicates in ``_generate_mode_arrays``).</span>
+
+<span class="sd">    Each row is argsorted descending; the per-row cumulative cutoff</span>
+<span class="sd">    ``cumsum &lt; total · (1 − threshold)`` is applied with the same</span>
+<span class="sd">    &quot;first-overshoot-kept&quot; rule as FEW.  The caller takes the union of</span>
+<span class="sd">    kept indices across rows in numpy because the kept count varies per</span>
+<span class="sd">    row.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    inds_sort : (N_traj, n_m + n_m_pos) int  -- descending order per row</span>
+<span class="sd">    keep_mask : (N_traj, n_m + n_m_pos) bool -- FEW&#39;s per-row threshold mask</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="c1"># +m column block — all modes paired with Y_{l,+m}.</span>
+    <span class="n">positive_amps</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">teuk_all</span> <span class="o">*</span> <span class="n">ylms_pos</span><span class="p">[</span><span class="kc">None</span><span class="p">,</span> <span class="p">:])</span> <span class="o">**</span> <span class="mi">2</span>                <span class="c1"># (n_t, n_m)</span>
+    <span class="c1"># -m partner block — only m &gt; 0 modes (contiguous in m0sort order).</span>
+    <span class="n">teuk_neg</span> <span class="o">=</span> <span class="n">teuk_all</span><span class="p">[:,</span> <span class="n">num_m0</span><span class="p">:]</span>                                <span class="c1"># (n_t, n_m_pos)</span>
+    <span class="n">ylms_neg_harm</span> <span class="o">=</span> <span class="n">ylms_neg</span><span class="p">[</span><span class="n">num_m0</span><span class="p">:]</span>                                   <span class="c1"># (n_m_pos,)</span>
+    <span class="n">negative_amps</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">jnp</span><span class="o">.</span><span class="n">conj</span><span class="p">(</span><span class="n">teuk_neg</span><span class="p">)</span> <span class="o">*</span> <span class="n">ylms_neg_harm</span><span class="p">[</span><span class="kc">None</span><span class="p">,</span> <span class="p">:])</span> <span class="o">**</span> <span class="mi">2</span>
+
+    <span class="c1"># it contains the power at each time step for all the modes</span>
+    <span class="n">power</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">concatenate</span><span class="p">([</span><span class="n">positive_amps</span><span class="p">,</span> <span class="n">negative_amps</span><span class="p">],</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>            <span class="c1"># (n_t, n_ext)</span>
+
+    <span class="c1"># Sorting the modes in each time step depending on their total power</span>
+    <span class="n">inds_sort</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">argsort</span><span class="p">(</span><span class="n">power</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)[:,</span> <span class="p">::</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>                <span class="c1"># (n_t, n_ext)</span>
+    <span class="n">sorted_power</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">take_along_axis</span><span class="p">(</span><span class="n">power</span><span class="p">,</span> <span class="n">inds_sort</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+    <span class="n">cumsum</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">cumsum</span><span class="p">(</span><span class="n">sorted_power</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+
+    <span class="c1"># Per-row cumulative cutoff:  inds_keep[:, 0]=True; inds_keep[:, i] =</span>
+    <span class="c1"># cumsum[:, i-1] &lt; cumsum[:, -1] · (1 − threshold).</span>
+    <span class="n">budget</span> <span class="o">=</span> <span class="n">cumsum</span><span class="p">[:,</span> <span class="o">-</span><span class="mi">1</span><span class="p">:]</span> <span class="o">*</span> <span class="p">(</span><span class="mf">1.0</span> <span class="o">-</span> <span class="n">threshold</span><span class="p">)</span>
+    <span class="n">head</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">ones</span><span class="p">((</span><span class="n">cumsum</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="mi">1</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">bool</span><span class="p">)</span>
+    <span class="n">keep_mask</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">concatenate</span><span class="p">([</span><span class="n">head</span><span class="p">,</span> <span class="n">cumsum</span><span class="p">[:,</span> <span class="p">:</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">&lt;</span> <span class="n">budget</span><span class="p">],</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">inds_sort</span><span class="p">,</span> <span class="n">keep_mask</span>
+
+
+<span class="nd">@eqx</span><span class="o">.</span><span class="n">filter_jit</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">_few_eval_and_score_jit</span><span class="p">(</span>
+    <span class="n">interp</span><span class="p">:</span> <span class="n">JAXAmplitudeInterpolator</span><span class="p">,</span>
+    <span class="n">a</span><span class="p">:</span> <span class="n">jnp</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+    <span class="n">p</span><span class="p">:</span> <span class="n">jnp</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+    <span class="n">e</span><span class="p">:</span> <span class="n">jnp</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+    <span class="n">ylms_pos</span><span class="p">:</span> <span class="n">jnp</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+    <span class="n">ylms_neg</span><span class="p">:</span> <span class="n">jnp</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+    <span class="n">num_m0</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+    <span class="n">threshold</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
+<span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Evaluate amplitudes on the trajectory then score (single GPU kernel).&quot;&quot;&quot;</span>
+    <span class="n">teuk_all</span> <span class="o">=</span> <span class="n">interp</span><span class="o">.</span><span class="n">evaluate_trajectory</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">p</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>           <span class="c1"># (n_t, n_modes)</span>
+    <span class="n">inds_sort</span><span class="p">,</span> <span class="n">keep_mask</span> <span class="o">=</span> <span class="n">_few_score_modes_jit</span><span class="p">(</span>
+        <span class="n">teuk_all</span><span class="p">,</span> <span class="n">ylms_pos</span><span class="p">,</span> <span class="n">ylms_neg</span><span class="p">,</span> <span class="n">num_m0</span><span class="p">,</span> <span class="n">threshold</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="k">return</span> <span class="n">teuk_all</span><span class="p">,</span> <span class="n">inds_sort</span><span class="p">,</span> <span class="n">keep_mask</span>
 </pre></div>
 
            </div>
