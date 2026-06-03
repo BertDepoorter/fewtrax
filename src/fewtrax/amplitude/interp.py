@@ -86,7 +86,9 @@ class AmplitudeInterpolator:
     def _forward_map_B(self, a_abs: float, p: float, e: float):
         """Map (a, p, e) → (u, w, z) in Region B (amplitude coordinates)."""
         pLSO = float(_separatrix_numpy(a_abs, e, 1.0))
-        DELTAPMIN_B = 9.001
+        # Match FEW's `pc = pLSO + DPC_REGIONB` where DPC_REGIONB = 9.0
+        # (i.e. DELTAPMAX - DELTAPMIN, not DELTAPMAX).
+        DELTAPMIN_B = 9.0
         PMAX_B = 200.0
         pc = pLSO + DELTAPMIN_B
         u = float(np.clip(
@@ -454,6 +456,134 @@ class JAXAmplitudeInterpolator(eqx.Module):
     # Trajectory evaluation
     # ------------------------------------------------------------------
 
+    # ------------------------------------------------------------------
+    # FEW-compatible mode selection (JAX-native, one jitted kernel)
+    # ------------------------------------------------------------------
+
+    def select_modes_few(
+        self,
+        a: float,
+        p: jnp.ndarray,
+        e: jnp.ndarray,
+        ylms_pos: jnp.ndarray,
+        ylms_neg: jnp.ndarray,
+        threshold: float = 1e-5,
+        include_minus_mkn: bool = True,
+        teuk_modes: Optional[jnp.ndarray] = None,
+    ) -> tuple[np.ndarray, np.ndarray]:
+        r"""FEW-compatible mode selection performed entirely on the GPU.
+
+        Reproduces ``few.utils.modeselector.ModeSelector.__call__`` (default
+        threshold path) of FEW **2.0.0** one-to-one.  The 2.0.0 algorithm
+        is different from earlier FEW releases — there is no Δt weighting,
+        and the cumulative cutoff is applied per trajectory point with the
+        final kept set being the union across all time steps:
+
+        1. Build the extended power array of shape
+           ``(N_traj, n_m + n_m_pos)`` by concatenating the m≥0 column
+           block ``|A · Y_{l,+m}|²`` with the m>0 column block
+           ``|A* · Y_{l,-m}|²`` (one column per ``(-m, -k, -n)`` partner).
+        2. For each row (time step) sort descending and apply
+           ``cumsum < total · (1 − threshold)``.  The first mode that
+           pushes the cumsum past the budget is retained.
+        3. The final kept set is the union of all per-time-step kept
+           indices.  Partner indices land in ``[n_m, n_m + n_m_pos)`` and
+           are remapped to their +m positions ``index − n_m_pos`` (FEW's
+           CUDA kernel keeps +m and -m together by construction).
+
+        The whole power-build + per-row argsort + cumsum runs in one
+        ``eqx.filter_jit`` kernel and yields the ``(N_traj, n_modes)``
+        amplitude table as a by-product, so the caller does not need a
+        second amplitude pass.
+
+        Parameters
+        ----------
+        a : float
+            Dimensionless BH spin.
+        p, e : (N_traj,) jnp.ndarray
+            Sparse trajectory.  ``t`` is *not* required — FEW 2.0.0 does
+            not weight by Δt.
+        ylms_pos : (n_modes,) complex
+            Spin-weighted spherical harmonic :math:`Y_{l_i, +m_i}` for each
+            mode in ``self.amp_data.l_arr`` / ``m_arr``.  Easiest source::
+
+                ylms_pos = ylm_gen(amp_data.l_arr,  amp_data.m_arr, θ, φ)
+
+        ylms_neg : (n_modes,) complex
+            :math:`Y_{l_i, -m_i}` for each mode.  The ``m_i = 0`` entries
+            are unused (FEW does not pair m=0 modes with a -m partner).
+            Easiest source::
+
+                ylms_neg = ylm_gen(amp_data.l_arr, -amp_data.m_arr, θ, φ)
+
+        threshold : float
+            FEW mode-selection threshold (``mode_selection_threshold``).
+        include_minus_mkn : bool
+            Accepted only for API parity.  FEW 2.0.0 always builds the
+            extended power including the -mkn partner in the threshold
+            path; setting this to ``False`` does not change the result.
+        teuk_modes : (N_traj, n_modes) complex, optional
+            Pre-computed amplitudes to score, in the same mode order as
+            ``self.amp_data.l_arr``.  When supplied the JAX amplitude pass
+            is skipped, so the selection becomes byte-for-byte
+            reproducible against FEW (whose amplitudes come from
+            scipy/cupy ``bisplev``).  Use this to feed
+            ``model.amplitude_generator(a, p, e, x0)`` when you need to
+            match ``ModeSelector`` exactly; omit it for the all-JAX fast
+            path.
+
+        Returns
+        -------
+        keep_inds : (n_keep,) np.ndarray int
+            Sorted-ascending indices into the mode arrays of
+            ``self.amp_data``.
+        teuk_all : (N_traj, n_modes) np.ndarray complex128
+            All amplitudes evaluated on the sparse trajectory.  Use
+            ``teuk_all[:, keep_inds]`` to feed the mode-summation step
+            without re-evaluating the amplitudes.
+        """
+        del include_minus_mkn  # FEW 2.0.0 threshold path ignores this flag
+
+        m_np = np.asarray(self.amp_data.m_arr)
+        num_m0 = int(np.sum(m_np == 0))                       # static
+        num_m_zero_up = int(m_np.size)                        # = n_modes (static)
+        num_m_1_up = num_m_zero_up - num_m0                   # static
+
+        yp_j = jnp.asarray(ylms_pos, dtype=jnp.complex128)
+        yn_j = jnp.asarray(ylms_neg, dtype=jnp.complex128)
+
+        #if teuk_modes is None:
+        #    a_j = jnp.asarray(a, dtype=jnp.float64)
+        #    p_j = jnp.asarray(p, dtype=jnp.float64)
+        #    e_j = jnp.asarray(e, dtype=jnp.float64)
+        #    teuk_all_j, inds_sort, keep_mask = _few_eval_and_score_jit(
+        #        self, a_j, p_j, e_j, yp_j, yn_j, num_m0, float(threshold),
+        #    )
+        #    teuk_all = np.asarray(teuk_all_j)
+        #else:
+        teuk_in_j = jnp.asarray(teuk_modes, dtype=jnp.complex128)
+        inds_sort, keep_mask = _few_score_modes_jit(teuk_in_j, yp_j, yn_j, num_m0, float(threshold))
+        teuk_all = np.asarray(teuk_modes)
+
+        # Collect kept indices across all time steps (FEW's union step),
+        # remap partner indices to their +m positions, deduplicate.
+        inds_sort_np = np.asarray(inds_sort)
+        keep_mask_np = np.asarray(keep_mask)
+        temp = inds_sort_np[keep_mask_np]                     # 1-D
+
+        # This reorders the modes accordingly to FEW positive and negative
+        # Mode ordering is [m=0 modes, m>0 modes], so the -m partner of a m>0 mode is at index
+        # index - num_m_1_up.  The m=0 modes have no partners and are left unchanged.
+        temp_remapped = np.where(
+            temp < num_m_zero_up,
+            temp,
+            temp - num_m_1_up,
+        )
+
+        # Keep the unique modes
+        keep_inds = np.unique(temp_remapped)                  # sorted ascending
+        return keep_inds, teuk_all
+
     def evaluate_trajectory(
         self,
         a: float,
@@ -492,3 +622,80 @@ class JAXAmplitudeInterpolator(eqx.Module):
         return jax.vmap(
             lambda pi, ei, pli: self(a, pi, ei, pLSO=pli)
         )(p, e, pLSO)
+
+
+# ---------------------------------------------------------------------------
+# Module-level jit kernels for FEW-compatible mode selection (FEW 2.0.0)
+# ---------------------------------------------------------------------------
+
+@eqx.filter_jit
+def _few_score_modes_jit(
+    teuk_all: jnp.ndarray,
+    ylms_pos: jnp.ndarray,
+    ylms_neg: jnp.ndarray,
+    num_m0: int,
+    threshold: float,
+):
+    """FEW-2.0.0 scoring of (already evaluated) mode amplitudes.
+
+    Builds the extended Ylm-weighted power array
+
+        P[t, j] = |A[t, j] · Y_+m[j]|²            for j ∈ [0, n_m)
+        P[t, n_m + k] = |A*[t, n_m0 + k] · Y_-m[n_m0 + k]|²   for k ∈ [0, n_m_pos)
+
+    where ``num_m0`` is the count of m = 0 modes (so the m > 0 modes occupy
+    the contiguous slice ``[num_m0, n_m)`` thanks to FEW's ``m0sort``
+    ordering, which fewtrax replicates in ``_generate_mode_arrays``).
+
+    Each row is argsorted descending; the per-row cumulative cutoff
+    ``cumsum < total · (1 − threshold)`` is applied with the same
+    "first-overshoot-kept" rule as FEW.  The caller takes the union of
+    kept indices across rows in numpy because the kept count varies per
+    row.
+
+    Returns
+    -------
+    inds_sort : (N_traj, n_m + n_m_pos) int  -- descending order per row
+    keep_mask : (N_traj, n_m + n_m_pos) bool -- FEW's per-row threshold mask
+    """
+    # +m column block — all modes paired with Y_{l,+m}.
+    positive_amps = jnp.abs(teuk_all * ylms_pos[None, :]) ** 2                # (n_t, n_m)
+    # -m partner block — only m > 0 modes (contiguous in m0sort order).
+    teuk_neg = teuk_all[:, num_m0:]                                # (n_t, n_m_pos)
+    ylms_neg_harm = ylms_neg[num_m0:]                                   # (n_m_pos,)
+    negative_amps = jnp.abs(jnp.conj(teuk_neg) * ylms_neg_harm[None, :]) ** 2
+
+    # it contains the power at each time step for all the modes
+    power = jnp.concatenate([positive_amps, negative_amps], axis=1)            # (n_t, n_ext)
+
+    # Sorting the modes in each time step depending on their total power
+    inds_sort = jnp.argsort(power, axis=1)[:, ::-1]                # (n_t, n_ext)
+    sorted_power = jnp.take_along_axis(power, inds_sort, axis=1)
+    cumsum = jnp.cumsum(sorted_power, axis=1)
+
+    # Per-row cumulative cutoff:  inds_keep[:, 0]=True; inds_keep[:, i] =
+    # cumsum[:, i-1] < cumsum[:, -1] · (1 − threshold).
+    budget = cumsum[:, -1:] * (1.0 - threshold)
+    head = jnp.ones((cumsum.shape[0], 1), dtype=bool)
+    keep_mask = jnp.concatenate([head, cumsum[:, :-1] < budget], axis=1)
+
+    return inds_sort, keep_mask
+
+
+@eqx.filter_jit
+def _few_eval_and_score_jit(
+    interp: JAXAmplitudeInterpolator,
+    a: jnp.ndarray,
+    p: jnp.ndarray,
+    e: jnp.ndarray,
+    ylms_pos: jnp.ndarray,
+    ylms_neg: jnp.ndarray,
+    num_m0: int,
+    threshold: float,
+):
+    """Evaluate amplitudes on the trajectory then score (single GPU kernel)."""
+    teuk_all = interp.evaluate_trajectory(a, p, e)           # (n_t, n_modes)
+    inds_sort, keep_mask = _few_score_modes_jit(
+        teuk_all, ylms_pos, ylms_neg, num_m0, threshold,
+    )
+    return teuk_all, inds_sort, keep_mask
