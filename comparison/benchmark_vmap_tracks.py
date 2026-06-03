@@ -766,6 +766,18 @@ def main():
                         help="Skip Fisher matrix benchmarks")
     parser.add_argument("--skip-hessian", action="store_true",
                         help="Skip hessian (expensive for large dense_steps)")
+    parser.add_argument("--skip-fdot", action="store_true",
+                        help="Skip f/fdot/fddot backward integration benchmarks")
+    parser.add_argument("--T-fdot",        type=float, default=2.0,
+                        help="Backward integration duration for fdot benchmark [yr] (default: 2.0)")
+    parser.add_argument("--N-alpha",       type=int,   default=1262,
+                        help="Time-grid points for fdot benchmark (default: 1262)")
+    parser.add_argument("--max-steps-fdot", type=int,  default=150,
+                        help="ODE max_steps for dense solve; governs k-buffer memory "
+                             "(default: 256 ≈ 4× typical steps for 2-yr integration)")
+    parser.add_argument("--fdot-chunk-size", type=int, default=1024,
+                        help="Sub-batch size for lax.map chunking in fdot benchmark; "
+                             "peak k-buffer ∝ chunk_size × max_steps (default: 4096)")
     parser.add_argument("--no-plots",    action="store_true",
                         help="Do not save plot files")
     parser.add_argument("--plot-dir",    type=str,   default="benchmark_plots",

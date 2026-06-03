@@ -176,7 +176,7 @@ def repeat_timer(fn, n_warmup: int = 1, n_repeat: int = 5) -> tuple[float, float
         t0 = time.perf_counter()
         fn()
         times.append(time.perf_counter() - t0)
-    return float(np.mean(times)), float(np.std(times))
+    return float(np.nanmean(times)), float(np.nanstd(times))
 
 
 def get_cpu_memory_mb() -> float:
