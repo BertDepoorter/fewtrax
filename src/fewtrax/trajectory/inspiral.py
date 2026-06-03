@@ -841,6 +841,128 @@ class EMRIInspiral(eqx.Module):
             return t_s, freqs, amps
         return t_s, freqs
 
+    @classmethod
+    def get_f_fdot_fddot_back(
+        cls,
+        flux_data: "FluxData",
+        M: float,
+        mu: float,
+        a: float,
+        e_f: float,
+        T: float,
+        t_alpha: jnp.ndarray,
+        x0: float = 1.0,
+        max_steps: int = 512,
+        atol: float = 1e-10,
+        rtol: float = 1e-10,
+    ) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]:
+        r"""Gravitational-wave frequency and its time derivatives on a fixed grid.
+
+        Solves the backward inspiral ODE once with dense (polynomial) output,
+        then evaluates f, ḟ, f̈ at every point in ``t_alpha`` by differentiating
+        the Dopri8 dense interpolant with ``jax.grad`` — no additional ODE
+        solves are required.
+
+        The backward ODE anchors the track to the plunge event rather than to
+        uncertain initial conditions, and is numerically more stable near
+        merger.  The sign convention follows
+        :math:`d\Phi_\phi/d\tau = -\Omega_\phi` (backward time reversal), so
+
+        .. math::
+
+            f        &= -\frac{d\Phi_\phi/d\tau}{2\pi M_s} \\
+            \dot{f}  &= +\frac{d^2\Phi_\phi/d\tau^2}{2\pi M_s^2} \\
+            \ddot{f} &= -\frac{d^3\Phi_\phi/d\tau^3}{2\pi M_s^3}
+
+        where :math:`\tau` is geometric backward time (:math:`M` units) and
+        :math:`M_s = (M + \mu)\,G/c^3` is the total mass in seconds.
+
+        Parameters
+        ----------
+        flux_data : FluxData
+            Pre-loaded flux interpolators.
+        M, mu : float
+            Primary and secondary masses [:math:`M_\odot`].
+        a : float
+            Dimensionless BH spin.
+        e_f : float
+            Eccentricity at plunge (sets the backward-ODE initial condition).
+        T : float
+            Duration of backward integration [years].  The ODE integrates
+            from :math:`\tau = 0` (plunge) to :math:`\tau = T \cdot {\rm yr}`.
+        t_alpha : array-like, shape (N,)
+            Physical time grid [s].  ``t_alpha[0] = 0`` is the start of the
+            observation window; ``t_alpha[-1]`` is the plunge moment.
+            Must satisfy ``t_alpha[-1] \le T \cdot {\rm YEAR\_SI}``.
+        x0 : float
+            Inclination cosine (+1 prograde, −1 retrograde).
+        max_steps : int
+            Maximum ODE internal steps.
+        atol, rtol : float
+            Adaptive step-size tolerances.
+
+        Returns
+        -------
+        f : jnp.ndarray, shape (N,)
+            Instantaneous GW frequency [Hz].
+        fdot : jnp.ndarray, shape (N,)
+            First physical time derivative df/dt [Hz/s].
+        fddot : jnp.ndarray, shape (N,)
+            Second physical time derivative d²f/dt² [Hz/s²].
+        """
+        instance = cls(flux_data, phases=True)
+
+        a_ = jnp.asarray(a, dtype=jnp.float64)
+        e_f_ = jnp.asarray(e_f, dtype=jnp.float64)
+        M_s = jnp.asarray((M + mu) * MTSUN_SI, dtype=jnp.float64)
+        T_geo = jnp.asarray(T * YEAR_SI / float(M_s), dtype=jnp.float64)
+        mu_over_M = jnp.asarray(M * mu / (M + mu) ** 2, dtype=jnp.float64)
+        r_isco = get_separatrix_fast(
+            jnp.abs(a_), jnp.zeros((), jnp.float64), _x_sign(a_, x0)
+        )
+        ode_args = (mu_over_M, a_, x0, r_isco)
+
+        p_sep = get_separatrix_fast(jnp.abs(a_), e_f_, _x_sign(a_, x0))
+        y0 = jnp.array(
+            [p_sep + SEPARATRIX_BUFFER, e_f_, 0.0, 0.0, 0.0], dtype=jnp.float64
+        )
+
+        sol = diffrax.diffeqsolve(
+            diffrax.ODETerm(lambda t, y, args: -instance._ode_rhs(t, y, args)),
+            diffrax.Dopri8(),
+            t0=jnp.zeros((), jnp.float64),
+            t1=T_geo,
+            dt0=None,
+            y0=y0,
+            saveat=diffrax.SaveAt(dense=True),
+            stepsize_controller=diffrax.PIDController(rtol=rtol, atol=atol),
+            max_steps=max_steps,
+            args=ode_args,
+        )
+
+        # Map t_alpha [s] → backward geometric time τ [M]:
+        #   τ = 0  at plunge      (t_alpha[-1])
+        #   τ = T_geo  at start   (t_alpha[0])
+        t_alpha_ = jnp.asarray(t_alpha, dtype=jnp.float64)
+        tau_query = (t_alpha_[-1] - t_alpha_) / M_s
+
+        def _phi_phi_at(tau):
+            return sol.interpolation.evaluate(tau)[2]
+
+        two_pi_Ms = 2.0 * jnp.pi * M_s
+
+        def _get_derivs(tau):
+            d1 = jax.grad(_phi_phi_at)(tau)
+            d2 = jax.grad(jax.grad(_phi_phi_at))(tau)
+            d3 = jax.grad(jax.grad(jax.grad(_phi_phi_at)))(tau)
+            return (
+                -d1 / two_pi_Ms,            # f      [Hz]
+                d2 / (two_pi_Ms * M_s),     # fdot   [Hz/s]
+                -d3 / (two_pi_Ms * M_s**2), # fddot  [Hz/s²]
+            )
+
+        f, fdot, fddot = jax.vmap(_get_derivs)(tau_query)
+        return f, fdot, fddot
 
 def run_inspiral(
     a: float,
