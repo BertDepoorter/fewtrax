@@ -404,6 +404,8 @@ def compare_at_few_times(
     # SaveAt(ts=..., t1=True): for a non-plunging run this duplicates the last
     # timestamp (t[-1] == t[-2]), leaving `t_ft_v` non-strictly-increasing.
     # np.interp requires increasing xp, so drop any non-increasing samples.
+    if t_ft_v.size == 0:
+        return {}
     keep = np.concatenate([[True], np.diff(t_ft_v) > 0])
     t_ft_v, Pp_ft_v, Pt_ft_v, Pr_ft_v, p_ft_v, e_ft_v = (
         arr[keep] for arr in (t_ft_v, Pp_ft_v, Pt_ft_v, Pr_ft_v, p_ft_v, e_ft_v)
