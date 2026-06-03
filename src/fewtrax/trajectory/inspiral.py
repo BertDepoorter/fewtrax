@@ -78,7 +78,7 @@ SEPARATRIX_BUFFER: float = 2.0 * DELTAPMIN
 
 
 def _x_sign(a: jnp.ndarray, x0: float) -> jnp.ndarray:
-    """Inclination sign (±1), safe at a=0."""
+    """Inclination sign (+/-1)."""
     ax = jnp.sign(a * x0)
     return jnp.where(ax == 0.0, 1.0, ax)
 
@@ -265,6 +265,16 @@ class EMRIInspiral(eqx.Module):
     # JIT-compiled ODE solve (inner loop)
     # ------------------------------------------------------------------
 
+    # Shared event condition (boolean, vmap-safe — no root-finder required).
+    # Returns True when the orbit has reached the separatrix buffer and
+    # integration should stop.  Used in all four forward-integration methods.
+    @staticmethod
+    def _separatrix_event(t, y, args, **kwargs):
+        _, a, x0, _ = args
+        p, e = y[0], y[1]
+        p_sep = get_separatrix_fast(jnp.abs(a), e, _x_sign(a, x0))
+        return p < p_sep + SEPARATRIX_BUFFER
+
     @eqx.filter_jit
     def _solve(
         self,
@@ -276,13 +286,13 @@ class EMRIInspiral(eqx.Module):
         atol: float = 1e-10,
         rtol: float = 1e-10,
     ):
-        """JIT-compiled diffrax solve.  All shape-determining args are static."""
-        def _event_cond(t, y, args, **kwargs):
-            _, a, x0, _r_isco = args
-            p, e = y[0], y[1]
-            p_sep = get_separatrix_fast(jnp.abs(a), e, _x_sign(a, x0))
-            return p < p_sep + SEPARATRIX_BUFFER
+        """JIT-compiled 5D diffrax solve on a fixed uniform output grid.
 
+        ``SaveAt(ts=t_save, t1=True)`` adds one extra slot that captures the
+        precise integration stop-time (plunge or T_geo), so callers can always
+        identify the final valid state without searching for NaN boundaries.
+        Output shape: ``(len(t_save) + 1, 5)``.
+        """
         return diffrax.diffeqsolve(
             diffrax.ODETerm(self._ode_rhs),
             diffrax.Dopri8(),
@@ -290,10 +300,46 @@ class EMRIInspiral(eqx.Module):
             t1=T_geo,
             dt0=None,
             y0=y0,
-            saveat=diffrax.SaveAt(ts=t_save),
+            saveat=diffrax.SaveAt(ts=t_save, t1=True),
             stepsize_controller=diffrax.PIDController(rtol=rtol, atol=atol),
             max_steps=max_steps,
-            event=diffrax.Event(_event_cond),
+            event=diffrax.Event(self._separatrix_event),
+            args=ode_args,
+            adjoint=self.adjoint,
+            throw=False,
+        )
+
+    @eqx.filter_jit
+    def _solve_steps(
+        self,
+        y0: jnp.ndarray,
+        T_geo: jnp.ndarray,
+        ode_args: tuple,
+        max_steps: int,
+        atol: float = 1e-10,
+        rtol: float = 1e-10,
+    ):
+        """JIT-compiled 5D diffrax solve saving at every accepted adaptive step.
+
+        Returns the native ODE nodes rather than a fixed uniform grid.
+        ``sol.ts`` and ``sol.ys`` have shape ``(max_steps,)`` /
+        ``(max_steps, 5)``, NaN-padded after the last valid step.  This is
+        fully ``vmap``-compatible because ``max_steps`` is static.
+
+        The adaptive stepper concentrates nodes near plunge automatically,
+        so no resolution is wasted on uniform sampling.
+        """
+        return diffrax.diffeqsolve(
+            diffrax.ODETerm(self._ode_rhs),
+            diffrax.Dopri8(),
+            t0=jnp.zeros((), dtype=jnp.float64),
+            t1=T_geo,
+            dt0=None,
+            y0=y0,
+            saveat=diffrax.SaveAt(steps=True),
+            stepsize_controller=diffrax.PIDController(rtol=rtol, atol=atol),
+            max_steps=max_steps,
+            event=diffrax.Event(self._separatrix_event),
             args=ode_args,
             adjoint=self.adjoint,
             throw=False,
@@ -352,23 +398,14 @@ class EMRIInspiral(eqx.Module):
         """JIT-compiled 2D diffrax solve: integrates (p, e) only.
 
         Used when ``phases=False``.  Adjoint and JVP cost are ~2.5× lower
-        than the 5D solve because the co-state / tangent vector has only
-        two components.
+        than the 5D solve.  See :meth:`_solve` for the ``t1=True`` convention.
         """
         def _ode_rhs_2d(t, y, args):
             mu_over_M, a, x0, r_isco = args
             p, e = y[0], y[1]
-            a_abs = jnp.abs(a)
-            x_in = _x_sign(a, x0)
-            p_sep = get_separatrix_fast(a_abs, e, x_in)
+            p_sep = get_separatrix_fast(jnp.abs(a), e, _x_sign(a, x0))
             pdot, edot = self._flux_pex(a, x0, r_isco, p, e, p_sep)
             return jnp.array([pdot * mu_over_M, edot * mu_over_M])
-
-        def _event_cond(t, y, args, **kwargs):
-            _, a, x0, _r_isco = args
-            p, e = y[0], y[1]
-            p_sep = get_separatrix_fast(jnp.abs(a), e, _x_sign(a, x0))
-            return p < p_sep + SEPARATRIX_BUFFER
 
         return diffrax.diffeqsolve(
             diffrax.ODETerm(_ode_rhs_2d),
@@ -377,10 +414,48 @@ class EMRIInspiral(eqx.Module):
             t1=T_geo,
             dt0=None,
             y0=y0,
-            saveat=diffrax.SaveAt(ts=t_save),
+            saveat=diffrax.SaveAt(ts=t_save, t1=True),
             stepsize_controller=diffrax.PIDController(rtol=rtol, atol=atol),
             max_steps=max_steps,
-            event=diffrax.Event(_event_cond),
+            event=diffrax.Event(self._separatrix_event),
+            args=ode_args,
+            adjoint=self.adjoint,
+            throw=False,
+        )
+
+    @eqx.filter_jit
+    def _solve_2d_steps(
+        self,
+        y0: jnp.ndarray,
+        T_geo: jnp.ndarray,
+        ode_args: tuple,
+        max_steps: int,
+        atol: float = 1e-10,
+        rtol: float = 1e-10,
+    ):
+        """JIT-compiled 2D adaptive-step solve saving at every accepted ODE node.
+
+        See :meth:`_solve_steps` for the rationale; this variant integrates
+        only ``(p, e)`` for lower adjoint cost when ``phases=False``.
+        """
+        def _ode_rhs_2d(t, y, args):
+            mu_over_M, a, x0, r_isco = args
+            p, e = y[0], y[1]
+            p_sep = get_separatrix_fast(jnp.abs(a), e, _x_sign(a, x0))
+            pdot, edot = self._flux_pex(a, x0, r_isco, p, e, p_sep)
+            return jnp.array([pdot * mu_over_M, edot * mu_over_M])
+
+        return diffrax.diffeqsolve(
+            diffrax.ODETerm(_ode_rhs_2d),
+            diffrax.Dopri8(),
+            t0=jnp.zeros((), dtype=jnp.float64),
+            t1=T_geo,
+            dt0=None,
+            y0=y0,
+            saveat=diffrax.SaveAt(steps=True),
+            stepsize_controller=diffrax.PIDController(rtol=rtol, atol=atol),
+            max_steps=max_steps,
+            event=diffrax.Event(self._separatrix_event),
             args=ode_args,
             adjoint=self.adjoint,
             throw=False,
@@ -449,6 +524,7 @@ class EMRIInspiral(eqx.Module):
         dense_steps: int = 100,
         backward: bool = False,
         e_f: Optional[float] = None,
+        save_at_steps: bool = False,
     ) -> tuple[jnp.ndarray, ...]:
         r"""Integrate the EMRI inspiral trajectory.
 
@@ -499,6 +575,19 @@ class EMRIInspiral(eqx.Module):
             :math:`p_{\rm sep}(e_f, a) + \epsilon` automatically.
             To obtain a consistent value, run a forward integration first
             and read off ``e`` at the last valid (non-NaN) trajectory point.
+        save_at_steps : bool, optional
+            If ``True``, return the native adaptive ODE nodes rather than a
+            fixed uniform grid.  Output arrays have shape ``(max_steps,)``
+            with ``nan``-padding after the last valid step; this is the
+            recommended mode for batched (``vmap``) evaluation because:
+
+            * Shapes are static (determined by ``max_steps``).
+            * The adaptive stepper concentrates nodes near plunge, so no
+              resolution is wasted.
+            * The last finite entry in ``t`` is the final accepted step before termination
+              (an accurate plunge/end time if the event is located with sufficient tolerance).
+
+            Default ``False`` preserves the original fixed-grid behaviour.
 
         Returns
         -------
@@ -507,9 +596,15 @@ class EMRIInspiral(eqx.Module):
         t, p, e, Phi_phi, Phi_theta, Phi_r : jnp.ndarray, shape (N_save,)
             When ``phases=True`` (default).  ``t`` is in seconds; phases in
             radians.  In backward mode ``t`` is time before plunge
-            (:math:`\tau`).  ``N_save`` equals ``dense_steps`` when
-            ``t_obs=None``, or ``len(t_obs)`` when ``t_obs`` was provided at
-            construction.
+            (:math:`\tau`).
+
+            ``N_save`` is:
+
+            * ``dense_steps + 1`` when ``save_at_steps=False`` and
+              ``t_obs=None`` (the +1 slot captures the precise plunge/end
+              time via ``SaveAt(..., t1=True)``).
+            * ``len(t_obs)`` when ``t_obs`` was provided at construction.
+            * ``max_steps`` when ``save_at_steps=True``.
         """
         a_ = jnp.asarray(a, dtype=jnp.float64)
         M_s = (M + mu) * MTSUN_SI                 # total mass in seconds (matches FEW convention)
@@ -523,11 +618,6 @@ class EMRIInspiral(eqx.Module):
         )
         ode_args = (mu_over_M, a_, x0, r_isco)
 
-        if self.t_obs is not None:
-            t_save = self.t_obs / M_s   # physical seconds → geometric time
-        else:
-            t_save = jnp.linspace(jnp.zeros((), jnp.float64), T_geo, dense_steps)
-
         if backward:
             if e_f is None:
                 raise ValueError(
@@ -538,6 +628,12 @@ class EMRIInspiral(eqx.Module):
             e_f_ = jnp.asarray(e_f, dtype=jnp.float64)
             p_sep = get_separatrix_fast(jnp.abs(a_), e_f_, _x_sign(a_, x0))
             p_start = p_sep + SEPARATRIX_BUFFER
+            # Backward integration always uses a uniform save grid
+            t_save = (
+                self.t_obs / M_s
+                if self.t_obs is not None
+                else jnp.linspace(jnp.zeros((), jnp.float64), T_geo, dense_steps)
+            )
             if self.phases:
                 y0 = jnp.array(
                     [p_start, e_f_, Phi_phi0, Phi_theta0, Phi_r0], dtype=jnp.float64
@@ -559,15 +655,31 @@ class EMRIInspiral(eqx.Module):
                         f"grid.  Must be >= {p0_min:.6g} for a={float(a_):.4g}, "
                         f"e0={float(e0):.4g}, x0={float(x0):.4g}."
                     )
-            if self.phases:
-                y0 = jnp.array([p0, e0, Phi_phi0, Phi_theta0, Phi_r0], dtype=jnp.float64)
-                sol = self._solve(y0, t_save, T_geo, ode_args, max_steps, atol, rtol)
-            else:
-                y0 = jnp.array([p0, e0], dtype=jnp.float64)
-                sol = self._solve_2d(y0, t_save, T_geo, ode_args, max_steps, atol, rtol)
 
-        t_arr = sol.ts       # (N_save,)
-        ys = sol.ys          # (N_save, 5) or (N_save, 2)
+            if save_at_steps:
+                # Adaptive-nodes path: vmap-friendly, shape (max_steps,)
+                if self.phases:
+                    y0 = jnp.array([p0, e0, Phi_phi0, Phi_theta0, Phi_r0], dtype=jnp.float64)
+                    sol = self._solve_steps(y0, T_geo, ode_args, max_steps, atol, rtol)
+                else:
+                    y0 = jnp.array([p0, e0], dtype=jnp.float64)
+                    sol = self._solve_2d_steps(y0, T_geo, ode_args, max_steps, atol, rtol)
+            else:
+                # Uniform-grid path: shape (dense_steps+1,) when t_obs is None
+                t_save = (
+                    self.t_obs / M_s
+                    if self.t_obs is not None
+                    else jnp.linspace(jnp.zeros((), jnp.float64), T_geo, dense_steps)
+                )
+                if self.phases:
+                    y0 = jnp.array([p0, e0, Phi_phi0, Phi_theta0, Phi_r0], dtype=jnp.float64)
+                    sol = self._solve(y0, t_save, T_geo, ode_args, max_steps, atol, rtol)
+                else:
+                    y0 = jnp.array([p0, e0], dtype=jnp.float64)
+                    sol = self._solve_2d(y0, t_save, T_geo, ode_args, max_steps, atol, rtol)
+
+        t_arr = sol.ts       # (N_save,)  or (max_steps,)
+        ys = sol.ys          # same shape, state dim 5 or 2
         t_s = t_arr * M_s
         p_arr = ys[:, 0]
         e_arr = ys[:, 1]
