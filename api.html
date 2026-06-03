@@ -71,6 +71,7 @@
 <li class="toctree-l2"><a class="reference internal" href="#fewtrax.trajectory.inspiral.EMRIInspiral"><code class="docutils literal notranslate"><span class="pre">EMRIInspiral</span></code></a><ul>
 <li class="toctree-l3"><a class="reference internal" href="#fewtrax.trajectory.inspiral.EMRIInspiral.get_frequency_track"><code class="docutils literal notranslate"><span class="pre">EMRIInspiral.get_frequency_track()</span></code></a></li>
 <li class="toctree-l3"><a class="reference internal" href="#fewtrax.trajectory.inspiral.EMRIInspiral.get_multi_track"><code class="docutils literal notranslate"><span class="pre">EMRIInspiral.get_multi_track()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#fewtrax.trajectory.inspiral.EMRIInspiral.get_f_fdot_fddot_back"><code class="docutils literal notranslate"><span class="pre">EMRIInspiral.get_f_fdot_fddot_back()</span></code></a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="#fewtrax.trajectory.inspiral.run_inspiral"><code class="docutils literal notranslate"><span class="pre">run_inspiral()</span></code></a></li>
@@ -511,6 +512,57 @@ non-negative.</p>
 <li><p>If <code class="docutils literal notranslate"><span class="pre">return_dict=True</span></code> – dict mapping each mode tuple to <code class="docutils literal notranslate"><span class="pre">(t,</span> <span class="pre">f)</span></code> or
 <code class="docutils literal notranslate"><span class="pre">(t,</span> <span class="pre">f,</span> <span class="pre">A)</span></code> arrays (<code class="docutils literal notranslate"><span class="pre">A</span></code> only when
 <code class="docutils literal notranslate"><span class="pre">with_amplitudes=True</span></code>).</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="fewtrax.trajectory.inspiral.EMRIInspiral.get_f_fdot_fddot_back">
+<span class="property"><span class="k"><span class="pre">classmethod</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">get_f_fdot_fddot_back</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">flux_data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">M</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mu</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">a</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">e_f</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">T</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">t_alpha</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x0</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_steps</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">512</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">atol</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1e-10</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rtol</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1e-10</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/fewtrax/trajectory/inspiral.html#EMRIInspiral.get_f_fdot_fddot_back"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#fewtrax.trajectory.inspiral.EMRIInspiral.get_f_fdot_fddot_back" title="Link to this definition"></a></dt>
+<dd><p>Gravitational-wave frequency and its time derivatives on a fixed grid.</p>
+<p>Solves the backward inspiral ODE once with dense (polynomial) output,
+then evaluates f, ḟ, f̈ at every point in <code class="docutils literal notranslate"><span class="pre">t_alpha</span></code> by differentiating
+the Dopri8 dense interpolant with <code class="docutils literal notranslate"><span class="pre">jax.grad</span></code> — no additional ODE
+solves are required.</p>
+<p>The backward ODE anchors the track to the plunge event rather than to
+uncertain initial conditions, and is numerically more stable near
+merger.  The sign convention follows
+<span class="math notranslate nohighlight">\(d\Phi_\phi/d\tau = -\Omega_\phi\)</span> (backward time reversal), so</p>
+<div class="math notranslate nohighlight">
+\[\begin{split}f        &amp;= -\frac{d\Phi_\phi/d\tau}{2\pi M_s} \\
+\dot{f}  &amp;= +\frac{d^2\Phi_\phi/d\tau^2}{2\pi M_s^2} \\
+\ddot{f} &amp;= -\frac{d^3\Phi_\phi/d\tau^3}{2\pi M_s^3}\end{split}\]</div>
+<p>where <span class="math notranslate nohighlight">\(\tau\)</span> is geometric backward time (<span class="math notranslate nohighlight">\(M\)</span> units) and
+<span class="math notranslate nohighlight">\(M_s = (M + \mu)\,G/c^3\)</span> is the total mass in seconds.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>flux_data</strong> (<span class="sphinx_autodoc_typehints-type"><a class="reference internal" href="#fewtrax.data.loader.FluxData" title="fewtrax.data.loader.FluxData"><code class="xref py py-class docutils literal notranslate"><span class="pre">FluxData</span></code></a></span>) – Pre-loaded flux interpolators.</p></li>
+<li><p><strong>M</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Primary and secondary masses [<span class="math notranslate nohighlight">\(M_\odot\)</span>].</p></li>
+<li><p><strong>mu</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Primary and secondary masses [<span class="math notranslate nohighlight">\(M_\odot\)</span>].</p></li>
+<li><p><strong>a</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Dimensionless BH spin.</p></li>
+<li><p><strong>e_f</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Eccentricity at plunge (sets the backward-ODE initial condition).</p></li>
+<li><p><strong>T</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Duration of backward integration [years].  The ODE integrates
+from <span class="math notranslate nohighlight">\(\tau = 0\)</span> (plunge) to <span class="math notranslate nohighlight">\(\tau = T \cdot {\rm yr}\)</span>.</p></li>
+<li><p><strong>t_alpha</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">Array</span></code></span>) – Physical time grid [s].  <code class="docutils literal notranslate"><span class="pre">t_alpha[0]</span> <span class="pre">=</span> <span class="pre">0</span></code> is the start of the
+observation window; <code class="docutils literal notranslate"><span class="pre">t_alpha[-1]</span></code> is the plunge moment.
+Must satisfy <code class="docutils literal notranslate"><span class="pre">t_alpha[-1]</span> <span class="pre">\le</span> <span class="pre">T</span> <span class="pre">\cdot</span> <span class="pre">{\rm</span> <span class="pre">YEAR\_SI}</span></code>.</p></li>
+<li><p><strong>x0</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Inclination cosine (+1 prograde, −1 retrograde).</p></li>
+<li><p><strong>max_steps</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code></span>) – Maximum ODE internal steps.</p></li>
+<li><p><strong>atol</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Adaptive step-size tolerances.</p></li>
+<li><p><strong>rtol</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Adaptive step-size tolerances.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">tuple</span></code>[<code class="xref py py-class docutils literal notranslate"><span class="pre">Array</span></code>, <code class="xref py py-class docutils literal notranslate"><span class="pre">Array</span></code>, <code class="xref py py-class docutils literal notranslate"><span class="pre">Array</span></code>]</span></p>
+</dd>
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p><ul class="simple">
+<li><p><strong>f</strong> (<em>jnp.ndarray, shape (N,)</em>) – Instantaneous GW frequency [Hz].</p></li>
+<li><p><strong>fdot</strong> (<em>jnp.ndarray, shape (N,)</em>) – First physical time derivative df/dt [Hz/s].</p></li>
+<li><p><strong>fddot</strong> (<em>jnp.ndarray, shape (N,)</em>) – Second physical time derivative d²f/dt² [Hz/s²].</p></li>
 </ul>
 </p>
 </dd>
