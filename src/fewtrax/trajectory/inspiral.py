@@ -584,8 +584,8 @@ class EMRIInspiral(eqx.Module):
             * Shapes are static (determined by ``max_steps``).
             * The adaptive stepper concentrates nodes near plunge, so no
               resolution is wasted.
-            * The last finite entry in ``t`` is the precisely root-found
-              plunge time (matching FEW's ``brentq`` accuracy).
+            * The last finite entry in ``t`` is the final accepted step before termination
+              (an accurate plunge/end time if the event is located with sufficient tolerance).
 
             Default ``False`` preserves the original fixed-grid behaviour.
 
