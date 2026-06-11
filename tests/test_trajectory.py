@@ -53,7 +53,9 @@ class TestTrajectoryBasic:
             ph = np.asarray(phase_arr)
             valid = ~np.isnan(ph)
             if valid.sum() > 1:
-                assert np.all(np.diff(ph[valid]) >= 0.0), \
+                # tolerance: the t1=True slot duplicates the final state,
+                # producing a ~1e-11 negative diff from float round-off
+                assert np.all(np.diff(ph[valid]) >= -1e-8), \
                     "Phase should be monotonically non-decreasing."
 
     def test_time_starts_at_zero(self, flux_data):
@@ -330,10 +332,13 @@ class TestJacfwdFisher:
     @pytest.mark.parametrize("e0", [0.2, 0.5, 0.75])
     def test_jacfwd_5d_finite(self, flux_data, e0):
         """``jacfwd`` over (M, μ, a, p₀, e₀) must return a finite Jacobian."""
+        import diffrax
         from fewtrax.trajectory.inspiral import EMRIInspiral
         from fewtrax.utils.geodesic import get_separatrix
 
-        traj = EMRIInspiral(flux_data, phases=False)
+        # jacfwd requires DirectAdjoint (custom_jvp); the default
+        # RecursiveCheckpointAdjoint only supports reverse mode.
+        traj = EMRIInspiral(flux_data, adjoint=diffrax.DirectAdjoint())
         a = 0.5
         p0 = float(get_separatrix(jnp.abs(jnp.asarray(a)),
                                   jnp.asarray(e0), 1.0)) + 2.5
@@ -349,7 +354,8 @@ class TestJacfwdFisher:
         theta0 = jnp.array([1e6, 10.0, a, p0, e0], dtype=jnp.float64)
         J = jax.jacfwd(freq_track)(theta0)
 
-        assert J.shape == (32, 5)
+        # N_save = dense_steps + 1 (the t1=True slot captures the end time)
+        assert J.shape == (33, 5)
         assert jnp.all(jnp.isfinite(J)), (
             f"jacfwd produced non-finite entries at e0={e0}"
         )
@@ -361,9 +367,10 @@ class TestJacfwdFisher:
 
     def test_fisher_matrix_psd(self, flux_data):
         """Fisher = Jᵀ J / σ² must be symmetric and positive semi-definite."""
+        import diffrax
         from fewtrax.trajectory.inspiral import EMRIInspiral
 
-        traj = EMRIInspiral(flux_data, phases=False)
+        traj = EMRIInspiral(flux_data, adjoint=diffrax.DirectAdjoint())
 
         def freq_track(theta):
             M, mu, a_, p0_, e0_ = theta
@@ -386,75 +393,6 @@ class TestJacfwdFisher:
         assert float(evals.min()) > -1e-6 * float(evals.max())
 
 
-class TestEMRIInspiralPhasesFalse:
-    """Test the 2D (phases=False) ODE solve.
-
-    When phases=False, EMRIInspiral integrates only (p, e) and returns
-    (t, p, e).  The adjoint and JVP cost are ~2.5x lower than the full
-    5D solve, which benefits jax.grad / jax.jacfwd for loss functions that
-    do not require the orbital phases.
-    """
-
-    def test_returns_three_arrays(self, flux_data):
-        """phases=False should return (t, p, e) only."""
-        from fewtrax.trajectory.inspiral import EMRIInspiral
-
-        traj = EMRIInspiral(flux_data, phases=False)
-        result = traj(p0=10.0, e0=0.4, T=0.1, M=1e6, mu=10.0, a=0.3, dense_steps=20)
-        assert len(result) == 3, "phases=False must return exactly (t, p, e)."
-
-    def test_pe_consistent_with_5d(self, flux_data):
-        """p and e from the 2D and 5D solves must agree to < 1e-6 relative error."""
-        from fewtrax.trajectory.inspiral import EMRIInspiral
-
-        kw = dict(p0=10.0, e0=0.4, T=0.1, M=1e6, mu=10.0, a=0.3, dense_steps=50)
-        traj_2d = EMRIInspiral(flux_data, phases=False)
-        traj_5d = EMRIInspiral(flux_data, phases=True)
-
-        _t2, p2, e2       = traj_2d(**kw)
-        _t5, p5, e5, *_ph = traj_5d(**kw)
-
-        np.testing.assert_allclose(np.asarray(p2), np.asarray(p5), rtol=1e-6,
-                                   err_msg="p mismatch between 2D and 5D solve.")
-        np.testing.assert_allclose(np.asarray(e2), np.asarray(e5), rtol=1e-6,
-                                   err_msg="e mismatch between 2D and 5D solve.")
-
-    def test_grad_phases_false(self, flux_data):
-        """jax.grad w.r.t. p0 must be finite with phases=False."""
-        from fewtrax.trajectory.inspiral import EMRIInspiral
-
-        traj = EMRIInspiral(flux_data, phases=False)
-
-        def final_p(p0):
-            _, p, _ = traj(p0=p0, e0=0.4, T=0.1, M=1e6, mu=10.0, a=0.3, dense_steps=20)
-            valid = jnp.isfinite(p)
-            return jnp.sum(jnp.where(valid, p, 0.0))
-
-        grad = jax.grad(final_p)(jnp.float64(10.0))
-        assert jnp.isfinite(grad), "Gradient w.r.t. p0 must be finite (phases=False)."
-
-    def test_vmap_phases_false(self, flux_data):
-        """phases=False should be vmappable over (p0, e0)."""
-        from fewtrax.trajectory.inspiral import EMRIInspiral
-        from fewtrax.utils.geodesic import get_separatrix
-
-        traj = EMRIInspiral(flux_data, phases=False)
-
-        def single(p0, e0):
-            _, p, e = traj(p0=p0, e0=e0, a=0.3, T=0.1, M=1e6, mu=10.0, dense_steps=20)
-            return p, e
-
-        a_val = jnp.float64(0.3)
-        e0_vals = jnp.array([0.2, 0.4, 0.6], dtype=jnp.float64)
-        p0_vals = jnp.array(
-            [float(get_separatrix(a_val, e, jnp.float64(1.0))) + 2.0 for e in e0_vals],
-            dtype=jnp.float64,
-        )
-
-        p_batch, e_batch = jax.jit(jax.vmap(single))(p0_vals, e0_vals)
-        assert p_batch.shape == (3, 20)
-        assert jnp.all(jnp.isfinite(p_batch[:, 0]))
-
 
 class TestEMRIInspiralTObs:
     """Test the t_obs construction-time parameter.
@@ -475,8 +413,9 @@ class TestEMRIInspiralTObs:
 
         traj = EMRIInspiral(flux_data, t_obs=t_obs)
         result = traj(p0=10.0, e0=0.4, T=T_yr, M=1e6, mu=10.0, a=0.3)
-        assert result[0].shape[0] == n_obs, (
-            f"Expected {n_obs} output points; got {result[0].shape[0]}."
+        # N_save = len(t_obs) + 1 (the t1=True slot captures the end time)
+        assert result[0].shape[0] == n_obs + 1, (
+            f"Expected {n_obs + 1} output points; got {result[0].shape[0]}."
         )
 
     def test_t_obs_first_time_near_zero(self, flux_data):
@@ -549,7 +488,8 @@ class TestEMRIInspiralMultiTrack:
         _t, freqs = traj.get_multi_track(
             modes, p0=10.0, e0=0.4, T=0.1, M=1e6, mu=10.0, a=0.3, dense_steps=30
         )
-        assert freqs.shape == (3, 30), f"Expected shape (3, 30); got {freqs.shape}."
+        # dense_steps + 1 points (the t1=True slot captures the end time)
+        assert freqs.shape == (3, 31), f"Expected shape (3, 31); got {freqs.shape}."
         assert np.all(np.asarray(freqs) >= 0.0), "All frequencies must be non-negative."
 
     def test_lmkn_tuples_accepted(self, flux_data):
@@ -577,8 +517,9 @@ class TestEMRIInspiralMultiTrack:
         for key in modes:
             assert tuple(key) in result, f"Key {key} missing from return dict."
             t_k, f_k = result[tuple(key)]
-            assert len(t_k) == 30
-            assert len(f_k) == 30
+            # dense_steps + 1 points (the t1=True slot captures the end time)
+            assert len(t_k) == 31
+            assert len(f_k) == 31
 
     def test_empty_modes_raises(self, flux_data):
         """Empty mode list must raise ValueError."""
@@ -674,10 +615,10 @@ class TestDirectAdjoint:
         import diffrax
         from fewtrax.trajectory.inspiral import EMRIInspiral
 
-        traj = EMRIInspiral(flux_data, phases=False, adjoint=diffrax.DirectAdjoint())
+        traj = EMRIInspiral(flux_data, adjoint=diffrax.DirectAdjoint())
 
         def pe_track(p0, e0):
-            _, p, e = traj(
+            _, p, e, *_ = traj(
                 p0=p0, e0=e0, T=0.05, M=1e6, mu=10.0, a=0.3, dense_steps=16,
             )
             return jnp.stack([p, e], axis=0)  # (2, dense_steps)
@@ -685,8 +626,9 @@ class TestDirectAdjoint:
         J_p0, J_e0 = jax.jacfwd(pe_track, argnums=(0, 1))(
             jnp.float64(10.0), jnp.float64(0.4)
         )
-        assert J_p0.shape == (2, 16)
-        assert J_e0.shape == (2, 16)
+        # N_save = dense_steps + 1 (the t1=True slot captures the end time)
+        assert J_p0.shape == (2, 17)
+        assert J_e0.shape == (2, 17)
         assert jnp.all(jnp.isfinite(J_p0)), "jacfwd J w.r.t. p0 contains non-finite values."
         assert jnp.all(jnp.isfinite(J_e0)), "jacfwd J w.r.t. e0 contains non-finite values."
 
@@ -697,12 +639,12 @@ class TestDirectAdjoint:
         from fewtrax.trajectory.inspiral import EMRIInspiral
 
         kw = dict(p0=10.0, e0=0.4, T=0.1, M=1e6, mu=10.0, a=0.3,
-                  dense_steps=40, phases=False)
+                  dense_steps=40)
         traj_rca = EMRIInspiral(flux_data)
         traj_da  = EMRIInspiral(flux_data, adjoint=diffrax.DirectAdjoint())
 
-        _t_r, p_r, e_r = traj_rca(**{k: v for k, v in kw.items() if k != "phases"})
-        _t_d, p_d, e_d = traj_da( **{k: v for k, v in kw.items() if k != "phases"})
+        _t_r, p_r, e_r, *_ = traj_rca(**kw)
+        _t_d, p_d, e_d, *_ = traj_da(**kw)
 
         np.testing.assert_allclose(
             np.asarray(p_r), np.asarray(p_d), rtol=1e-10,
