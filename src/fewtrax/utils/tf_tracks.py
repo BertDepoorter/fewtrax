@@ -78,7 +78,7 @@ from fewtrax.utils.tf_bases.wdm import (   # noqa: F401
     meyer_kernel,
     _nu,
 )
-from fewtrax.utils.tf_bases.base import direct_tf_mode  # noqa: F401
+from fewtrax.utils.tf_bases.base import TFGrid, direct_tf_mode  # noqa: F401
 
 
 # ---------------------------------------------------------------------------
@@ -93,7 +93,7 @@ class TFTrack:
     ----------
     mode : tuple of int
         Mode indices (l, m, k, n).
-    grid : WDMGrid
+    grid : TFGrid
         WDM grid on which the track lives.
     i_freq : np.ndarray, shape (Nt,), int16
         Frequency bin index at each WDM time step.
@@ -105,7 +105,7 @@ class TFTrack:
     """
 
     mode: tuple
-    grid: WDMGrid
+    grid: TFGrid
     i_freq: np.ndarray   # int16
     freq_hz: np.ndarray  # float32
     coeff: Optional[np.ndarray] = field(default=None)  # complex64
@@ -250,7 +250,7 @@ def analytical_tf_track(
     a: float,
     M: float,
     mu: float,
-    grid: WDMGrid,
+    grid: TFGrid,
     x0: float = 1.0,
     use_jax: bool = True,
 ) -> TFTrack:
@@ -267,8 +267,8 @@ def analytical_tf_track(
         Trajectory arrays (may contain NaNs after plunge).
     a, M, mu : float
         Kerr spin and mass parameters.
-    grid : WDMGrid
-        Target WDM grid.
+    grid : TFGrid
+        Target time-frequency grid (WDM, SFT, or any TFGrid subclass).
     x0 : float
         Inclination sign.
     use_jax : bool
@@ -322,7 +322,7 @@ def sparse_wdm_track(
     a: float,
     M: float,
     mu: float,
-    grid: WDMGrid,
+    grid: TFGrid,
     x0: float = 1.0,
     hw: int = 1,
     nx: float = 4.0,
@@ -344,7 +344,7 @@ def sparse_wdm_track(
     teuk_amp : array, shape (N_traj,), complex
         Teukolsky mode amplitude A_{lmkn}(t) at each trajectory point.
     a, M, mu : float
-    grid : WDMGrid
+    grid : TFGrid
     x0 : float
     hw : int
         Half-width in frequency bins: store coefficients for
@@ -428,11 +428,11 @@ class TFTrackSet:
     Parameters
     ----------
     tracks : list of TFTrack
-    grid : WDMGrid
+    grid : TFGrid
     """
 
     tracks: list
-    grid: WDMGrid
+    grid: TFGrid
 
     @property
     def nbytes(self) -> int:
@@ -471,7 +471,7 @@ def build_tf_tracks(
     a: float,
     M: float,
     mu: float,
-    grid: WDMGrid,
+    grid: TFGrid,
     x0: float = 1.0,
 ) -> TFTrackSet:
     """Build analytical TF tracks for a list of modes.
@@ -482,7 +482,7 @@ def build_tf_tracks(
     t_traj, p_traj, e_traj : arrays
         Trajectory.
     a, M, mu : float
-    grid : WDMGrid
+    grid : TFGrid
     x0 : float
 
     Returns
