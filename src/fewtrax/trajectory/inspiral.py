@@ -136,14 +136,12 @@ class EMRIInspiral(eqx.Module):
 
     flux_data: FluxData
     t_obs: Optional[jnp.ndarray]
-    phases: bool = eqx.field(static=True)
     adjoint: Any = eqx.field(static=True)
 
     def __init__(
         self,
         flux_data: FluxData,
         t_obs: Optional[jnp.ndarray] = None,
-        phases: bool = True,
         adjoint: Optional[Any] = None,
     ):
         """
@@ -157,13 +155,6 @@ class EMRIInspiral(eqx.Module):
             uniform ``dense_steps`` grid, so no interpolation is needed when
             comparing to STFT segment centres.  The shape is fixed at
             construction time (required for JIT/vmap).
-        phases : bool
-            If ``True`` (default), integrate all five state variables
-            ``(p, e, Φ_φ, Φ_θ, Φ_r)`` and return the full trajectory.
-            If ``False``, integrate only ``(p, e)`` and return
-            ``(t, p, e)``; the adjoint and JVP cost are ~2.5× lower,
-            which benefits ``jax.grad`` / ``jax.jacfwd`` for frequency-track
-            loss functions that do not require the orbital phases.
         adjoint : diffrax adjoint, optional
             Adjoint method for reverse-mode autodiff through the ODE solve.
 
@@ -186,7 +177,6 @@ class EMRIInspiral(eqx.Module):
         self.t_obs = (
             jnp.asarray(t_obs, dtype=jnp.float64) if t_obs is not None else None
         )
-        self.phases = phases
         self.adjoint = (
             diffrax.RecursiveCheckpointAdjoint() if adjoint is None else adjoint
         )
@@ -384,123 +374,6 @@ class EMRIInspiral(eqx.Module):
             adjoint=self.adjoint,
         )
 
-    @eqx.filter_jit
-    def _solve_2d(
-        self,
-        y0: jnp.ndarray,
-        t_save: jnp.ndarray,
-        T_geo: jnp.ndarray,
-        ode_args: tuple,
-        max_steps: int,
-        atol: float = 1e-10,
-        rtol: float = 1e-10,
-    ):
-        """JIT-compiled 2D diffrax solve: integrates (p, e) only.
-
-        Used when ``phases=False``.  Adjoint and JVP cost are ~2.5× lower
-        than the 5D solve.  See :meth:`_solve` for the ``t1=True`` convention.
-        """
-        def _ode_rhs_2d(t, y, args):
-            mu_over_M, a, x0, r_isco = args
-            p, e = y[0], y[1]
-            p_sep = get_separatrix_fast(jnp.abs(a), e, _x_sign(a, x0))
-            pdot, edot = self._flux_pex(a, x0, r_isco, p, e, p_sep)
-            return jnp.array([pdot * mu_over_M, edot * mu_over_M])
-
-        return diffrax.diffeqsolve(
-            diffrax.ODETerm(_ode_rhs_2d),
-            diffrax.Dopri8(),
-            t0=jnp.zeros((), dtype=jnp.float64),
-            t1=T_geo,
-            dt0=None,
-            y0=y0,
-            saveat=diffrax.SaveAt(ts=t_save, t1=True),
-            stepsize_controller=diffrax.PIDController(rtol=rtol, atol=atol),
-            max_steps=max_steps,
-            event=diffrax.Event(self._separatrix_event),
-            args=ode_args,
-            adjoint=self.adjoint,
-            throw=False,
-        )
-
-    @eqx.filter_jit
-    def _solve_2d_steps(
-        self,
-        y0: jnp.ndarray,
-        T_geo: jnp.ndarray,
-        ode_args: tuple,
-        max_steps: int,
-        atol: float = 1e-10,
-        rtol: float = 1e-10,
-    ):
-        """JIT-compiled 2D adaptive-step solve saving at every accepted ODE node.
-
-        See :meth:`_solve_steps` for the rationale; this variant integrates
-        only ``(p, e)`` for lower adjoint cost when ``phases=False``.
-        """
-        def _ode_rhs_2d(t, y, args):
-            mu_over_M, a, x0, r_isco = args
-            p, e = y[0], y[1]
-            p_sep = get_separatrix_fast(jnp.abs(a), e, _x_sign(a, x0))
-            pdot, edot = self._flux_pex(a, x0, r_isco, p, e, p_sep)
-            return jnp.array([pdot * mu_over_M, edot * mu_over_M])
-
-        return diffrax.diffeqsolve(
-            diffrax.ODETerm(_ode_rhs_2d),
-            diffrax.Dopri8(),
-            t0=jnp.zeros((), dtype=jnp.float64),
-            t1=T_geo,
-            dt0=None,
-            y0=y0,
-            saveat=diffrax.SaveAt(steps=True),
-            stepsize_controller=diffrax.PIDController(rtol=rtol, atol=atol),
-            max_steps=max_steps,
-            event=diffrax.Event(self._separatrix_event),
-            args=ode_args,
-            adjoint=self.adjoint,
-            throw=False,
-        )
-
-    @eqx.filter_jit
-    def _solve_2d_backward(
-        self,
-        y0: jnp.ndarray,
-        t_save: jnp.ndarray,
-        T_geo: jnp.ndarray,
-        ode_args: tuple,
-        max_steps: int,
-        atol: float = 1e-10,
-        rtol: float = 1e-10,
-    ):
-        """JIT-compiled backward 2D diffrax solve: integrates (p, e) time-reversed.
-
-        Negates the 2D RHS so p and e *increase* along the output (moving away
-        from the separatrix).  No separatrix event is needed: the integration
-        always moves outward.
-        """
-        def _ode_rhs_2d_bwd(t, y, args):
-            mu_over_M, a, x0, r_isco = args
-            p, e = y[0], y[1]
-            a_abs = jnp.abs(a)
-            x_in = _x_sign(a, x0)
-            p_sep = get_separatrix_fast(a_abs, e, x_in)
-            pdot, edot = self._flux_pex(a, x0, r_isco, p, e, p_sep)
-            return jnp.array([-pdot * mu_over_M, -edot * mu_over_M])
-
-        return diffrax.diffeqsolve(
-            diffrax.ODETerm(_ode_rhs_2d_bwd),
-            diffrax.Dopri8(),
-            t0=jnp.zeros((), dtype=jnp.float64),
-            t1=T_geo,
-            dt0=None,
-            y0=y0,
-            saveat=diffrax.SaveAt(ts=t_save),
-            stepsize_controller=diffrax.PIDController(rtol=rtol, atol=atol),
-            max_steps=max_steps,
-            args=ode_args,
-            adjoint=self.adjoint,
-        )
-
     # ------------------------------------------------------------------
     # Public interface
     # ------------------------------------------------------------------
@@ -591,12 +464,9 @@ class EMRIInspiral(eqx.Module):
 
         Returns
         -------
-        t, p, e : jnp.ndarray, shape (N_save,)
-            When ``phases=False`` (set at construction time).
         t, p, e, Phi_phi, Phi_theta, Phi_r : jnp.ndarray, shape (N_save,)
-            When ``phases=True`` (default).  ``t`` is in seconds; phases in
-            radians.  In backward mode ``t`` is time before plunge
-            (:math:`\tau`).
+            ``t`` is in seconds; phases in radians.  In backward mode ``t``
+            is time before plunge (:math:`\tau`).
 
             ``N_save`` is:
 
@@ -634,14 +504,10 @@ class EMRIInspiral(eqx.Module):
                 if self.t_obs is not None
                 else jnp.linspace(jnp.zeros((), jnp.float64), T_geo, dense_steps)
             )
-            if self.phases:
-                y0 = jnp.array(
-                    [p_start, e_f_, Phi_phi0, Phi_theta0, Phi_r0], dtype=jnp.float64
-                )
-                sol = self._solve_backward(y0, t_save, T_geo, ode_args, max_steps, atol, rtol)
-            else:
-                y0 = jnp.array([p_start, e_f_], dtype=jnp.float64)
-                sol = self._solve_2d_backward(y0, t_save, T_geo, ode_args, max_steps, atol, rtol)
+            y0 = jnp.array(
+                [p_start, e_f_, Phi_phi0, Phi_theta0, Phi_r0], dtype=jnp.float64
+            )
+            sol = self._solve_backward(y0, t_save, T_geo, ode_args, max_steps, atol, rtol)
         else:
             # Only validate p0 against the grid when every input is concrete;
             # under jit/vmap/grad these are tracers and the check is skipped.
@@ -656,14 +522,10 @@ class EMRIInspiral(eqx.Module):
                         f"e0={float(e0):.4g}, x0={float(x0):.4g}."
                     )
 
+            y0 = jnp.array([p0, e0, Phi_phi0, Phi_theta0, Phi_r0], dtype=jnp.float64)
             if save_at_steps:
                 # Adaptive-nodes path: vmap-friendly, shape (max_steps,)
-                if self.phases:
-                    y0 = jnp.array([p0, e0, Phi_phi0, Phi_theta0, Phi_r0], dtype=jnp.float64)
-                    sol = self._solve_steps(y0, T_geo, ode_args, max_steps, atol, rtol)
-                else:
-                    y0 = jnp.array([p0, e0], dtype=jnp.float64)
-                    sol = self._solve_2d_steps(y0, T_geo, ode_args, max_steps, atol, rtol)
+                sol = self._solve_steps(y0, T_geo, ode_args, max_steps, atol, rtol)
             else:
                 # Uniform-grid path: shape (dense_steps+1,) when t_obs is None
                 t_save = (
@@ -671,21 +533,13 @@ class EMRIInspiral(eqx.Module):
                     if self.t_obs is not None
                     else jnp.linspace(jnp.zeros((), jnp.float64), T_geo, dense_steps)
                 )
-                if self.phases:
-                    y0 = jnp.array([p0, e0, Phi_phi0, Phi_theta0, Phi_r0], dtype=jnp.float64)
-                    sol = self._solve(y0, t_save, T_geo, ode_args, max_steps, atol, rtol)
-                else:
-                    y0 = jnp.array([p0, e0], dtype=jnp.float64)
-                    sol = self._solve_2d(y0, t_save, T_geo, ode_args, max_steps, atol, rtol)
+                sol = self._solve(y0, t_save, T_geo, ode_args, max_steps, atol, rtol)
 
         t_arr = sol.ts       # (N_save,)  or (max_steps,)
-        ys = sol.ys          # same shape, state dim 5 or 2
+        ys = sol.ys          # same shape, state dim 5
         t_s = t_arr * M_s
         p_arr = ys[:, 0]
         e_arr = ys[:, 1]
-
-        if not self.phases:
-            return t_s, p_arr, e_arr
 
         # Phases are Boyer-Lindquist orbital phases [rad]; no mass-ratio scaling needed
         Phi_phi_arr   = ys[:, 2]
@@ -784,6 +638,7 @@ class EMRIInspiral(eqx.Module):
         with_amplitudes: bool = False,
         amp_interp=None,
         return_dict: bool = False,
+        grid: Optional[Any] = None,
         **kwargs,
     ):
         r"""Frequency tracks for multiple harmonic modes along one shared trajectory.
@@ -824,9 +679,26 @@ class EMRIInspiral(eqx.Module):
         return_dict : bool
             If ``True``, return a dictionary keyed by the mode tuples
             instead of plain arrays.
+        grid : TFGrid, optional
+            Time-frequency grid descriptor
+            (:class:`~fewtrax.utils.tf_bases.wdm.WDMGrid`,
+            :class:`~fewtrax.utils.tf_bases.sft.SFTGrid`, or any other
+            :class:`~fewtrax.utils.tf_bases.base.TFGrid` subclass).  When
+            provided, each mode's frequency track is interpolated onto the
+            grid's time-bin centres and quantised to frequency-bin indices,
+            and a :class:`~fewtrax.utils.tf_tracks.TFTrackSet` is returned
+            instead of raw arrays.  The mapping only uses the basis-agnostic
+            ``TFGrid`` interface (``t_bins``, ``freq_to_bin``, ``Nf``), so
+            any TF basis works.  Incompatible with ``return_dict`` and
+            ``with_amplitudes``.
 
         Returns
         -------
+        If ``grid`` is given:
+            :class:`~fewtrax.utils.tf_tracks.TFTrackSet` with one
+            :class:`~fewtrax.utils.tf_tracks.TFTrack` per mode (bin indices
+            ``i_freq`` and frequencies ``freq_hz`` on the grid's time bins).
+
         If ``return_dict=False`` (default):
             t : jnp.ndarray, shape (dense_steps,)
                 Time [s].
@@ -847,6 +719,10 @@ class EMRIInspiral(eqx.Module):
         if with_amplitudes and amp_interp is None:
             raise ValueError(
                 "amp_interp is required when with_amplitudes=True."
+            )
+        if grid is not None and (return_dict or with_amplitudes):
+            raise ValueError(
+                "grid cannot be combined with return_dict or with_amplitudes."
             )
 
         # Normalise mode tuples to (l, m, k, n); use l=None if not given
@@ -888,6 +764,36 @@ class EMRIInspiral(eqx.Module):
 
         # All mode frequencies in one matrix multiply: (N_modes, dense_steps)
         freqs = jnp.abs(mkn_arr @ Omegas.T) / (2.0 * jnp.pi * M_s)
+
+        # --- Optional mapping onto a time-frequency grid (any TFGrid basis) ---
+        if grid is not None:
+            from fewtrax.utils.tf_tracks import TFTrack, TFTrackSet
+            import numpy as _np
+
+            t_np = _np.asarray(t_s)
+            freqs_np = _np.asarray(freqs)
+            valid = _np.isfinite(t_np)
+            t_v = t_np[valid]
+            # np.interp needs increasing x; backward tracks already satisfy
+            # this (t is time-before-plunge, saved on an increasing grid).
+            t_bins = grid.t_bins
+            tracks = []
+            for i in range(len(norm_modes)):
+                f_v = freqs_np[i, valid]
+                f_at_bins = _np.interp(
+                    t_bins, t_v, f_v, left=f_v[0], right=f_v[-1]
+                ).astype(_np.float32)
+                i_freq = (
+                    grid.freq_to_bin(f_at_bins)
+                    .clip(0, grid.Nf - 1)
+                    .astype(_np.int16)
+                )
+                # Always store the normalised (l, m, k, n) key (l may be None)
+                tracks.append(
+                    TFTrack(mode=norm_modes[i], grid=grid,
+                            i_freq=i_freq, freq_hz=f_at_bins)
+                )
+            return TFTrackSet(tracks=tracks, grid=grid)
 
         # --- Optional amplitude evaluation ---
         amps = None
@@ -1022,7 +928,7 @@ class EMRIInspiral(eqx.Module):
         fddot : jnp.ndarray, shape (N,)
             Second physical time derivative d²f/dt² [Hz/s²].
         """
-        instance = cls(flux_data, phases=True)
+        instance = cls(flux_data)
 
         a_ = jnp.asarray(a, dtype=jnp.float64)
         e_f_ = jnp.asarray(e_f, dtype=jnp.float64)
@@ -1131,3 +1037,4 @@ def run_inspiral(
         Phi_phi0=Phi_phi0, Phi_theta0=Phi_theta0, Phi_r0=Phi_r0,
         dense_steps=dense_steps, backward=backward, e_f=e_f, **kwargs,
     )
+
