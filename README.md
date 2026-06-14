@@ -1,5 +1,6 @@
 # fewtrax
 [![Doc badge](https://img.shields.io/badge/Docs-master-brightgreen)](https://bertdepoorter.github.io/fewtrax)
+
 JAX implementation of the **KerrEccentricEquatorial** EMRI waveform model from [FastEMRIWaveforms (FEW)](https://github.com/BlackHolePerturbationToolkit/FastEMRIWaveforms), with full support for JIT compilation, automatic differentiation, and batched evaluation via `vmap`.
 
 ## Features
@@ -7,9 +8,9 @@ JAX implementation of the **KerrEccentricEquatorial** EMRI waveform model from [
 - **JIT compilation** – waveform generation via `jax.jit` and `equinox.filter_jit`
 - **Automatic differentiation** – gradients of any output w.r.t. source parameters
 - **Vectorisation** – batch over populations with `jax.vmap`
-- **ODE trajectory** – adiabatic inspiral via [diffrax](https://github.com/patrick-kidger/diffrax) (Tsit5, adaptive step-size)
+- **ODE trajectory** – adiabatic inspiral via [diffrax](https://github.com/patrick-kidger/diffrax) (Dopri8, adaptive step-size through PIDController)
 - **Mode amplitude interpolation** – Teukolsky mode amplitudes from FEW HDF5 files
-- **GPU-ready** – install the `gpu` extra to run on CUDA hardware
+- **GPU-ready** – install the `gpu` extra to run on CUDA hardware. JAX takes care of compilation, no manual kernels required.
 
 ## Requirements
 
@@ -32,7 +33,7 @@ The package has not yet been published to PyPI. To install and run locally, clon
 Or from source:
 
 ```bash
-git clone https://github.com/<your-org>/fewtrax
+git clone https://github.com/BertDepoorter/fewtrax
 cd fewtrax
 pip install -e ".[dev]"
 ```
@@ -128,6 +129,8 @@ open build/html/index.html
 ```
 The HTML file can be opened in a web browser where you can view the docs. 
 
+## Use of GenAI
+Developers of this repository were assisted by GenAI (copilot/Claude code). Specifically, GenAI aided by creating docstrings, cleaning code and packaging functions. Tests and comparison have been written by the authors and reformatted by GenAI to be more readable.  
 
 ## Citation
 
@@ -165,4 +168,7 @@ If you use fewtrax in your research, please cite the original FEW papers:
 
 ## License
 
-MIT © 2024 – see [LICENSE](LICENSE).
+MIT © 2024. see [LICENSE](LICENSE).
+
+#### Contributors
+All contributions are welcomed! See [AUTHORS](AUTHORS) file for more. 
