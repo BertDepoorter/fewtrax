@@ -490,10 +490,10 @@ class EMRIInspiral(eqx.Module):
             # since the solve runs from tau = 0 in either case.
             interp = sol.interpolation
 
-            def phase_fn(t_seconds):
-                tau = jnp.asarray(t_seconds, dtype=jnp.float64) / M_s
-                phases = jax.vmap(interp.evaluate)(tau)  # (N, 5)
-                return phases[:, 2], phases[:, 3], phases[:, 4]
+def phase_fn(t_seconds):
+    tau = jnp.atleast_1d(jnp.asarray(t_seconds, dtype=jnp.float64) / M_s)
+    phases = jax.vmap(interp.evaluate)(tau)  # (N, 5)
+    return phases[:, 2], phases[:, 3], phases[:, 4]
 
             return (
                 t_s, p_arr, e_arr, Phi_phi_arr, Phi_theta_arr, Phi_r_arr, phase_fn
