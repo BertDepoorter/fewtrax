@@ -1,58 +1,23 @@
 """EMRI orbital trajectory integration via diffrax.
 
-The trajectory ODE integrates
+Integrates the adiabatic inspiral ODE for :math:`(p, e, \\Phi_\\phi,
+\\Phi_\\theta, \\Phi_r)` (time in units of :math:`M`) with
+:class:`diffrax.Dopri8` and adaptive step-size control, stopping when the
+orbit reaches the separatrix.  The solve is JIT-compilable and differentiable
+in :math:`(p_0, e_0, a, M, \\mu)`.
 
-.. math::
-
-    \\frac{dp}{dt} &= \\left(\\frac{\\partial E}{\\partial p}\\right)^{-1}_{\\rm eff}\\,\\dot{E}_{\\rm GR} + \\cdots \\\\
-    \\frac{de}{dt} &= \\cdots \\\\
-    \\frac{d\\Phi_\\phi}{dt} &= \\Omega_\\phi(a, p, e) \\\\
-    \\frac{d\\Phi_\\theta}{dt} &= \\Omega_\\theta(a, p, e) \\\\
-    \\frac{d\\Phi_r}{dt} &= \\Omega_r(a, p, e)
-
-where time is in units of :math:`M`.
-
-The radiation-reaction terms are obtained by interpolating the PN-normalised
-:math:`\\dot{E}` and :math:`\\dot{L}` grids from :mod:`fewtrax.data.loader`
-and converting them to :math:`\\dot{p}`, :math:`\\dot{e}` via the
-Jacobian :math:`\\partial(E,L)/\\partial(p,e)` computed analytically with
-:func:`jax.jacfwd`.
-
-Solver: :class:`diffrax.Dopri8` (8th-order Dormand-Prince Runge-Kutta,
-matching FEW's DOPR853 in order) with :class:`diffrax.PIDController`
-adaptive step-size control.  The system is stopped when the orbit approaches
-the separatrix.
-
-The ODE is fully JIT-compilable and differentiable with respect to the
-initial conditions :math:`(p_0, e_0)`, the BH spin :math:`a`, and the
-mass parameters :math:`(M, \\mu)`.
-
-:attr:`EMRIInspiral` stores only the (static) flux data.  All physical
-parameters — including ``a`` — are passed at call time, so a single
-instance can be vmapped over the full parameter space::
+:class:`EMRIInspiral` stores only the static flux data; all physical
+parameters are call-time arguments, so a single instance can be vmapped over
+the parameter space::
 
     from jax import vmap
     traj = EMRIInspiral(flux_data)
     batch = vmap(lambda p0, e0, a: traj(p0=p0, e0=e0, a=a, T=1.0, M=1e6, mu=10.0))
     results = batch(p0_arr, e0_arr, a_arr)
 
-Backward integration
---------------------
-Setting ``backward=True`` integrates the time-reversed ODE, starting at the
-separatrix and moving outward.  This anchors the track to the plunge rather
-than to uncertain initial conditions, and is more stable near merger because
-the ODE moves *away* from the separatrix.
-
-The backward ODE is simply the negation of the forward ODE:
-
-.. math::
-
-    \\frac{d y}{d\\tau} = -\\frac{d y}{dt}
-
-where :math:`\\tau = T_{\\rm plunge} - t` is time before plunge.  Initial
-conditions are set to :math:`(p_{\\rm sep}(e_f, a) + \\epsilon, e_f, 0, 0, 0)`
-and the integration runs for duration :math:`T` years.
-
+Set ``backward=True`` to integrate the time-reversed ODE from the separatrix
+outward (with time axis :math:`\\tau = T_{\\rm plunge} - t`), anchoring the
+track to the plunge rather than to uncertain initial conditions.
 """
 
 from __future__ import annotations
@@ -73,6 +38,7 @@ from fewtrax.utils.coordinates import (
     kerrecceq_forward_map_fast, DELTAPMIN, min_valid_p,
 )
 from fewtrax.data.loader import FluxData, _pdot_PN_jax, _edot_PN_jax
+from fewtrax.trajectory.helpers import dense_phase_derivs
 
 SEPARATRIX_BUFFER: float = 2.0 * DELTAPMIN
 
@@ -86,47 +52,21 @@ def _x_sign(a: jnp.ndarray, x0: float) -> jnp.ndarray:
 class EMRIInspiral(eqx.Module):
     r"""Adiabatic EMRI trajectory integrator (JIT/vmap-compatible).
 
-    Integrates the adiabatic inspiral ODE using :class:`diffrax.Dopri8`
-    (8th-order Dormand-Prince) with adaptive step-size control.  The radiation-reaction force
-    (:math:`\dot{p}`, :math:`\dot{e}`) is computed from the FEW flux
-    tables using the **pex convention** (matching FEW):
-
-    1. Interpolate the pre-computed ratios
-       :math:`r_p = \dot{p}_{\rm GR}/\dot{p}_{\rm PN}` and
-       :math:`r_e = \dot{e}_{\rm GR}/\dot{e}_{\rm PN}`.
-    2. Multiply by the separatrix-dependent PN functions
-       :math:`\dot{p}_{\rm PN}(p, e, r_{\rm ISCO}, p_{\rm sep})` and
-       :math:`\dot{e}_{\rm PN}`.
-
-    This avoids the runtime Jacobian inversion that was previously
-    needed in the ELQ convention, improving both speed and accuracy.
-
-    **Hybrid implementation** — per-step optimisations relative to a naive
-    baseline:
-
-    * **Fast separatrix** — :func:`~fewtrax.utils.geodesic.get_separatrix_fast`
-      (20-step bisection + 5 Newton-Raphson) replaces the 50-step pure-bisection
-      version.  Same float64 accuracy, fewer operations.
-    * **p_sep reuse** — the separatrix is computed once per ODE-RHS evaluation
-      and passed directly to the flux helper, eliminating the redundant internal
-      call that the base-class ``_flux_pex`` used to make.
-    * **Platform-aware elliptic integrals** —
-      :func:`~fewtrax.utils.geodesic.get_fundamental_frequencies_platform`
-      selects 64-point Gauss-Legendre (GPU: maps to cuBLAS contractions) or
-      AGM + 24-pt GL (CPU: fewer sequential operations) at JIT-trace time.
-    * **Configurable adjoint** — defaults to
-      :class:`diffrax.RecursiveCheckpointAdjoint` (low memory, optimal for
-      ``jax.grad`` / ``jax.jacrev``).  Pass ``adjoint=diffrax.DirectAdjoint()``
-      to enable ``jax.jacfwd`` / ``jax.hessian``.
-
-    ``a`` and ``x0`` are **call-time** arguments rather than constructor
-    fields, so a single instance can be vmapped over the full five-parameter
+    Integrates the adiabatic inspiral ODE with :class:`diffrax.Dopri8` and
+    adaptive step-size control.  The radiation-reaction force
+    (:math:`\dot{p}`, :math:`\dot{e}`) is read from the FEW flux tables in the
+    pex convention.  All physical parameters — including ``a`` and ``x0`` — are
+    call-time arguments, so a single instance vmaps over the five-parameter
     space :math:`(M, \mu, a, p_0, e_0)` without rebuilding the Module::
 
         from jax import vmap
         traj = EMRIInspiral(flux_data)
         batch = vmap(lambda p0, e0, a: traj(p0=p0, e0=e0, a=a, T=1.0, M=1e6, mu=10.0))
         results = batch(p0_arr, e0_arr, a_arr)
+
+    The adjoint defaults to :class:`diffrax.RecursiveCheckpointAdjoint`
+    (``jax.grad`` / ``jax.jacrev``); pass ``adjoint=diffrax.DirectAdjoint()``
+    to enable ``jax.jacfwd`` / ``jax.hessian``. usually jax.jacfwd is the fastest option
 
     Parameters
     ----------
@@ -196,13 +136,8 @@ class EMRIInspiral(eqx.Module):
     ) -> tuple[jnp.ndarray, jnp.ndarray]:
         r"""Return physical :math:`(\dot{p}, \dot{e})` from the pex spline tables.
 
-        Evaluates the pre-computed pex ratios :math:`\dot{p}/\dot{p}_{\rm PN}`
-        and :math:`\dot{e}/\dot{e}_{\rm PN}`, then multiplies by the
-        separatrix-dependent PN functions.  Returns **negative** values for
-        :math:`\dot{p}` (inspiraling orbit loses semi-latus rectum).
-
-        ``r_isco = p_sep(a, e=0)`` and ``p_sep = p_sep(a, e)`` are both
-        pre-computed by the caller (in ``_ode_rhs``) so that the separatrix
+        Values are **negative** (inspiraling orbit).  ``r_isco = p_sep(a, e=0)``
+        and ``p_sep = p_sep(a, e)`` are supplied by the caller so the separatrix
         polynomial is evaluated only once per ODE-RHS call.
         """
         a_abs = jnp.abs(a)
@@ -225,15 +160,9 @@ class EMRIInspiral(eqx.Module):
     def _ode_rhs(self, t: float, y: jnp.ndarray, args) -> jnp.ndarray:
         r"""ODE right-hand side: :math:`dy/dt` for :math:`y=(p,e,\Phi_\phi,\Phi_\theta,\Phi_r)`.
 
-        ``args`` is a 4-tuple ``(mu_over_M, a, x0, r_isco)`` so that all
-        physical parameters flow through diffrax and remain differentiable.
-        ``r_isco`` is the spin-only separatrix ``p_sep(a, e=0)``, precomputed
-        once per solve.  The orbital phases evolve at the Boyer-Lindquist
-        frequencies and are *not* affected by the mass ratio.
-
-        ``p_sep(a, e)`` is computed once here and forwarded to ``_flux_pex``
-        so that the separatrix polynomial is not evaluated a second time inside
-        the coordinate-map helper.
+        ``args`` is the 4-tuple ``(mu_over_M, a, x0, r_isco)`` (all physical
+        parameters flow through diffrax and stay differentiable).  ``r_isco`` is
+        the spin-only separatrix ``p_sep(a, e=0)``, precomputed once per solve.
         """
         mu_over_M, a, x0, r_isco = args
         p, e = y[0], y[1]
@@ -278,10 +207,12 @@ class EMRIInspiral(eqx.Module):
     ):
         """JIT-compiled 5D diffrax solve on a fixed uniform output grid.
 
-        ``SaveAt(ts=t_save, t1=True)`` adds one extra slot that captures the
-        precise integration stop-time (plunge or T_geo), so callers can always
-        identify the final valid state without searching for NaN boundaries.
-        Output shape: ``(len(t_save) + 1, 5)``.
+        Always retains the Dopri8 dense (7th/8th-order) interpolant on
+        ``sol.interpolation`` (``SaveAt(..., dense=True)``), so phases are taken
+        from the native polynomial rather than refit with a less accurate cubic
+        spline.  ``t1=True`` adds one extra slot capturing the precise stop-time
+        (plunge or T_geo), so the final valid state is identifiable without
+        searching for NaN boundaries.  Output shape: ``(len(t_save) + 1, 5)``.
         """
         return diffrax.diffeqsolve(
             diffrax.ODETerm(self._ode_rhs),
@@ -290,7 +221,7 @@ class EMRIInspiral(eqx.Module):
             t1=T_geo,
             dt0=None,
             y0=y0,
-            saveat=diffrax.SaveAt(ts=t_save, t1=True),
+            saveat=diffrax.SaveAt(ts=t_save, t1=True, dense=True),
             stepsize_controller=diffrax.PIDController(rtol=rtol, atol=atol),
             max_steps=max_steps,
             event=diffrax.Event(self._separatrix_event),
@@ -313,11 +244,8 @@ class EMRIInspiral(eqx.Module):
 
         Returns the native ODE nodes rather than a fixed uniform grid.
         ``sol.ts`` and ``sol.ys`` have shape ``(max_steps,)`` /
-        ``(max_steps, 5)``, NaN-padded after the last valid step.  This is
-        fully ``vmap``-compatible because ``max_steps`` is static.
-
-        The adaptive stepper concentrates nodes near plunge automatically,
-        so no resolution is wasted on uniform sampling.
+        ``(max_steps, 5)``, padded with NaNs after the last valid step.  This is
+        fully vmap-compatible because ``max_steps`` is static.
         """
         return diffrax.diffeqsolve(
             diffrax.ODETerm(self._ode_rhs),
@@ -346,19 +274,14 @@ class EMRIInspiral(eqx.Module):
         atol: float = 1e-10,
         rtol: float = 1e-10,
     ):
-        r"""JIT-compiled backward diffrax solve.
+        r"""JIT-compiled backward diffrax solve (time-reversed ODE).
 
-        Integrates the time-reversed ODE
-
-        .. math::
-
-            \frac{dy}{d\tau} = -\frac{dy}{dt}
-
-        where :math:`\tau = T_{\rm plunge} - t` is time before plunge.
-        There is no separatrix event condition: the integration moves
-        *away* from the separatrix, so no termination is needed.
-
-        Parameters are identical to :meth:`_solve`.
+        Integrates :math:`dy/d\tau = -dy/dt` with
+        :math:`\tau = T_{\rm plunge} - t`.  No separatrix event: the integration
+        moves away from the separatrix.  Retains the dense (7th/8th-order)
+        interpolant on ``sol.interpolation`` (as :meth:`_solve`) so backward
+        waveforms can use the polynomial phases.  Parameters match
+        :meth:`_solve`.
         """
         return diffrax.diffeqsolve(
             diffrax.ODETerm(lambda t, y, args: -self._ode_rhs(t, y, args)),
@@ -367,7 +290,7 @@ class EMRIInspiral(eqx.Module):
             t1=T_geo,
             dt0=None,
             y0=y0,
-            saveat=diffrax.SaveAt(ts=t_save),
+            saveat=diffrax.SaveAt(ts=t_save, dense=True),
             stepsize_controller=diffrax.PIDController(rtol=rtol, atol=atol),
             max_steps=max_steps,
             args=ode_args,
@@ -398,6 +321,7 @@ class EMRIInspiral(eqx.Module):
         backward: bool = False,
         e_f: Optional[float] = None,
         save_at_steps: bool = False,
+        return_dense_phase_fn: bool = False,
     ) -> tuple[jnp.ndarray, ...]:
         r"""Integrate the EMRI inspiral trajectory.
 
@@ -409,9 +333,7 @@ class EMRIInspiral(eqx.Module):
         T : float
             Observation time [years].
         a : float
-            Dimensionless BH spin parameter.  Passed as a differentiable
-            JAX array so that :func:`jax.grad` / :func:`jax.vmap` work
-            across ``a`` without rebuilding the Module.
+            Dimensionless BH spin (differentiable / vmappable).
         x0 : float
             Inclination cosine (+1 prograde, −1 retrograde).
         dt : float
@@ -419,54 +341,46 @@ class EMRIInspiral(eqx.Module):
         M, mu : float
             Primary and secondary masses [:math:`M_\odot`].
         Phi_phi0, Phi_theta0, Phi_r0 : float
-            Initial orbital phases [rad].  In backward mode these are the
-            phases at plunge (:math:`\tau = 0`); they are often left at zero
-            since only the instantaneous frequency matters for track generation.
+            Initial orbital phases [rad] (phases at the backward-mode anchor).
         atol, rtol : float
             Adaptive solver tolerances.
         max_steps : int
-            Maximum number of ODE internal steps.  The Dopri8 solver
-            typically uses ~100–150 steps for a year-long EMRI inspiral,
-            so the default of 256 leaves a safe margin.  Under reverse-mode
-            autodiff (``jax.grad``), diffrax allocates adjoint buffers
-            scaling with ``max_steps``, so lowering this value directly
-            reduces GPU memory use under ``vmap``.  Raise it only for
-            pathological cases that actually require more steps.
+            Maximum ODE internal steps.  Under reverse-mode autodiff diffrax
+            allocates adjoint buffers scaling with ``max_steps``, so keep it as
+            small as safe under ``vmap``.
         dense_steps : int
             Number of output trajectory points.
         backward : bool
-            If ``True``, integrate the time-reversed ODE starting from the
-            separatrix.  The output time axis represents
-            :math:`\tau = T_{\rm plunge} - t` (time before plunge), so
-            ``t[0] = 0`` is at plunge and ``t[-1]`` is ``T`` years earlier.
-            In backward mode ``p`` and ``e`` *increase* along the output
-            arrays (moving away from the separatrix), and the phases
-            *decrease* (since :math:`d\Phi/d\tau < 0`).
+            If ``True``, integrate the time-reversed ODE.  The output time axis
+            is :math:`\tau` (time before the anchor, ``t[0] = 0`` at the
+            anchor); ``p``, ``e`` increase and the phases decrease along the
+            arrays.  The start is the separatrix when ``e_f`` is given, otherwise
+            ``(p0, e0)`` (see ``e_f``).
         e_f : float, optional
-            Eccentricity at plunge, required when ``backward=True``.
-            The corresponding semi-latus rectum is set to
-            :math:`p_{\rm sep}(e_f, a) + \epsilon` automatically.
-            To obtain a consistent value, run a forward integration first
-            and read off ``e`` at the last valid (non-NaN) trajectory point.
+            Backward mode only.  If given, anchor to plunge: start at
+            :math:`p = p_{\rm sep}(e_f, a) + \epsilon` (``(p0, e0)`` ignored);
+            obtain it from a forward run's last valid ``e``.  If ``None``, the
+            backward integration instead starts from the supplied ``(p0, e0)``
+            and runs into the past.
         save_at_steps : bool, optional
-            If ``True``, return the native adaptive ODE nodes rather than a
-            fixed uniform grid.  Output arrays have shape ``(max_steps,)``
-            with ``nan``-padding after the last valid step; this is the
-            recommended mode for batched (``vmap``) evaluation because:
-
-            * Shapes are static (determined by ``max_steps``).
-            * The adaptive stepper concentrates nodes near plunge, so no
-              resolution is wasted.
-            * The last finite entry in ``t`` is the final accepted step before termination
-              (an accurate plunge/end time if the event is located with sufficient tolerance).
-
-            Default ``False`` preserves the original fixed-grid behaviour.
+            If ``True``, return the native adaptive ODE nodes (shape
+            ``(max_steps,)``, NaN-padded after the last step) instead of a fixed
+            uniform grid.  Recommended for batched (``vmap``) evaluation:
+            static shapes and nodes concentrated near plunge.
+        return_dense_phase_fn : bool, optional
+            If ``True`` (fixed-grid mode, forward or backward), additionally
+            return a callable ``phase_fn(t_seconds) -> (Phi_phi, Phi_theta,
+            Phi_r)`` as a 7th element, evaluating the phases from the Dopri8
+            dense (7th/8th-order) interpolant.  In backward mode ``t_seconds``
+            is time before plunge.  Incompatible with ``save_at_steps``.
 
         Returns
         -------
         t, p, e, Phi_phi, Phi_theta, Phi_r : jnp.ndarray, shape (N_save,)
             ``t`` is in seconds; phases in radians.  In backward mode ``t``
-            is time before plunge (:math:`\tau`).
+            is time before plunge (:math:`\tau`).  When
+            ``return_dense_phase_fn=True`` a 7th element ``phase_fn`` is
+            appended (see above).
 
             ``N_save`` is:
 
@@ -488,16 +402,37 @@ class EMRIInspiral(eqx.Module):
         )
         ode_args = (mu_over_M, a_, x0, r_isco)
 
+        if return_dense_phase_fn and save_at_steps:
+            raise NotImplementedError(
+                "return_dense_phase_fn requires a fixed save grid; it is "
+                "incompatible with save_at_steps=True.  Use the default "
+                "fixed-grid mode (forward or backward)."
+            )
+
         if backward:
-            if e_f is None:
-                raise ValueError(
-                    "e_f must be provided when backward=True.  "
-                    "Run a forward integration first and read off e at the "
-                    "last valid trajectory point."
-                )
-            e_f_ = jnp.asarray(e_f, dtype=jnp.float64)
-            p_sep = get_separatrix_fast(jnp.abs(a_), e_f_, _x_sign(a_, x0))
-            p_start = p_sep + SEPARATRIX_BUFFER
+            # Two backward-start conventions:
+            #   * e_f given      → anchor to plunge: start at the separatrix
+            #     p_start = p_sep(e_f) + buffer (the orbit widens going back).
+            #   * e_f None        → start from the given (p0, e0) and integrate
+            #     backward in time (toward earlier, wider-orbit inspiral).
+            if e_f is not None:
+                e_start = jnp.asarray(e_f, dtype=jnp.float64)
+                p_sep = get_separatrix_fast(jnp.abs(a_), e_start, _x_sign(a_, x0))
+                p_start = p_sep + SEPARATRIX_BUFFER
+            else:
+                if not any(
+                    isinstance(x, jax.core.Tracer) for x in (p0, e0, a_, x0)
+                ):
+                    p0_min = float(min_valid_p(a_, e0, x0))
+                    if float(p0) < p0_min:
+                        raise ValueError(
+                            f"p0={float(p0):.6g} is outside the flux "
+                            f"interpolation grid.  Must be >= {p0_min:.6g} for "
+                            f"a={float(a_):.4g}, e0={float(e0):.4g}, "
+                            f"x0={float(x0):.4g}."
+                        )
+                p_start = jnp.asarray(p0, dtype=jnp.float64)
+                e_start = jnp.asarray(e0, dtype=jnp.float64)
             # Backward integration always uses a uniform save grid
             t_save = (
                 self.t_obs / M_s
@@ -505,7 +440,7 @@ class EMRIInspiral(eqx.Module):
                 else jnp.linspace(jnp.zeros((), jnp.float64), T_geo, dense_steps)
             )
             y0 = jnp.array(
-                [p_start, e_f_, Phi_phi0, Phi_theta0, Phi_r0], dtype=jnp.float64
+                [p_start, e_start, Phi_phi0, Phi_theta0, Phi_r0], dtype=jnp.float64
             )
             sol = self._solve_backward(y0, t_save, T_geo, ode_args, max_steps, atol, rtol)
         else:
@@ -527,7 +462,8 @@ class EMRIInspiral(eqx.Module):
                 # Adaptive-nodes path: vmap-friendly, shape (max_steps,)
                 sol = self._solve_steps(y0, T_geo, ode_args, max_steps, atol, rtol)
             else:
-                # Uniform-grid path: shape (dense_steps+1,) when t_obs is None
+                # Uniform-grid path: shape (dense_steps+1,) when t_obs is None.
+                # _solve always retains the dense interpolant.
                 t_save = (
                     self.t_obs / M_s
                     if self.t_obs is not None
@@ -545,6 +481,23 @@ class EMRIInspiral(eqx.Module):
         Phi_phi_arr   = ys[:, 2]
         Phi_theta_arr = ys[:, 3]
         Phi_r_arr     = ys[:, 4]
+
+        if return_dense_phase_fn:
+            # Evaluate the orbital phases from the Dopri8 dense (7th/8th-order)
+            # interpolant.  The query time [s] maps to the solver's geometric
+            # time via tau = t / M_s; this holds for both forward integration
+            # (t from start) and backward integration (t = time before plunge),
+            # since the solve runs from tau = 0 in either case.
+            interp = sol.interpolation
+
+            def phase_fn(t_seconds):
+                tau = jnp.asarray(t_seconds, dtype=jnp.float64) / M_s
+                phases = jax.vmap(interp.evaluate)(tau)  # (N, 5)
+                return phases[:, 2], phases[:, 3], phases[:, 4]
+
+            return (
+                t_s, p_arr, e_arr, Phi_phi_arr, Phi_theta_arr, Phi_r_arr, phase_fn
+            )
 
         return t_s, p_arr, e_arr, Phi_phi_arr, Phi_theta_arr, Phi_r_arr
 
@@ -673,24 +626,18 @@ class EMRIInspiral(eqx.Module):
         with_amplitudes : bool
             If ``True``, also return the mode amplitudes ``|A_{lmkn}(t)|``
             along the track.  Requires ``amp_interp``.
-        amp_interp : AmplitudeInterpolator, optional
+        amp_interp : JAXAmplitudeInterpolator, optional
             Pre-constructed amplitude interpolator.  Required when
             ``with_amplitudes=True``.
         return_dict : bool
             If ``True``, return a dictionary keyed by the mode tuples
             instead of plain arrays.
         grid : TFGrid, optional
-            Time-frequency grid descriptor
-            (:class:`~fewtrax.utils.tf_bases.wdm.WDMGrid`,
-            :class:`~fewtrax.utils.tf_bases.sft.SFTGrid`, or any other
-            :class:`~fewtrax.utils.tf_bases.base.TFGrid` subclass).  When
-            provided, each mode's frequency track is interpolated onto the
-            grid's time-bin centres and quantised to frequency-bin indices,
-            and a :class:`~fewtrax.utils.tf_tracks.TFTrackSet` is returned
-            instead of raw arrays.  The mapping only uses the basis-agnostic
-            ``TFGrid`` interface (``t_bins``, ``freq_to_bin``, ``Nf``), so
-            any TF basis works.  Incompatible with ``return_dict`` and
-            ``with_amplitudes``.
+            Any :class:`~fewtrax.utils.tf_bases.base.TFGrid` subclass (WDM, SFT,
+            …).  When provided, each mode's track is interpolated onto the grid's
+            time-bin centres, quantised to frequency-bin indices, and returned as
+            a :class:`~fewtrax.utils.tf_tracks.TFTrackSet`.  Incompatible with
+            ``return_dict`` and ``with_amplitudes``.
 
         Returns
         -------
@@ -799,42 +746,30 @@ class EMRIInspiral(eqx.Module):
         amps = None
         if with_amplitudes:
             import numpy as _np
-            p_np = _np.asarray(p_arr)
-            e_np = _np.asarray(e_arr)
-            a_float = float(jnp.abs(a_))
+            l_all = _np.asarray(amp_interp.l_arr)
+            m_all = _np.asarray(amp_interp.m_arr)
+            k_all = _np.asarray(amp_interp.k_arr)
+            n_all = _np.asarray(amp_interp.n_arr)
 
-            # Build list of amplitude mode indices for look-up
-            # Each norm_mode has (l, m, k, n); find matching index in amp_interp
+            # Locate each requested (l, m, k, n) in the amplitude data (l=None
+            # matches on (m, k, n) only).
             amp_indices = []
             for lmkn in norm_modes:
                 l_, m_, k_, n_ = lmkn
-                if l_ is None:
-                    # Search by (m, k, n) only
-                    mask = (
-                        (amp_interp.m_arr == m_)
-                        & (amp_interp.k_arr == k_)
-                        & (amp_interp.n_arr == n_)
-                    )
-                else:
-                    mask = (
-                        (amp_interp.l_arr == l_)
-                        & (amp_interp.m_arr == m_)
-                        & (amp_interp.k_arr == k_)
-                        & (amp_interp.n_arr == n_)
-                    )
+                mask = (m_all == m_) & (k_all == k_) & (n_all == n_)
+                if l_ is not None:
+                    mask = mask & (l_all == l_)
                 idx = _np.where(mask)[0]
                 amp_indices.append(int(idx[0]) if len(idx) > 0 else None)
 
-            # Filter to modes that exist in the amplitude data
             valid_amp_idx = [i for i in amp_indices if i is not None]
             valid_mode_idx = [j for j, i in enumerate(amp_indices) if i is not None]
 
             if valid_amp_idx:
-                A_raw = amp_interp.evaluate(
-                    a_float, p_np, e_np, specific_modes=valid_amp_idx
-                )  # (dense_steps, len(valid_amp_idx)), complex
-                A_abs = _np.abs(A_raw).T  # (len(valid_amp_idx), dense_steps)
-                # Build full amps array (NaN for missing modes)
+                # Evaluate all modes along the track (prograde convention), then
+                # keep the requested columns.
+                A_all = amp_interp.evaluate_trajectory(jnp.abs(a_), p_arr, e_arr)
+                A_abs = _np.abs(_np.asarray(A_all)[:, valid_amp_idx]).T
                 amps_np = _np.full(
                     (len(norm_modes), len(t_s)), _np.nan, dtype=_np.float64
                 )
@@ -873,27 +808,19 @@ class EMRIInspiral(eqx.Module):
         max_steps: int = 512,
         atol: float = 1e-10,
         rtol: float = 1e-10,
-    ) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]:
-        r"""Gravitational-wave frequency and its time derivatives on a fixed grid.
+        return_phi_r: bool = False,
+    ) -> tuple[jnp.ndarray, ...]:
+        r"""Frequency and its time derivatives on a fixed grid (backward solve).
 
-        Solves the backward inspiral ODE once with dense (polynomial) output,
-        then evaluates f, ḟ, f̈ at every point in ``t_alpha`` by differentiating
-        the Dopri8 dense interpolant with ``jax.grad`` — no additional ODE
-        solves are required.
+        Solves the backward inspiral ODE once with dense output, then evaluates
+        f, ḟ, f̈ at every point in ``t_alpha`` by analytically differentiating
+        the Dopri8 dense interpolant (no extra ODE solves; fully vmap-able).
 
-        The backward ODE anchors the track to the plunge event rather than to
-        uncertain initial conditions, and is numerically more stable near
-        merger.  The sign convention follows
-        :math:`d\Phi_\phi/d\tau = -\Omega_\phi` (backward time reversal), so
-
-        .. math::
-
-            f        &= -\frac{d\Phi_\phi/d\tau}{2\pi M_s} \\
-            \dot{f}  &= +\frac{d^2\Phi_\phi/d\tau^2}{2\pi M_s^2} \\
-            \ddot{f} &= -\frac{d^3\Phi_\phi/d\tau^3}{2\pi M_s^3}
-
-        where :math:`\tau` is geometric backward time (:math:`M` units) and
-        :math:`M_s = (M + \mu)\,G/c^3` is the total mass in seconds.
+        The conventions are :math:`f = -(d\Phi/d\tau)/(2\pi M_s)`,
+        :math:`\dot f = (d^2\Phi/d\tau^2)/(2\pi M_s^2)`,
+        :math:`\ddot f = -(d^3\Phi/d\tau^3)/(2\pi M_s^3)`, with :math:`\tau` the
+        geometric backward time and :math:`M_s=(M+\mu)\,G/c^3` the total mass in
+        seconds.
 
         Parameters
         ----------
@@ -906,34 +833,38 @@ class EMRIInspiral(eqx.Module):
         e_f : float
             Eccentricity at plunge (sets the backward-ODE initial condition).
         T : float
-            Duration of backward integration [years].  The ODE integrates
-            from :math:`\tau = 0` (plunge) to :math:`\tau = T \cdot {\rm yr}`.
+            Duration of backward integration [years].
         t_alpha : array-like, shape (N,)
-            Physical time grid [s].  ``t_alpha[0] = 0`` is the start of the
-            observation window; ``t_alpha[-1]`` is the plunge moment.
-            Must satisfy ``t_alpha[-1] \le T \cdot {\rm YEAR\_SI}``.
+            Physical time grid [s], increasing.  ``t_alpha[0]`` starts the
+            observation window and ``t_alpha[-1]`` is the plunge moment;
+            requires ``t_alpha[-1] <= T * YEAR_SI``.
         x0 : float
             Inclination cosine (+1 prograde, −1 retrograde).
         max_steps : int
             Maximum ODE internal steps.
         atol, rtol : float
             Adaptive step-size tolerances.
+        return_phi_r : bool
+            If ``True``, also return the :math:`\Phi_r`-derived radial frequency
+            and its derivatives (``f_r, fdot_r, fddot_r``) as three extra
+            arrays.
 
         Returns
         -------
-        f : jnp.ndarray, shape (N,)
-            Instantaneous GW frequency [Hz].
-        fdot : jnp.ndarray, shape (N,)
-            First physical time derivative df/dt [Hz/s].
-        fddot : jnp.ndarray, shape (N,)
-            Second physical time derivative d²f/dt² [Hz/s²].
+        f, fdot, fddot : jnp.ndarray, shape (N,)
+            :math:`\Phi_\phi`-derived GW frequency [Hz] and its physical time
+            derivatives [Hz/s], [Hz/s²].
+        f_r, fdot_r, fddot_r : jnp.ndarray, shape (N,), optional
+            :math:`\Phi_r`-derived radial frequency and derivatives, only
+            present when ``return_phi_r=True``.
         """
         instance = cls(flux_data)
 
         a_ = jnp.asarray(a, dtype=jnp.float64)
         e_f_ = jnp.asarray(e_f, dtype=jnp.float64)
+        # Pure-jnp arithmetic throughout so M, mu may be vmapped tracers.
         M_s = jnp.asarray((M + mu) * MTSUN_SI, dtype=jnp.float64)
-        T_geo = jnp.asarray(T * YEAR_SI / float(M_s), dtype=jnp.float64)
+        T_geo = jnp.asarray(T * YEAR_SI, dtype=jnp.float64) / M_s
         mu_over_M = jnp.asarray(M * mu / (M + mu) ** 2, dtype=jnp.float64)
         r_isco = get_separatrix_fast(
             jnp.abs(a_), jnp.zeros((), jnp.float64), _x_sign(a_, x0)
@@ -959,27 +890,25 @@ class EMRIInspiral(eqx.Module):
         )
 
         # Map t_alpha [s] → backward geometric time τ [M]:
-        #   τ = 0  at plunge      (t_alpha[-1])
-        #   τ = T_geo  at start   (t_alpha[0])
+        #   τ = 0  at plunge (t_alpha[-1]);  τ = T_geo at start (t_alpha[0])
         t_alpha_ = jnp.asarray(t_alpha, dtype=jnp.float64)
         tau_query = (t_alpha_[-1] - t_alpha_) / M_s
 
-        def _phi_phi_at(tau):
-            return sol.interpolation.evaluate(tau)[2]
-
+        interp = sol.interpolation
         two_pi_Ms = 2.0 * jnp.pi * M_s
 
-        def _get_derivs(tau):
-            d1 = jax.grad(_phi_phi_at)(tau)
-            d2 = jax.grad(jax.grad(_phi_phi_at))(tau)
-            d3 = jax.grad(jax.grad(jax.grad(_phi_phi_at)))(tau)
+        def _freqs(tau, comp):
+            d1, d2, d3 = dense_phase_derivs(interp, tau, comp)
             return (
-                -d1 / two_pi_Ms,            # f      [Hz]
-                d2 / (two_pi_Ms * M_s),     # fdot   [Hz/s]
-                -d3 / (two_pi_Ms * M_s**2), # fddot  [Hz/s²]
+                -d1 / two_pi_Ms,             # f      [Hz]
+                d2 / (two_pi_Ms * M_s),      # fdot   [Hz/s]
+                -d3 / (two_pi_Ms * M_s**2),  # fddot  [Hz/s²]
             )
 
-        f, fdot, fddot = jax.vmap(_get_derivs)(tau_query)
+        f, fdot, fddot = jax.vmap(lambda tau: _freqs(tau, 2))(tau_query)
+        if return_phi_r:
+            f_r, fdot_r, fddot_r = jax.vmap(lambda tau: _freqs(tau, 4))(tau_query)
+            return f, fdot, fddot, f_r, fdot_r, fddot_r
         return f, fdot, fddot
 
 def run_inspiral(
@@ -1000,36 +929,11 @@ def run_inspiral(
     e_f: Optional[float] = None,
     **kwargs,
 ) -> tuple[jnp.ndarray, ...]:
-    r"""Convenience wrapper: integrate an EMRI inspiral trajectory.
+    r"""Convenience wrapper: build an :class:`EMRIInspiral` and integrate once.
 
-    Parameters
-    ----------
-    a : float
-        BH spin parameter.
-    p0, e0 : float
-        Initial orbital parameters (forward mode; ignored when
-        ``backward=True``).
-    T : float
-        Observation time [years].
-    flux_data : FluxData
-        Pre-loaded flux data.
-    M, mu : float
-        Primary and secondary masses [:math:`M_\odot`].
-    dt : float
-        Waveform sampling interval [s] (not ODE step size).
-    x0 : float
-        Inclination cosine.
-    dense_steps : int
-        Number of output trajectory points.
-    backward : bool
-        If ``True``, integrate the time-reversed ODE from the separatrix.
-    e_f : float, optional
-        Eccentricity at plunge, required when ``backward=True``.
-
-    Returns
-    -------
-    t, p, e, Phi_phi, Phi_theta, Phi_r : jnp.ndarray
-        Trajectory arrays.  In backward mode ``t`` is time before plunge.
+    Takes the same arguments as :meth:`EMRIInspiral.__call__` (plus
+    ``flux_data``) and returns ``(t, p, e, Phi_phi, Phi_theta, Phi_r)``; in
+    backward mode ``t`` is time before plunge.
     """
     traj = EMRIInspiral(flux_data)
     return traj(
