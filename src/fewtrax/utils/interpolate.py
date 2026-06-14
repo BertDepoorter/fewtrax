@@ -16,8 +16,6 @@ from scipy.interpolate import CubicSpline as _CubicSpline
 # v3 matches FEW's InterpolatedModeSum accuracy (not-a-knot cubic splines)
 # while keeping the exp-factorisation speedup from v2.
 
-from scipy.interpolate import CubicSpline as _CubicSpline
-
 def _fit_spline(t_sparse_np, y_sparse_np):
     """Fit a not-a-knot cubic spline and return scipy's (4, n-1, ...) coefficient array."""
     cs = _CubicSpline(t_sparse_np, y_sparse_np)
