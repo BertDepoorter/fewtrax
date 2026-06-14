@@ -40,7 +40,7 @@ from fewtrax.utils.tf_bases.base import TFGrid
 
 
 # ---------------------------------------------------------------------------
-# Gauss-Legendre nodes for the exact quadrature (computed once at import time)
+# GL nodes for the exact quadrature (computed once at import time)
 # ---------------------------------------------------------------------------
 
 #: Number of Gauss-Legendre quadrature points.
@@ -256,13 +256,11 @@ def default_sft_grid(
     f_max : float
         Maximum frequency to cover [Hz].
     T_coh : float
-        Segment length [s].  Default 86400 s (1 day), which is a common
-        choice for LISA semi-coherent EMRI searches.
-
+        Segment length [s].  Default 86400 s (1 day).
     Returns
     -------
     SFTGrid
-        The total duration is snapped to the nearest integer multiple of
+        The total duration is ceiled to the nearest integer multiple of
         ``T_coh``.
     """
     Nt = max(1, int(round(T / T_coh)))

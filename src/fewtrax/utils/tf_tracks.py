@@ -5,7 +5,7 @@ track in the WDM (Wilson-Daubechies-Meyer) time-frequency plane:
 
     f_{mkn}(t) = [m Ω_φ(t) + k Ω_θ(t) + n Ω_r(t)] / (2π M_s)
 
-where M_s = (M + μ) MTSUN_SI is the total mass in seconds and Ω_i are the
+where M_s = (M + mu) MTSUN_SI is the total mass in seconds and Omega_i are the
 Boyer-Lindquist fundamental frequencies in geometric units [rad/M].
 
 Because EMRI signals evolve slowly, each mode occupies O(Nt) active pixels
@@ -26,9 +26,9 @@ Two representations
 
 Memory estimate (default grid Nf=64, Nt=4096)
 ----------------------------------------------
-- i_freq  int16    : Nt × 2 bytes =   8 kB
-- freq_hz float32  : Nt × 4 bytes =  16 kB
-- coeff   complex64: Nt × 8 bytes =  32 kB
+- i_freq  int16    : Nt x 2 bytes =   8 kB
+- freq_hz float32  : Nt x 4 bytes =  16 kB
+- coeff   complex64: Nt x 8 bytes =  32 kB
 Total per mode ≈ 56 kB.
 """
 
