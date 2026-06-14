@@ -129,6 +129,8 @@ open build/html/index.html
 ```
 The HTML file can be opened in a web browser where you can view the docs. 
 
+## Use of GenAI
+Developers of this repository were assisted by GenAI (copilot/Claude code). Specifically, GenAI aided by creating docstrings, cleaning code and packaging functions. Tests and comparison have been written by the authors and reformatted by GenAI to be more readable.  
 
 ## Citation
 
