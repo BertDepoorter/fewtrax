@@ -491,7 +491,7 @@ class EMRIInspiral(eqx.Module):
             interp = sol.interpolation
 
             def phase_fn(t_seconds):
-                tau = jnp.asarray(t_seconds, dtype=jnp.float64) / M_s
+                tau = jnp.atleast_1d(jnp.asarray(t_seconds, dtype=jnp.float64) / M_s)
                 phases = jax.vmap(interp.evaluate)(tau)  # (N, 5)
                 return phases[:, 2], phases[:, 3], phases[:, 4]
 
