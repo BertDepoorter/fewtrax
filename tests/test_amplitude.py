@@ -1,10 +1,10 @@
-"""Tests for the amplitude interpolation module.
+"""Tests for the amplitude interpolation module (JAXAmplitudeInterpolator).
 
 Tests verify:
 - Amplitude arrays have the correct shape.
 - Amplitudes are finite and not identically zero.
-- Mode symmetry relations are satisfied.
-- The amplitude evaluator handles edge cases gracefully.
+- Mode selection behaves monotonically in the threshold.
+- A known FEW amplitude value is reproduced to within tolerance.
 """
 
 import numpy as np
@@ -21,104 +21,91 @@ KERRECCEQ_AMP_TEST_POINTS = [
 ]
 
 
+@pytest.fixture(scope="module")
+def amp_interp(data_dir):
+    """Module-scoped JAX amplitude interpolator."""
+    from fewtrax.data.loader import load_amplitude_data_jax
+    from fewtrax.amplitude import JAXAmplitudeInterpolator
+    return JAXAmplitudeInterpolator(load_amplitude_data_jax(data_dir))
+
+
 class TestAmplitudeShape:
     """Shape and basic validity tests."""
 
-    def test_shape(self, amp_data):
-        """Amplitude array should have shape (N_times, N_modes)."""
-        from fewtrax.amplitude import AmplitudeInterpolator
-        amp = AmplitudeInterpolator(amp_data)
+    def test_shape(self, amp_interp):
+        """evaluate_trajectory should return (N_times, N_modes)."""
         N = 50
-        p = np.linspace(8.0, 10.0, N)
-        e = np.linspace(0.35, 0.45, N)
-        A = amp.evaluate(a=0.3, p=p, e=e)
-        assert A.shape == (N, amp.n_modes), \
-            f"Expected shape ({N}, {amp.n_modes}), got {A.shape}"
+        p = jnp.linspace(8.0, 10.0, N)
+        e = jnp.linspace(0.35, 0.45, N)
+        A = amp_interp.evaluate_trajectory(jnp.float64(0.3), p, e)
+        assert A.shape == (N, amp_interp.n_modes), \
+            f"Expected shape ({N}, {amp_interp.n_modes}), got {A.shape}"
 
-    def test_amplitudes_finite(self, amp_data):
+    def test_amplitudes_finite(self, amp_interp):
         """Amplitudes should be finite (no NaN/Inf)."""
-        from fewtrax.amplitude import AmplitudeInterpolator
-        amp = AmplitudeInterpolator(amp_data)
-        p = np.array([10.0, 12.0, 15.0])
-        e = np.array([0.4, 0.3, 0.2])
-        A = amp.evaluate(a=0.3, p=p, e=e)
-        assert np.all(np.isfinite(A)), "Amplitudes contain NaN or Inf."
+        p = jnp.array([10.0, 12.0, 15.0])
+        e = jnp.array([0.4, 0.3, 0.2])
+        A = amp_interp.evaluate_trajectory(jnp.float64(0.3), p, e)
+        assert np.all(np.isfinite(np.asarray(A))), "Amplitudes contain NaN or Inf."
 
-    def test_amplitudes_not_zero(self, amp_data):
+    def test_amplitudes_not_zero(self, amp_interp):
         """Dominant modes should have non-zero amplitudes."""
-        from fewtrax.amplitude import AmplitudeInterpolator
-        amp = AmplitudeInterpolator(amp_data)
-        p = np.array([10.0])
-        e = np.array([0.4])
-        A = amp.evaluate(a=0.3, p=p, e=e)
-        max_amp = np.max(np.abs(A))
-        assert max_amp > 1e-10, "Maximum amplitude is unexpectedly small."
+        A = amp_interp(a=0.3, p=10.0, e=0.4)   # (n_modes,)
+        assert float(jnp.max(jnp.abs(A))) > 1e-10, \
+            "Maximum amplitude is unexpectedly small."
 
 
 class TestModeSelection:
-    """Tests for the mode selection utility."""
+    """Tests for the mean-power mode selection utility."""
 
-    def test_returns_subset(self, amp_data):
-        """Selected modes should be a subset of all modes."""
-        from fewtrax.amplitude import AmplitudeInterpolator
-        amp = AmplitudeInterpolator(amp_data)
-        p = np.linspace(9.0, 11.0, 20)
-        e = np.linspace(0.3, 0.4, 20)
-        inds = amp.select_modes(a=0.3, p=p, e=e, threshold=1e-3)
-        assert len(inds) <= amp.n_modes
-        assert len(inds) > 0, "No modes selected!"
+    def test_returns_subset(self, amp_interp):
+        """Selected modes should be a non-empty subset of all modes."""
+        p = jnp.linspace(9.0, 11.0, 20)
+        e = jnp.linspace(0.3, 0.4, 20)
+        inds = amp_interp.select_modes(a=0.3, p=p, e=e, threshold=1e-3)
+        assert 0 < len(inds) <= amp_interp.n_modes
 
-    def test_threshold_reduces_modes(self, amp_data):
-        """Higher threshold should select fewer modes."""
-        from fewtrax.amplitude import AmplitudeInterpolator
-        amp = AmplitudeInterpolator(amp_data)
-        p = np.linspace(9.0, 11.0, 20)
-        e = np.linspace(0.3, 0.4, 20)
-        inds_loose = amp.select_modes(a=0.3, p=p, e=e, threshold=1e-6)
-        inds_strict = amp.select_modes(a=0.3, p=p, e=e, threshold=1e-2)
+    def test_threshold_reduces_modes(self, amp_interp):
+        """Higher threshold should select fewer (or equal) modes."""
+        p = jnp.linspace(9.0, 11.0, 20)
+        e = jnp.linspace(0.3, 0.4, 20)
+        inds_loose = amp_interp.select_modes(a=0.3, p=p, e=e, threshold=1e-6)
+        inds_strict = amp_interp.select_modes(a=0.3, p=p, e=e, threshold=1e-2)
         assert len(inds_strict) <= len(inds_loose)
 
-    def test_specific_modes(self, amp_data):
-        """Evaluating specific modes returns the correct number of columns."""
-        from fewtrax.amplitude import AmplitudeInterpolator
-        amp = AmplitudeInterpolator(amp_data)
-        p = np.array([10.0, 11.0])
-        e = np.array([0.4, 0.35])
-        modes = np.array([0, 1, 2])
-        A = amp.evaluate(a=0.3, p=p, e=e, specific_modes=modes)
-        assert A.shape == (2, 3)
+    def test_select_from_amps_matches(self, amp_interp):
+        """select_modes_from_amps on a precomputed table matches select_modes."""
+        p = jnp.linspace(9.0, 11.0, 20)
+        e = jnp.linspace(0.3, 0.4, 20)
+        teuk = amp_interp.evaluate_trajectory(jnp.float64(0.3), p, e)
+        inds_a = amp_interp.select_modes_from_amps(teuk, threshold=1e-3)
+        inds_b = amp_interp.select_modes(a=0.3, p=p, e=e, threshold=1e-3)
+        np.testing.assert_array_equal(inds_a, inds_b)
 
 
 class TestAmplitudeValues:
-    """Numerical value tests (require FEW for comparison)."""
+    """Numerical value tests (require FEW data for comparison)."""
 
     @pytest.mark.parametrize(
         "mode,a,p,e,re_expected,im_expected",
         KERRECCEQ_AMP_TEST_POINTS,
     )
-    def test_known_value(self, amp_data, mode, a, p, e, re_expected, im_expected):
-        """Check amplitude matches known FEW value to within 10%."""
-        from fewtrax.amplitude import AmplitudeInterpolator
-        amp = AmplitudeInterpolator(amp_data)
-
-        # Find the mode index
+    def test_known_value(self, amp_interp, mode, a, p, e, re_expected, im_expected):
+        """Check amplitude magnitude matches the known FEW value to within 50%."""
         l, m, k, n = mode
-        idx = None
-        for i, (li, mi, ki, ni) in enumerate(
-            zip(amp.l_arr, amp.m_arr, amp.k_arr, amp.n_arr)
-        ):
-            if int(li) == l and int(mi) == m and int(ki) == k and int(ni) == n:
-                idx = i
-                break
-
-        if idx is None:
+        l_arr = np.asarray(amp_interp.l_arr)
+        m_arr = np.asarray(amp_interp.m_arr)
+        k_arr = np.asarray(amp_interp.k_arr)
+        n_arr = np.asarray(amp_interp.n_arr)
+        match = np.where(
+            (l_arr == l) & (m_arr == m) & (k_arr == k) & (n_arr == n)
+        )[0]
+        if match.size == 0:
             pytest.skip(f"Mode {mode} not in dataset.")
 
-        A = amp.evaluate(a=a, p=np.array([p]), e=np.array([e]),
-                         specific_modes=np.array([idx]))
-        A_val = complex(A[0, 0])
+        A = np.asarray(amp_interp(a=a, p=p, e=e))
+        A_val = complex(A[int(match[0])])
         expected = complex(re_expected, im_expected)
 
-        # Check magnitude is in the right ballpark (order of magnitude)
         assert abs(abs(A_val) - abs(expected)) / abs(expected) < 0.5, \
             f"Amplitude {A_val:.4e} deviates >50% from expected {expected:.4e}"

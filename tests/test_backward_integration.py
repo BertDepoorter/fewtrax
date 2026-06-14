@@ -85,13 +85,25 @@ class TestBackwardBasics:
                 f"{name} should be monotonically non-increasing in backward mode."
             )
 
-    def test_e_f_required(self, flux_data):
-        """ValueError must be raised when backward=True and e_f is None."""
+    def test_backward_from_p0e0_without_ef(self, flux_data):
+        """Without e_f, backward integration starts from (p0, e0) and widens.
+
+        The separatrix anchor (e_f) is optional: omitting it integrates the
+        time-reversed ODE from the supplied (p0, e0) into the past, so p and e
+        increase away from the start.
+        """
         from fewtrax.trajectory import EMRIInspiral
         traj = EMRIInspiral(flux_data)
-        with pytest.raises(ValueError, match="e_f must be provided"):
-            traj(p0=10.0, e0=0.4, T=0.1, M=1e6, mu=10.0, a=0.3,
-                 dense_steps=10, backward=True, e_f=None)
+        p0, e0 = 10.0, 0.4
+        t, p, e, *_ = traj(
+            p0=p0, e0=e0, T=0.1, M=1e6, mu=10.0, a=0.3,
+            dense_steps=20, backward=True, e_f=None,
+        )
+        p = np.asarray(p)
+        e = np.asarray(e)
+        assert np.isclose(float(p[0]), p0) and np.isclose(float(e[0]), e0), \
+            "Backward run without e_f must start exactly at (p0, e0)."
+        assert float(p[-1]) > p0, "p should increase into the past."
 
     def test_schwarzschild_backward(self, flux_data):
         """Backward integration should work for a=0 (Schwarzschild)."""
