@@ -67,7 +67,6 @@
 <li class="toctree-l3"><a class="reference internal" href="#fewtrax.waveform.kerr.KerrEccentricEquatorialWaveform.get_harmonic_track"><code class="docutils literal notranslate"><span class="pre">KerrEccentricEquatorialWaveform.get_harmonic_track()</span></code></a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="#backward-integration">Backward integration</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#fewtrax.trajectory.inspiral.EMRIInspiral"><code class="docutils literal notranslate"><span class="pre">EMRIInspiral</span></code></a><ul>
 <li class="toctree-l3"><a class="reference internal" href="#fewtrax.trajectory.inspiral.EMRIInspiral.get_frequency_track"><code class="docutils literal notranslate"><span class="pre">EMRIInspiral.get_frequency_track()</span></code></a></li>
 <li class="toctree-l3"><a class="reference internal" href="#fewtrax.trajectory.inspiral.EMRIInspiral.get_multi_track"><code class="docutils literal notranslate"><span class="pre">EMRIInspiral.get_multi_track()</span></code></a></li>
@@ -75,16 +74,11 @@
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="#fewtrax.trajectory.inspiral.run_inspiral"><code class="docutils literal notranslate"><span class="pre">run_inspiral()</span></code></a></li>
-<li class="toctree-l2"><a class="reference internal" href="#design-notes-legacy-backend">Design notes (legacy backend)</a></li>
-<li class="toctree-l2"><a class="reference internal" href="#fewtrax.amplitude.interp.AmplitudeInterpolator"><code class="docutils literal notranslate"><span class="pre">AmplitudeInterpolator</span></code></a><ul>
-<li class="toctree-l3"><a class="reference internal" href="#fewtrax.amplitude.interp.AmplitudeInterpolator.evaluate"><code class="docutils literal notranslate"><span class="pre">AmplitudeInterpolator.evaluate()</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="#fewtrax.amplitude.interp.AmplitudeInterpolator.get_mode_power"><code class="docutils literal notranslate"><span class="pre">AmplitudeInterpolator.get_mode_power()</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="#fewtrax.amplitude.interp.AmplitudeInterpolator.select_modes"><code class="docutils literal notranslate"><span class="pre">AmplitudeInterpolator.select_modes()</span></code></a></li>
-</ul>
-</li>
 <li class="toctree-l2"><a class="reference internal" href="#fewtrax.amplitude.interp.JAXAmplitudeInterpolator"><code class="docutils literal notranslate"><span class="pre">JAXAmplitudeInterpolator</span></code></a><ul>
 <li class="toctree-l3"><a class="reference internal" href="#fewtrax.amplitude.interp.JAXAmplitudeInterpolator.select_modes_few"><code class="docutils literal notranslate"><span class="pre">JAXAmplitudeInterpolator.select_modes_few()</span></code></a></li>
 <li class="toctree-l3"><a class="reference internal" href="#fewtrax.amplitude.interp.JAXAmplitudeInterpolator.evaluate_trajectory"><code class="docutils literal notranslate"><span class="pre">JAXAmplitudeInterpolator.evaluate_trajectory()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#fewtrax.amplitude.interp.JAXAmplitudeInterpolator.select_modes_from_amps"><code class="docutils literal notranslate"><span class="pre">JAXAmplitudeInterpolator.select_modes_from_amps()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#fewtrax.amplitude.interp.JAXAmplitudeInterpolator.select_modes"><code class="docutils literal notranslate"><span class="pre">JAXAmplitudeInterpolator.select_modes()</span></code></a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="#utilities">Utilities</a></li>
@@ -171,7 +165,7 @@ once and JAX-compatible interpolators are built.</p></li>
 the adiabatic ODE for <span class="math notranslate nohighlight">\((p, e, \Phi_\phi, \Phi_\theta, \Phi_r)\)</span>.</p></li>
 <li><p><strong>Mode selection</strong>: modes are filtered by their relative power
 contribution (threshold configurable).</p></li>
-<li><p><strong>Amplitude evaluation</strong>: <code class="xref py py-class docutils literal notranslate"><span class="pre">AmplitudeInterpolator</span></code>
+<li><p><strong>Amplitude evaluation</strong>: <code class="xref py py-class docutils literal notranslate"><span class="pre">JAXAmplitudeInterpolator</span></code>
 evaluates <span class="math notranslate nohighlight">\(A_{\ell m k n}\)</span> at each trajectory point.</p></li>
 <li><p><strong>Harmonics</strong>: <a class="reference internal" href="#fewtrax.utils.harmonics.get_ylms_for_modes" title="fewtrax.utils.harmonics.get_ylms_for_modes"><code class="xref py py-func docutils literal notranslate"><span class="pre">get_ylms_for_modes()</span></code></a>
 computes <span class="math notranslate nohighlight">\({}_{-2}Y_{\ell m}(\theta, \phi)\)</span>.</p></li>
@@ -213,7 +207,7 @@ directly inside <code class="docutils literal notranslate"><span class="pre">jax
 </section>
 <dl class="py class">
 <dt class="sig sig-object py" id="fewtrax.waveform.kerr.KerrEccentricEquatorialWaveform">
-<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">fewtrax.waveform.kerr.</span></span><span class="sig-name descname"><span class="pre">KerrEccentricEquatorialWaveform</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data_dir</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">amp_filename</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'ZNAmps_l10_m10_n55_DS2Outer.h5'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mode_selection_threshold</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1e-05</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dense_steps</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">100</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">preload_amplitude</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_jax_amps</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/fewtrax/waveform/kerr.html#KerrEccentricEquatorialWaveform"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#fewtrax.waveform.kerr.KerrEccentricEquatorialWaveform" title="Link to this definition"></a></dt>
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">fewtrax.waveform.kerr.</span></span><span class="sig-name descname"><span class="pre">KerrEccentricEquatorialWaveform</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data_dir</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">amp_filename</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'ZNAmps_l10_m10_n55_DS2Outer.h5'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mode_selection_threshold</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1e-05</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dense_steps</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">100</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">preload_amplitude</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/fewtrax/waveform/kerr.html#KerrEccentricEquatorialWaveform"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#fewtrax.waveform.kerr.KerrEccentricEquatorialWaveform" title="Link to this definition"></a></dt>
 <dd><p>EMRI waveform generator for the KerrEccentricEquatorial model.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
@@ -326,86 +320,32 @@ Obtain this from a forward run:
 </dd></dl>
 
 <p id="module-fewtrax.trajectory.inspiral">EMRI orbital trajectory integration via diffrax.</p>
-<p>The trajectory ODE integrates</p>
-<div class="math notranslate nohighlight">
-\[\begin{split}\frac{dp}{dt} &amp;= \left(\frac{\partial E}{\partial p}\right)^{-1}_{\rm eff}\,\dot{E}_{\rm GR} + \cdots \\
-\frac{de}{dt} &amp;= \cdots \\
-\frac{d\Phi_\phi}{dt} &amp;= \Omega_\phi(a, p, e) \\
-\frac{d\Phi_\theta}{dt} &amp;= \Omega_\theta(a, p, e) \\
-\frac{d\Phi_r}{dt} &amp;= \Omega_r(a, p, e)\end{split}\]</div>
-<p>where time is in units of <span class="math notranslate nohighlight">\(M\)</span>.</p>
-<p>The radiation-reaction terms are obtained by interpolating the PN-normalised
-<span class="math notranslate nohighlight">\(\dot{E}\)</span> and <span class="math notranslate nohighlight">\(\dot{L}\)</span> grids from <a class="reference internal" href="#module-fewtrax.data.loader" title="fewtrax.data.loader"><code class="xref py py-mod docutils literal notranslate"><span class="pre">fewtrax.data.loader</span></code></a>
-and converting them to <span class="math notranslate nohighlight">\(\dot{p}\)</span>, <span class="math notranslate nohighlight">\(\dot{e}\)</span> via the
-Jacobian <span class="math notranslate nohighlight">\(\partial(E,L)/\partial(p,e)\)</span> computed analytically with
-<code class="xref py py-func docutils literal notranslate"><span class="pre">jax.jacfwd()</span></code>.</p>
-<p>Solver: <code class="xref py py-class docutils literal notranslate"><span class="pre">diffrax.Dopri8</span></code> (8th-order Dormand-Prince Runge-Kutta,
-matching FEW’s DOPR853 in order) with <code class="xref py py-class docutils literal notranslate"><span class="pre">diffrax.PIDController</span></code>
-adaptive step-size control.  The system is stopped when the orbit approaches
-the separatrix.</p>
-<p>The ODE is fully JIT-compilable and differentiable with respect to the
-initial conditions <span class="math notranslate nohighlight">\((p_0, e_0)\)</span>, the BH spin <span class="math notranslate nohighlight">\(a\)</span>, and the
-mass parameters <span class="math notranslate nohighlight">\((M, \mu)\)</span>.</p>
-<p><a class="reference internal" href="#fewtrax.trajectory.inspiral.EMRIInspiral" title="fewtrax.trajectory.inspiral.EMRIInspiral"><code class="xref py py-attr docutils literal notranslate"><span class="pre">EMRIInspiral</span></code></a> stores only the (static) flux data.  All physical
-parameters — including <code class="docutils literal notranslate"><span class="pre">a</span></code> — are passed at call time, so a single
-instance can be vmapped over the full parameter space:</p>
+<p>Integrates the adiabatic inspiral ODE for <span class="math notranslate nohighlight">\((p, e, \Phi_\phi,
+\Phi_\theta, \Phi_r)\)</span> (time in units of <span class="math notranslate nohighlight">\(M\)</span>) with
+<code class="xref py py-class docutils literal notranslate"><span class="pre">diffrax.Dopri8</span></code> and adaptive step-size control, stopping when the
+orbit reaches the separatrix.  The solve is JIT-compilable and differentiable
+in <span class="math notranslate nohighlight">\((p_0, e_0, a, M, \mu)\)</span>.</p>
+<p><a class="reference internal" href="#fewtrax.trajectory.inspiral.EMRIInspiral" title="fewtrax.trajectory.inspiral.EMRIInspiral"><code class="xref py py-class docutils literal notranslate"><span class="pre">EMRIInspiral</span></code></a> stores only the static flux data; all physical
+parameters are call-time arguments, so a single instance can be vmapped over
+the parameter space:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">jax</span><span class="w"> </span><span class="kn">import</span> <span class="n">vmap</span>
 <span class="n">traj</span> <span class="o">=</span> <span class="n">EMRIInspiral</span><span class="p">(</span><span class="n">flux_data</span><span class="p">)</span>
 <span class="n">batch</span> <span class="o">=</span> <span class="n">vmap</span><span class="p">(</span><span class="k">lambda</span> <span class="n">p0</span><span class="p">,</span> <span class="n">e0</span><span class="p">,</span> <span class="n">a</span><span class="p">:</span> <span class="n">traj</span><span class="p">(</span><span class="n">p0</span><span class="o">=</span><span class="n">p0</span><span class="p">,</span> <span class="n">e0</span><span class="o">=</span><span class="n">e0</span><span class="p">,</span> <span class="n">a</span><span class="o">=</span><span class="n">a</span><span class="p">,</span> <span class="n">T</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span> <span class="n">M</span><span class="o">=</span><span class="mf">1e6</span><span class="p">,</span> <span class="n">mu</span><span class="o">=</span><span class="mf">10.0</span><span class="p">))</span>
 <span class="n">results</span> <span class="o">=</span> <span class="n">batch</span><span class="p">(</span><span class="n">p0_arr</span><span class="p">,</span> <span class="n">e0_arr</span><span class="p">,</span> <span class="n">a_arr</span><span class="p">)</span>
 </pre></div>
 </div>
-<section id="backward-integration">
-<h2>Backward integration<a class="headerlink" href="#backward-integration" title="Link to this heading"></a></h2>
-<p>Setting <code class="docutils literal notranslate"><span class="pre">backward=True</span></code> integrates the time-reversed ODE, starting at the
-separatrix and moving outward.  This anchors the track to the plunge rather
-than to uncertain initial conditions, and is more stable near merger because
-the ODE moves <em>away</em> from the separatrix.</p>
-<p>The backward ODE is simply the negation of the forward ODE:</p>
-<div class="math notranslate nohighlight">
-\[\frac{d y}{d\tau} = -\frac{d y}{dt}\]</div>
-<p>where <span class="math notranslate nohighlight">\(\tau = T_{\rm plunge} - t\)</span> is time before plunge.  Initial
-conditions are set to <span class="math notranslate nohighlight">\((p_{\rm sep}(e_f, a) + \epsilon, e_f, 0, 0, 0)\)</span>
-and the integration runs for duration <span class="math notranslate nohighlight">\(T\)</span> years.</p>
-</section>
+<p>Set <code class="docutils literal notranslate"><span class="pre">backward=True</span></code> to integrate the time-reversed ODE from the separatrix
+outward (with time axis <span class="math notranslate nohighlight">\(\tau = T_{\rm plunge} - t\)</span>), anchoring the
+track to the plunge rather than to uncertain initial conditions.</p>
 <dl class="py class">
 <dt class="sig sig-object py" id="fewtrax.trajectory.inspiral.EMRIInspiral">
-<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">fewtrax.trajectory.inspiral.</span></span><span class="sig-name descname"><span class="pre">EMRIInspiral</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">flux_data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">t_obs</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">phases</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">adjoint</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/fewtrax/trajectory/inspiral.html#EMRIInspiral"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#fewtrax.trajectory.inspiral.EMRIInspiral" title="Link to this definition"></a></dt>
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">fewtrax.trajectory.inspiral.</span></span><span class="sig-name descname"><span class="pre">EMRIInspiral</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">flux_data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">t_obs</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">adjoint</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/fewtrax/trajectory/inspiral.html#EMRIInspiral"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#fewtrax.trajectory.inspiral.EMRIInspiral" title="Link to this definition"></a></dt>
 <dd><p>Adiabatic EMRI trajectory integrator (JIT/vmap-compatible).</p>
-<p>Integrates the adiabatic inspiral ODE using <code class="xref py py-class docutils literal notranslate"><span class="pre">diffrax.Dopri8</span></code>
-(8th-order Dormand-Prince) with adaptive step-size control.  The radiation-reaction force
-(<span class="math notranslate nohighlight">\(\dot{p}\)</span>, <span class="math notranslate nohighlight">\(\dot{e}\)</span>) is computed from the FEW flux
-tables using the <strong>pex convention</strong> (matching FEW):</p>
-<ol class="arabic simple">
-<li><p>Interpolate the pre-computed ratios
-<span class="math notranslate nohighlight">\(r_p = \dot{p}_{\rm GR}/\dot{p}_{\rm PN}\)</span> and
-<span class="math notranslate nohighlight">\(r_e = \dot{e}_{\rm GR}/\dot{e}_{\rm PN}\)</span>.</p></li>
-<li><p>Multiply by the separatrix-dependent PN functions
-<span class="math notranslate nohighlight">\(\dot{p}_{\rm PN}(p, e, r_{\rm ISCO}, p_{\rm sep})\)</span> and
-<span class="math notranslate nohighlight">\(\dot{e}_{\rm PN}\)</span>.</p></li>
-</ol>
-<p>This avoids the runtime Jacobian inversion that was previously
-needed in the ELQ convention, improving both speed and accuracy.</p>
-<p><strong>Hybrid implementation</strong> — per-step optimisations relative to a naive
-baseline:</p>
-<ul class="simple">
-<li><p><strong>Fast separatrix</strong> — <a class="reference internal" href="#fewtrax.utils.geodesic.get_separatrix_fast" title="fewtrax.utils.geodesic.get_separatrix_fast"><code class="xref py py-func docutils literal notranslate"><span class="pre">get_separatrix_fast()</span></code></a>
-(20-step bisection + 5 Newton-Raphson) replaces the 50-step pure-bisection
-version.  Same float64 accuracy, fewer operations.</p></li>
-<li><p><strong>p_sep reuse</strong> — the separatrix is computed once per ODE-RHS evaluation
-and passed directly to the flux helper, eliminating the redundant internal
-call that the base-class <code class="docutils literal notranslate"><span class="pre">_flux_pex</span></code> used to make.</p></li>
-<li><p><strong>Platform-aware elliptic integrals</strong> —
-<a class="reference internal" href="#fewtrax.utils.geodesic.get_fundamental_frequencies_platform" title="fewtrax.utils.geodesic.get_fundamental_frequencies_platform"><code class="xref py py-func docutils literal notranslate"><span class="pre">get_fundamental_frequencies_platform()</span></code></a>
-selects 64-point Gauss-Legendre (GPU: maps to cuBLAS contractions) or
-AGM + 24-pt GL (CPU: fewer sequential operations) at JIT-trace time.</p></li>
-<li><p><strong>Configurable adjoint</strong> — defaults to
-<code class="xref py py-class docutils literal notranslate"><span class="pre">diffrax.RecursiveCheckpointAdjoint</span></code> (low memory, optimal for
-<code class="docutils literal notranslate"><span class="pre">jax.grad</span></code> / <code class="docutils literal notranslate"><span class="pre">jax.jacrev</span></code>).  Pass <code class="docutils literal notranslate"><span class="pre">adjoint=diffrax.DirectAdjoint()</span></code>
-to enable <code class="docutils literal notranslate"><span class="pre">jax.jacfwd</span></code> / <code class="docutils literal notranslate"><span class="pre">jax.hessian</span></code>.</p></li>
-</ul>
-<p><code class="docutils literal notranslate"><span class="pre">a</span></code> and <code class="docutils literal notranslate"><span class="pre">x0</span></code> are <strong>call-time</strong> arguments rather than constructor
-fields, so a single instance can be vmapped over the full five-parameter
+<p>Integrates the adiabatic inspiral ODE with <code class="xref py py-class docutils literal notranslate"><span class="pre">diffrax.Dopri8</span></code> and
+adaptive step-size control.  The radiation-reaction force
+(<span class="math notranslate nohighlight">\(\dot{p}\)</span>, <span class="math notranslate nohighlight">\(\dot{e}\)</span>) is read from the FEW flux tables in the
+pex convention.  All physical parameters — including <code class="docutils literal notranslate"><span class="pre">a</span></code> and <code class="docutils literal notranslate"><span class="pre">x0</span></code> — are
+call-time arguments, so a single instance vmaps over the five-parameter
 space <span class="math notranslate nohighlight">\((M, \mu, a, p_0, e_0)\)</span> without rebuilding the Module:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">jax</span><span class="w"> </span><span class="kn">import</span> <span class="n">vmap</span>
 <span class="n">traj</span> <span class="o">=</span> <span class="n">EMRIInspiral</span><span class="p">(</span><span class="n">flux_data</span><span class="p">)</span>
@@ -413,6 +353,9 @@ space <span class="math notranslate nohighlight">\((M, \mu, a, p_0, e_0)\)</span
 <span class="n">results</span> <span class="o">=</span> <span class="n">batch</span><span class="p">(</span><span class="n">p0_arr</span><span class="p">,</span> <span class="n">e0_arr</span><span class="p">,</span> <span class="n">a_arr</span><span class="p">)</span>
 </pre></div>
 </div>
+<p>The adjoint defaults to <code class="xref py py-class docutils literal notranslate"><span class="pre">diffrax.RecursiveCheckpointAdjoint</span></code>
+(<code class="docutils literal notranslate"><span class="pre">jax.grad</span></code> / <code class="docutils literal notranslate"><span class="pre">jax.jacrev</span></code>); pass <code class="docutils literal notranslate"><span class="pre">adjoint=diffrax.DirectAdjoint()</span></code>
+to enable <code class="docutils literal notranslate"><span class="pre">jax.jacfwd</span></code> / <code class="docutils literal notranslate"><span class="pre">jax.hessian</span></code>. usually jax.jacfwd is the fastest option</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><p><strong>flux_data</strong> (<span class="sphinx_autodoc_typehints-type"><a class="reference internal" href="#fewtrax.data.loader.FluxData" title="fewtrax.data.loader.FluxData"><code class="xref py py-class docutils literal notranslate"><span class="pre">FluxData</span></code></a></span>) – Pre-loaded flux interpolators (pex convention).</p>
@@ -465,7 +408,7 @@ increases (moving earlier in the inspiral).</p></li>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="fewtrax.trajectory.inspiral.EMRIInspiral.get_multi_track">
-<span class="sig-name descname"><span class="pre">get_multi_track</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">modes</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">p0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">e0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">T</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">a</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">M</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1000000.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mu</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">10.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x0</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dense_steps</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">200</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">backward</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">e_f</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">with_amplitudes</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">amp_interp</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">return_dict</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/fewtrax/trajectory/inspiral.html#EMRIInspiral.get_multi_track"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#fewtrax.trajectory.inspiral.EMRIInspiral.get_multi_track" title="Link to this definition"></a></dt>
+<span class="sig-name descname"><span class="pre">get_multi_track</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">modes</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">p0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">e0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">T</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">a</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">M</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1000000.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mu</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">10.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x0</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dense_steps</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">200</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">backward</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">e_f</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">with_amplitudes</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">amp_interp</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">return_dict</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">grid</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/fewtrax/trajectory/inspiral.html#EMRIInspiral.get_multi_track"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#fewtrax.trajectory.inspiral.EMRIInspiral.get_multi_track" title="Link to this definition"></a></dt>
 <dd><p>Frequency tracks for multiple harmonic modes along one shared trajectory.</p>
 <p>Runs the ODE integrator once and evaluates all mode frequencies
 simultaneously via a single matrix–vector product at each trajectory
@@ -489,14 +432,22 @@ index is only used for amplitude look-up (when
 <li><p><strong>e_f</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-data docutils literal notranslate"><span class="pre">Optional</span></code>[<code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code>]</span>) – Eccentricity at plunge; required when <code class="docutils literal notranslate"><span class="pre">backward=True</span></code>.</p></li>
 <li><p><strong>with_amplitudes</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code></span>) – If <code class="docutils literal notranslate"><span class="pre">True</span></code>, also return the mode amplitudes <code class="docutils literal notranslate"><span class="pre">|A_{lmkn}(t)|</span></code>
 along the track.  Requires <code class="docutils literal notranslate"><span class="pre">amp_interp</span></code>.</p></li>
-<li><p><strong>amp_interp</strong> (<a class="reference internal" href="#fewtrax.amplitude.interp.AmplitudeInterpolator" title="fewtrax.amplitude.interp.AmplitudeInterpolator"><em>AmplitudeInterpolator</em></a><em>, </em><em>optional</em>) – Pre-constructed amplitude interpolator.  Required when
+<li><p><strong>amp_interp</strong> (<a class="reference internal" href="#fewtrax.amplitude.interp.JAXAmplitudeInterpolator" title="fewtrax.amplitude.interp.JAXAmplitudeInterpolator"><em>JAXAmplitudeInterpolator</em></a><em>, </em><em>optional</em>) – Pre-constructed amplitude interpolator.  Required when
 <code class="docutils literal notranslate"><span class="pre">with_amplitudes=True</span></code>.</p></li>
 <li><p><strong>return_dict</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code></span>) – If <code class="docutils literal notranslate"><span class="pre">True</span></code>, return a dictionary keyed by the mode tuples
 instead of plain arrays.</p></li>
+<li><p><strong>grid</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-data docutils literal notranslate"><span class="pre">Optional</span></code>[<code class="xref py py-data docutils literal notranslate"><span class="pre">Any</span></code>]</span>) – Any <code class="xref py py-class docutils literal notranslate"><span class="pre">TFGrid</span></code> subclass (WDM, SFT,
+…).  When provided, each mode’s track is interpolated onto the grid’s
+time-bin centres, quantised to frequency-bin indices, and returned as
+a <code class="xref py py-class docutils literal notranslate"><span class="pre">TFTrackSet</span></code>.  Incompatible with
+<code class="docutils literal notranslate"><span class="pre">return_dict</span></code> and <code class="docutils literal notranslate"><span class="pre">with_amplitudes</span></code>.</p></li>
 </ul>
 </dd>
 <dt class="field-even">Returns<span class="colon">:</span></dt>
 <dd class="field-even"><p><ul>
+<li><p>If <code class="docutils literal notranslate"><span class="pre">grid</span></code> is given – <code class="xref py py-class docutils literal notranslate"><span class="pre">TFTrackSet</span></code> with one
+<code class="xref py py-class docutils literal notranslate"><span class="pre">TFTrack</span></code> per mode (bin indices
+<code class="docutils literal notranslate"><span class="pre">i_freq</span></code> and frequencies <code class="docutils literal notranslate"><span class="pre">freq_hz</span></code> on the grid’s time bins).</p></li>
 <li><p>If <code class="docutils literal notranslate"><span class="pre">return_dict=False</span></code> (default) –</p>
 <dl class="simple">
 <dt>t<span class="classifier">jnp.ndarray, shape (dense_steps,)</span></dt><dd><p>Time [s].</p>
@@ -520,22 +471,16 @@ non-negative.</p>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="fewtrax.trajectory.inspiral.EMRIInspiral.get_f_fdot_fddot_back">
-<span class="property"><span class="k"><span class="pre">classmethod</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">get_f_fdot_fddot_back</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">flux_data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">M</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mu</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">a</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">e_f</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">T</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">t_alpha</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x0</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_steps</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">512</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">atol</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1e-10</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rtol</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1e-10</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/fewtrax/trajectory/inspiral.html#EMRIInspiral.get_f_fdot_fddot_back"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#fewtrax.trajectory.inspiral.EMRIInspiral.get_f_fdot_fddot_back" title="Link to this definition"></a></dt>
-<dd><p>Gravitational-wave frequency and its time derivatives on a fixed grid.</p>
-<p>Solves the backward inspiral ODE once with dense (polynomial) output,
-then evaluates f, ḟ, f̈ at every point in <code class="docutils literal notranslate"><span class="pre">t_alpha</span></code> by differentiating
-the Dopri8 dense interpolant with <code class="docutils literal notranslate"><span class="pre">jax.grad</span></code> — no additional ODE
-solves are required.</p>
-<p>The backward ODE anchors the track to the plunge event rather than to
-uncertain initial conditions, and is numerically more stable near
-merger.  The sign convention follows
-<span class="math notranslate nohighlight">\(d\Phi_\phi/d\tau = -\Omega_\phi\)</span> (backward time reversal), so</p>
-<div class="math notranslate nohighlight">
-\[\begin{split}f        &amp;= -\frac{d\Phi_\phi/d\tau}{2\pi M_s} \\
-\dot{f}  &amp;= +\frac{d^2\Phi_\phi/d\tau^2}{2\pi M_s^2} \\
-\ddot{f} &amp;= -\frac{d^3\Phi_\phi/d\tau^3}{2\pi M_s^3}\end{split}\]</div>
-<p>where <span class="math notranslate nohighlight">\(\tau\)</span> is geometric backward time (<span class="math notranslate nohighlight">\(M\)</span> units) and
-<span class="math notranslate nohighlight">\(M_s = (M + \mu)\,G/c^3\)</span> is the total mass in seconds.</p>
+<span class="property"><span class="k"><span class="pre">classmethod</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">get_f_fdot_fddot_back</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">flux_data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">M</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mu</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">a</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">e_f</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">T</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">t_alpha</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x0</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_steps</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">512</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">atol</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1e-10</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rtol</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1e-10</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">return_phi_r</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/fewtrax/trajectory/inspiral.html#EMRIInspiral.get_f_fdot_fddot_back"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#fewtrax.trajectory.inspiral.EMRIInspiral.get_f_fdot_fddot_back" title="Link to this definition"></a></dt>
+<dd><p>Frequency and its time derivatives on a fixed grid (backward solve).</p>
+<p>Solves the backward inspiral ODE once with dense output, then evaluates
+f, ḟ, f̈ at every point in <code class="docutils literal notranslate"><span class="pre">t_alpha</span></code> by analytically differentiating
+the Dopri8 dense interpolant (no extra ODE solves; fully vmap-able).</p>
+<p>The conventions are <span class="math notranslate nohighlight">\(f = -(d\Phi/d\tau)/(2\pi M_s)\)</span>,
+<span class="math notranslate nohighlight">\(\dot f = (d^2\Phi/d\tau^2)/(2\pi M_s^2)\)</span>,
+<span class="math notranslate nohighlight">\(\ddot f = -(d^3\Phi/d\tau^3)/(2\pi M_s^3)\)</span>, with <span class="math notranslate nohighlight">\(\tau\)</span> the
+geometric backward time and <span class="math notranslate nohighlight">\(M_s=(M+\mu)\,G/c^3\)</span> the total mass in
+seconds.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
@@ -544,25 +489,28 @@ merger.  The sign convention follows
 <li><p><strong>mu</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Primary and secondary masses [<span class="math notranslate nohighlight">\(M_\odot\)</span>].</p></li>
 <li><p><strong>a</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Dimensionless BH spin.</p></li>
 <li><p><strong>e_f</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Eccentricity at plunge (sets the backward-ODE initial condition).</p></li>
-<li><p><strong>T</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Duration of backward integration [years].  The ODE integrates
-from <span class="math notranslate nohighlight">\(\tau = 0\)</span> (plunge) to <span class="math notranslate nohighlight">\(\tau = T \cdot {\rm yr}\)</span>.</p></li>
-<li><p><strong>t_alpha</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">Array</span></code></span>) – Physical time grid [s].  <code class="docutils literal notranslate"><span class="pre">t_alpha[0]</span> <span class="pre">=</span> <span class="pre">0</span></code> is the start of the
-observation window; <code class="docutils literal notranslate"><span class="pre">t_alpha[-1]</span></code> is the plunge moment.
-Must satisfy <code class="docutils literal notranslate"><span class="pre">t_alpha[-1]</span> <span class="pre">\le</span> <span class="pre">T</span> <span class="pre">\cdot</span> <span class="pre">{\rm</span> <span class="pre">YEAR\_SI}</span></code>.</p></li>
+<li><p><strong>T</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Duration of backward integration [years].</p></li>
+<li><p><strong>t_alpha</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">Array</span></code></span>) – Physical time grid [s], increasing.  <code class="docutils literal notranslate"><span class="pre">t_alpha[0]</span></code> starts the
+observation window and <code class="docutils literal notranslate"><span class="pre">t_alpha[-1]</span></code> is the plunge moment;
+requires <code class="docutils literal notranslate"><span class="pre">t_alpha[-1]</span> <span class="pre">&lt;=</span> <span class="pre">T</span> <span class="pre">*</span> <span class="pre">YEAR_SI</span></code>.</p></li>
 <li><p><strong>x0</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Inclination cosine (+1 prograde, −1 retrograde).</p></li>
 <li><p><strong>max_steps</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code></span>) – Maximum ODE internal steps.</p></li>
 <li><p><strong>atol</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Adaptive step-size tolerances.</p></li>
 <li><p><strong>rtol</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Adaptive step-size tolerances.</p></li>
+<li><p><strong>return_phi_r</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code></span>) – If <code class="docutils literal notranslate"><span class="pre">True</span></code>, also return the <span class="math notranslate nohighlight">\(\Phi_r\)</span>-derived radial frequency
+and its derivatives (<code class="docutils literal notranslate"><span class="pre">f_r,</span> <span class="pre">fdot_r,</span> <span class="pre">fddot_r</span></code>) as three extra
+arrays.</p></li>
 </ul>
 </dd>
 <dt class="field-even">Return type<span class="colon">:</span></dt>
-<dd class="field-even"><p><span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">tuple</span></code>[<code class="xref py py-class docutils literal notranslate"><span class="pre">Array</span></code>, <code class="xref py py-class docutils literal notranslate"><span class="pre">Array</span></code>, <code class="xref py py-class docutils literal notranslate"><span class="pre">Array</span></code>]</span></p>
+<dd class="field-even"><p><span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">tuple</span></code>[<code class="xref py py-class docutils literal notranslate"><span class="pre">Array</span></code>, <code class="xref py py-data docutils literal notranslate"><span class="pre">...</span></code>]</span></p>
 </dd>
 <dt class="field-odd">Returns<span class="colon">:</span></dt>
 <dd class="field-odd"><p><ul class="simple">
-<li><p><strong>f</strong> (<em>jnp.ndarray, shape (N,)</em>) – Instantaneous GW frequency [Hz].</p></li>
-<li><p><strong>fdot</strong> (<em>jnp.ndarray, shape (N,)</em>) – First physical time derivative df/dt [Hz/s].</p></li>
-<li><p><strong>fddot</strong> (<em>jnp.ndarray, shape (N,)</em>) – Second physical time derivative d²f/dt² [Hz/s²].</p></li>
+<li><p><strong>f, fdot, fddot</strong> (<em>jnp.ndarray, shape (N,)</em>) – <span class="math notranslate nohighlight">\(\Phi_\phi\)</span>-derived GW frequency [Hz] and its physical time
+derivatives [Hz/s], [Hz/s²].</p></li>
+<li><p><strong>f_r, fdot_r, fddot_r</strong> (<em>jnp.ndarray, shape (N,), optional</em>) – <span class="math notranslate nohighlight">\(\Phi_r\)</span>-derived radial frequency and derivatives, only
+present when <code class="docutils literal notranslate"><span class="pre">return_phi_r=True</span></code>.</p></li>
 </ul>
 </p>
 </dd>
@@ -574,29 +522,11 @@ Must satisfy <code class="docutils literal notranslate"><span class="pre">t_alph
 <dl class="py function">
 <dt class="sig sig-object py" id="fewtrax.trajectory.inspiral.run_inspiral">
 <span class="sig-prename descclassname"><span class="pre">fewtrax.trajectory.inspiral.</span></span><span class="sig-name descname"><span class="pre">run_inspiral</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">a</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">p0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">e0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">T</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">flux_data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">M</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1000000.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mu</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">10.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dt</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">10.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x0</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">Phi_phi0</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">Phi_theta0</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">Phi_r0</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dense_steps</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">100</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">backward</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">e_f</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/fewtrax/trajectory/inspiral.html#run_inspiral"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#fewtrax.trajectory.inspiral.run_inspiral" title="Link to this definition"></a></dt>
-<dd><p>Convenience wrapper: integrate an EMRI inspiral trajectory.</p>
+<dd><p>Convenience wrapper: build an <a class="reference internal" href="#fewtrax.trajectory.inspiral.EMRIInspiral" title="fewtrax.trajectory.inspiral.EMRIInspiral"><code class="xref py py-class docutils literal notranslate"><span class="pre">EMRIInspiral</span></code></a> and integrate once.</p>
+<p>Takes the same arguments as <code class="xref py py-meth docutils literal notranslate"><span class="pre">EMRIInspiral.__call__()</span></code> (plus
+<code class="docutils literal notranslate"><span class="pre">flux_data</span></code>) and returns <code class="docutils literal notranslate"><span class="pre">(t,</span> <span class="pre">p,</span> <span class="pre">e,</span> <span class="pre">Phi_phi,</span> <span class="pre">Phi_theta,</span> <span class="pre">Phi_r)</span></code>; in
+backward mode <code class="docutils literal notranslate"><span class="pre">t</span></code> is time before plunge.</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>a</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – BH spin parameter.</p></li>
-<li><p><strong>p0</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Initial orbital parameters (forward mode; ignored when
-<code class="docutils literal notranslate"><span class="pre">backward=True</span></code>).</p></li>
-<li><p><strong>e0</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Initial orbital parameters (forward mode; ignored when
-<code class="docutils literal notranslate"><span class="pre">backward=True</span></code>).</p></li>
-<li><p><strong>T</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Observation time [years].</p></li>
-<li><p><strong>flux_data</strong> (<span class="sphinx_autodoc_typehints-type"><a class="reference internal" href="#fewtrax.data.loader.FluxData" title="fewtrax.data.loader.FluxData"><code class="xref py py-class docutils literal notranslate"><span class="pre">FluxData</span></code></a></span>) – Pre-loaded flux data.</p></li>
-<li><p><strong>M</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Primary and secondary masses [<span class="math notranslate nohighlight">\(M_\odot\)</span>].</p></li>
-<li><p><strong>mu</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Primary and secondary masses [<span class="math notranslate nohighlight">\(M_\odot\)</span>].</p></li>
-<li><p><strong>dt</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Waveform sampling interval [s] (not ODE step size).</p></li>
-<li><p><strong>x0</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Inclination cosine.</p></li>
-<li><p><strong>dense_steps</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code></span>) – Number of output trajectory points.</p></li>
-<li><p><strong>backward</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code></span>) – If <code class="docutils literal notranslate"><span class="pre">True</span></code>, integrate the time-reversed ODE from the separatrix.</p></li>
-<li><p><strong>e_f</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-data docutils literal notranslate"><span class="pre">Optional</span></code>[<code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code>]</span>) – Eccentricity at plunge, required when <code class="docutils literal notranslate"><span class="pre">backward=True</span></code>.</p></li>
-</ul>
-</dd>
-<dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p><strong>t, p, e, Phi_phi, Phi_theta, Phi_r</strong> – Trajectory arrays.  In backward mode <code class="docutils literal notranslate"><span class="pre">t</span></code> is time before plunge.</p>
-</dd>
 <dt class="field-odd">Return type<span class="colon">:</span></dt>
 <dd class="field-odd"><p><span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">tuple</span></code>[<code class="xref py py-class docutils literal notranslate"><span class="pre">Array</span></code>, <code class="xref py py-data docutils literal notranslate"><span class="pre">...</span></code>]</span></p>
 </dd>
@@ -604,103 +534,22 @@ Must satisfy <code class="docutils literal notranslate"><span class="pre">t_alph
 </dd></dl>
 
 <p id="module-fewtrax.amplitude.interp">Teukolsky mode amplitude interpolation from FEW precomputed grids.</p>
-<p>Two backends are available:</p>
-<dl class="simple">
-<dt><a class="reference internal" href="#fewtrax.amplitude.interp.AmplitudeInterpolator" title="fewtrax.amplitude.interp.AmplitudeInterpolator"><code class="xref py py-class docutils literal notranslate"><span class="pre">AmplitudeInterpolator</span></code></a></dt><dd><p>Legacy numpy/scipy backend.  Evaluates the raw bisplev B-spline
-coefficients stored in the HDF5 file using <code class="docutils literal notranslate"><span class="pre">scipy.interpolate.bisplev</span></code>
-in a Python loop over trajectory points and modes.  CPU-only, not
-JAX-traceable, kept for validation and backward compatibility.</p>
-</dd>
-<dt><a class="reference internal" href="#fewtrax.amplitude.interp.JAXAmplitudeInterpolator" title="fewtrax.amplitude.interp.JAXAmplitudeInterpolator"><code class="xref py py-class docutils literal notranslate"><span class="pre">JAXAmplitudeInterpolator</span></code></a></dt><dd><p>Fully JAX-native backend.  Uses <code class="xref py py-class docutils literal notranslate"><span class="pre">BatchedTricubicSplineE3</span></code>
-splines built by <a class="reference internal" href="#fewtrax.data.loader.load_amplitude_data_jax" title="fewtrax.data.loader.load_amplitude_data_jax"><code class="xref py py-func docutils literal notranslate"><span class="pre">load_amplitude_data_jax()</span></code></a>.
-A single <code class="docutils literal notranslate"><span class="pre">einsum</span></code> replaces the <code class="docutils literal notranslate"><span class="pre">N_traj</span> <span class="pre">×</span> <span class="pre">N_modes</span></code> bisplev loop,
-evaluating all modes in parallel.  Supports <code class="xref py py-func docutils literal notranslate"><span class="pre">jax.jit()</span></code>,
-<code class="xref py py-func docutils literal notranslate"><span class="pre">jax.grad()</span></code>, and <code class="xref py py-func docutils literal notranslate"><span class="pre">jax.vmap()</span></code> for batched waveform generation.</p>
-</dd>
-</dl>
-<section id="design-notes-legacy-backend">
-<h2>Design notes (legacy backend)<a class="headerlink" href="#design-notes-legacy-backend" title="Link to this heading"></a></h2>
-<ul class="simple">
-<li><p>The amplitude evaluation is intentionally <strong>numpy-based</strong> rather than
-JAX-based.  The spline coefficient arrays are large (several GB for all
-6993 modes), and precomputing them as JAX arrays on the GPU would exceed
-typical GPU memory budgets.  Instead, the scipy B-spline evaluation runs
-on the CPU and only the resulting (N_traj, N_modes) amplitude array is
-transferred to the GPU for the mode summation.</p></li>
-<li><p>Mode selection (thresholding by relative power) is done here to
-reduce the number of modes passed to the summation step.</p></li>
-</ul>
-</section>
-<dl class="py class">
-<dt class="sig sig-object py" id="fewtrax.amplitude.interp.AmplitudeInterpolator">
-<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">fewtrax.amplitude.interp.</span></span><span class="sig-name descname"><span class="pre">AmplitudeInterpolator</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">amp_data</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/fewtrax/amplitude/interp.html#AmplitudeInterpolator"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#fewtrax.amplitude.interp.AmplitudeInterpolator" title="Link to this definition"></a></dt>
-<dd><p>Evaluate Teukolsky mode amplitudes <span class="math notranslate nohighlight">\(A_{\ell mkn}(a, p, e)\)</span>.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><p><strong>amp_data</strong> (<span class="sphinx_autodoc_typehints-type"><a class="reference internal" href="#fewtrax.data.loader.AmplitudeData" title="fewtrax.data.loader.AmplitudeData"><code class="xref py py-class docutils literal notranslate"><span class="pre">AmplitudeData</span></code></a></span>) – Pre-loaded amplitude data (B-spline coefficients + mode arrays).</p>
-</dd>
-</dl>
-<dl class="py method">
-<dt class="sig sig-object py" id="fewtrax.amplitude.interp.AmplitudeInterpolator.evaluate">
-<span class="sig-name descname"><span class="pre">evaluate</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">a</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">p</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">e</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">specific_modes</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/fewtrax/amplitude/interp.html#AmplitudeInterpolator.evaluate"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#fewtrax.amplitude.interp.AmplitudeInterpolator.evaluate" title="Link to this definition"></a></dt>
-<dd><p>Evaluate Teukolsky mode amplitudes along a trajectory.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>a</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Dimensionless BH spin.</p></li>
-<li><p><strong>p</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">ndarray</span></code></span>) – Semi-latus rectum and eccentricity.</p></li>
-<li><p><strong>e</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">ndarray</span></code></span>) – Semi-latus rectum and eccentricity.</p></li>
-<li><p><strong>x</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Inclination cosine (±1).</p></li>
-<li><p><strong>specific_modes</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-data docutils literal notranslate"><span class="pre">Optional</span></code>[<code class="xref py py-class docutils literal notranslate"><span class="pre">Sequence</span></code>[<code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code>]]</span>) – Mode indices to evaluate.  Default: all modes.</p></li>
-</ul>
-</dd>
-<dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p><strong>amps</strong></p>
-</dd>
-<dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p><span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">ndarray</span></code></span></p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="fewtrax.amplitude.interp.AmplitudeInterpolator.get_mode_power">
-<span class="sig-name descname"><span class="pre">get_mode_power</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">a</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">p</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">e</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/fewtrax/amplitude/interp.html#AmplitudeInterpolator.get_mode_power"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#fewtrax.amplitude.interp.AmplitudeInterpolator.get_mode_power" title="Link to this definition"></a></dt>
-<dd><p>Return mean <a href="#id1"><span class="problematic" id="id2">|</span></a>A|² per mode, shape (n_modes,).</p>
-<dl class="field-list simple">
-<dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p><span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">ndarray</span></code></span></p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="fewtrax.amplitude.interp.AmplitudeInterpolator.select_modes">
-<span class="sig-name descname"><span class="pre">select_modes</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">a</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">p</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">e</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">threshold</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1e-05</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/fewtrax/amplitude/interp.html#AmplitudeInterpolator.select_modes"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#fewtrax.amplitude.interp.AmplitudeInterpolator.select_modes" title="Link to this definition"></a></dt>
-<dd><p>Return indices of modes with relative power ≥ <code class="docutils literal notranslate"><span class="pre">threshold</span> <span class="pre">×</span> <span class="pre">max</span></code>.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Returns<span class="colon">:</span></dt>
-<dd class="field-odd"><p><strong>indices</strong></p>
-</dd>
-<dt class="field-even">Return type<span class="colon">:</span></dt>
-<dd class="field-even"><p><span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">ndarray</span></code></span></p>
-</dd>
-</dl>
-</dd></dl>
-
-</dd></dl>
-
+<p><a class="reference internal" href="#fewtrax.amplitude.interp.JAXAmplitudeInterpolator" title="fewtrax.amplitude.interp.JAXAmplitudeInterpolator"><code class="xref py py-class docutils literal notranslate"><span class="pre">JAXAmplitudeInterpolator</span></code></a> is a fully JAX-native evaluator of the complex
+mode amplitudes <span class="math notranslate nohighlight">\(A_{\ell mkn}(a, p, e)\)</span>.  It wraps the
+<code class="xref py py-class docutils literal notranslate"><span class="pre">BatchedTricubicSplineE3</span></code> coefficients built by
+<a class="reference internal" href="#fewtrax.data.loader.load_amplitude_data_jax" title="fewtrax.data.loader.load_amplitude_data_jax"><code class="xref py py-func docutils literal notranslate"><span class="pre">load_amplitude_data_jax()</span></code></a> and evaluates all modes in
+a single fused <code class="docutils literal notranslate"><span class="pre">einsum</span></code> — the JAX analogue of FEW’s per-point
+<code class="docutils literal notranslate"><span class="pre">scipy.bisplev</span></code> loop — with full <code class="xref py py-func docutils literal notranslate"><span class="pre">jax.jit()</span></code> / <code class="xref py py-func docutils literal notranslate"><span class="pre">jax.grad()</span></code> /
+<code class="xref py py-func docutils literal notranslate"><span class="pre">jax.vmap()</span></code> support.  It also carries the FEW-2.0.0-exact mode selector
+<a class="reference internal" href="#fewtrax.amplitude.interp.JAXAmplitudeInterpolator.select_modes_few" title="fewtrax.amplitude.interp.JAXAmplitudeInterpolator.select_modes_few"><code class="xref py py-meth docutils literal notranslate"><span class="pre">JAXAmplitudeInterpolator.select_modes_few()</span></code></a>.</p>
 <dl class="py class">
 <dt class="sig sig-object py" id="fewtrax.amplitude.interp.JAXAmplitudeInterpolator">
 <span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">fewtrax.amplitude.interp.</span></span><span class="sig-name descname"><span class="pre">JAXAmplitudeInterpolator</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">amp_data</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/fewtrax/amplitude/interp.html#JAXAmplitudeInterpolator"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#fewtrax.amplitude.interp.JAXAmplitudeInterpolator" title="Link to this definition"></a></dt>
 <dd><p>Fully JAX-native Teukolsky amplitude evaluator.</p>
 <p>Wraps an <a class="reference internal" href="#fewtrax.data.loader.AmplitudeDataJAX" title="fewtrax.data.loader.AmplitudeDataJAX"><code class="xref py py-class docutils literal notranslate"><span class="pre">AmplitudeDataJAX</span></code></a> container and
-provides a <code class="xref py py-meth docutils literal notranslate"><span class="pre">__call__()</span></code> that evaluates complex mode amplitudes
-<span class="math notranslate nohighlight">\(A_{\ell mkn}(a, p, e)\)</span> for all modes in a single fused
-<code class="docutils literal notranslate"><span class="pre">einsum</span></code>, replacing the <code class="docutils literal notranslate"><span class="pre">N_{\rm</span> <span class="pre">traj}</span> <span class="pre">\times</span> <span class="pre">N_{\rm</span> <span class="pre">modes}</span></code>
-<code class="docutils literal notranslate"><span class="pre">scipy.bisplev</span></code> Python loop in <a class="reference internal" href="#fewtrax.amplitude.interp.AmplitudeInterpolator" title="fewtrax.amplitude.interp.AmplitudeInterpolator"><code class="xref py py-class docutils literal notranslate"><span class="pre">AmplitudeInterpolator</span></code></a>.</p>
-<p>All public methods are <code class="xref py py-func docutils literal notranslate"><span class="pre">jax.jit()</span></code>-able, <code class="xref py py-func docutils literal notranslate"><span class="pre">jax.vmap()</span></code>-able, and
-support <code class="xref py py-func docutils literal notranslate"><span class="pre">jax.grad()</span></code> / <code class="xref py py-func docutils literal notranslate"><span class="pre">jax.jacfwd()</span></code>.</p>
+evaluates the complex mode amplitudes <span class="math notranslate nohighlight">\(A_{\ell mkn}(a, p, e)\)</span> for all
+modes in a single fused <code class="docutils literal notranslate"><span class="pre">einsum</span></code>.  All public methods are jit/vmap-able
+and support <code class="xref py py-func docutils literal notranslate"><span class="pre">jax.grad()</span></code> / <code class="xref py py-func docutils literal notranslate"><span class="pre">jax.jacfwd()</span></code>.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><p><strong>amp_data</strong> (<span class="sphinx_autodoc_typehints-type"><a class="reference internal" href="#fewtrax.data.loader.AmplitudeDataJAX" title="fewtrax.data.loader.AmplitudeDataJAX"><code class="xref py py-class docutils literal notranslate"><span class="pre">AmplitudeDataJAX</span></code></a></span>) – Pre-built JAX amplitude container; construct with
@@ -708,81 +557,36 @@ support <code class="xref py py-func docutils literal notranslate"><span class="
 </dd>
 </dl>
 <p class="rubric">Examples</p>
-<p>Single-point evaluation:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">interp</span> <span class="o">=</span> <span class="n">JAXAmplitudeInterpolator</span><span class="p">(</span><span class="n">amp_data</span><span class="p">)</span>
-<span class="n">amps</span> <span class="o">=</span> <span class="n">interp</span><span class="p">(</span><span class="n">a</span><span class="o">=</span><span class="mf">0.9</span><span class="p">,</span> <span class="n">p</span><span class="o">=</span><span class="mf">10.0</span><span class="p">,</span> <span class="n">e</span><span class="o">=</span><span class="mf">0.3</span><span class="p">)</span>   <span class="c1"># (n_modes,) complex128</span>
-</pre></div>
-</div>
-<p>Trajectory evaluation (vectorised over time steps):</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">amps_traj</span> <span class="o">=</span> <span class="n">interp</span><span class="o">.</span><span class="n">evaluate_trajectory</span><span class="p">(</span><span class="n">a</span><span class="o">=</span><span class="mf">0.9</span><span class="p">,</span> <span class="n">p</span><span class="o">=</span><span class="n">p_arr</span><span class="p">,</span> <span class="n">e</span><span class="o">=</span><span class="n">e_arr</span><span class="p">)</span>
-<span class="c1"># (N_traj, n_modes) complex128</span>
-</pre></div>
-</div>
-<p>Batched waveform generation (vmap over initial conditions):</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">batch_eval</span> <span class="o">=</span> <span class="n">jax</span><span class="o">.</span><span class="n">vmap</span><span class="p">(</span>
-    <span class="k">lambda</span> <span class="n">a</span><span class="p">,</span> <span class="n">p0</span><span class="p">,</span> <span class="n">e0</span><span class="p">:</span> <span class="n">interp</span><span class="o">.</span><span class="n">evaluate_trajectory</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">traj_p</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">p0</span><span class="p">,</span> <span class="n">e0</span><span class="p">),</span> <span class="o">...</span><span class="p">)</span>
-<span class="p">)</span>
+<span class="n">amps</span> <span class="o">=</span> <span class="n">interp</span><span class="p">(</span><span class="n">a</span><span class="o">=</span><span class="mf">0.9</span><span class="p">,</span> <span class="n">p</span><span class="o">=</span><span class="mf">10.0</span><span class="p">,</span> <span class="n">e</span><span class="o">=</span><span class="mf">0.3</span><span class="p">)</span>                   <span class="c1"># (n_modes,)</span>
+<span class="n">amps_traj</span> <span class="o">=</span> <span class="n">interp</span><span class="o">.</span><span class="n">evaluate_trajectory</span><span class="p">(</span><span class="mf">0.9</span><span class="p">,</span> <span class="n">p_arr</span><span class="p">,</span> <span class="n">e_arr</span><span class="p">)</span>  <span class="c1"># (N, n_modes)</span>
 </pre></div>
 </div>
 <dl class="py method">
 <dt class="sig sig-object py" id="fewtrax.amplitude.interp.JAXAmplitudeInterpolator.select_modes_few">
 <span class="sig-name descname"><span class="pre">select_modes_few</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">a</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">p</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">e</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ylms_pos</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ylms_neg</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">threshold</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1e-05</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">include_minus_mkn</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">teuk_modes</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/fewtrax/amplitude/interp.html#JAXAmplitudeInterpolator.select_modes_few"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#fewtrax.amplitude.interp.JAXAmplitudeInterpolator.select_modes_few" title="Link to this definition"></a></dt>
-<dd><p>FEW-compatible mode selection performed entirely on the GPU.</p>
-<p>Reproduces <code class="docutils literal notranslate"><span class="pre">few.utils.modeselector.ModeSelector.__call__</span></code> (default
-threshold path) of FEW <strong>2.0.0</strong> one-to-one.  The 2.0.0 algorithm
-is different from earlier FEW releases — there is no Δt weighting,
-and the cumulative cutoff is applied per trajectory point with the
-final kept set being the union across all time steps:</p>
-<ol class="arabic simple">
-<li><p>Build the extended power array of shape
-<code class="docutils literal notranslate"><span class="pre">(N_traj,</span> <span class="pre">n_m</span> <span class="pre">+</span> <span class="pre">n_m_pos)</span></code> by concatenating the m≥0 column
-block <code class="docutils literal notranslate"><span class="pre">|A</span> <span class="pre">·</span> <span class="pre">Y_{l,+m}|²</span></code> with the m&gt;0 column block
-<code class="docutils literal notranslate"><span class="pre">|A*</span> <span class="pre">·</span> <span class="pre">Y_{l,-m}|²</span></code> (one column per <code class="docutils literal notranslate"><span class="pre">(-m,</span> <span class="pre">-k,</span> <span class="pre">-n)</span></code> partner).</p></li>
-<li><p>For each row (time step) sort descending and apply
-<code class="docutils literal notranslate"><span class="pre">cumsum</span> <span class="pre">&lt;</span> <span class="pre">total</span> <span class="pre">·</span> <span class="pre">(1</span> <span class="pre">−</span> <span class="pre">threshold)</span></code>.  The first mode that
-pushes the cumsum past the budget is retained.</p></li>
-<li><p>The final kept set is the union of all per-time-step kept
-indices.  Partner indices land in <code class="docutils literal notranslate"><span class="pre">[n_m,</span> <span class="pre">n_m</span> <span class="pre">+</span> <span class="pre">n_m_pos)</span></code> and
-are remapped to their +m positions <code class="docutils literal notranslate"><span class="pre">index</span> <span class="pre">−</span> <span class="pre">n_m_pos</span></code> (FEW’s
-CUDA kernel keeps +m and -m together by construction).</p></li>
-</ol>
-<p>The whole power-build + per-row argsort + cumsum runs in one
-<code class="docutils literal notranslate"><span class="pre">eqx.filter_jit</span></code> kernel and yields the <code class="docutils literal notranslate"><span class="pre">(N_traj,</span> <span class="pre">n_modes)</span></code>
-amplitude table as a by-product, so the caller does not need a
-second amplitude pass.</p>
+<dd><p>FEW-2.0.0-exact mode selection (Ylm-weighted, per-point cumulative cutoff).</p>
+<p>Reproduces <code class="docutils literal notranslate"><span class="pre">few.utils.modeselector.ModeSelector.__call__</span></code> (2.0.0
+threshold path) one-to-one: build the Ylm-weighted power of every
+mode and its <code class="docutils literal notranslate"><span class="pre">-mkn</span></code> partner, apply <code class="docutils literal notranslate"><span class="pre">cumsum</span> <span class="pre">&lt;</span> <span class="pre">total·(1−threshold)</span></code>
+per trajectory point, and keep the union across points.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>a</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Dimensionless BH spin.</p></li>
-<li><p><strong>p</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">Array</span></code></span>) – Sparse trajectory.  <code class="docutils literal notranslate"><span class="pre">t</span></code> is <em>not</em> required — FEW 2.0.0 does
-not weight by Δt.</p></li>
-<li><p><strong>e</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">Array</span></code></span>) – Sparse trajectory.  <code class="docutils literal notranslate"><span class="pre">t</span></code> is <em>not</em> required — FEW 2.0.0 does
-not weight by Δt.</p></li>
-<li><p><strong>ylms_pos</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">Array</span></code></span>) – <p>Spin-weighted spherical harmonic <span class="math notranslate nohighlight">\(Y_{l_i, +m_i}\)</span> for each
-mode in <code class="docutils literal notranslate"><span class="pre">self.amp_data.l_arr</span></code> / <code class="docutils literal notranslate"><span class="pre">m_arr</span></code>.  Easiest source:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">ylms_pos</span> <span class="o">=</span> <span class="n">ylm_gen</span><span class="p">(</span><span class="n">amp_data</span><span class="o">.</span><span class="n">l_arr</span><span class="p">,</span>  <span class="n">amp_data</span><span class="o">.</span><span class="n">m_arr</span><span class="p">,</span> <span class="n">θ</span><span class="p">,</span> <span class="n">φ</span><span class="p">)</span>
-</pre></div>
-</div>
-</p></li>
-<li><p><strong>ylms_neg</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">Array</span></code></span>) – <p><span class="math notranslate nohighlight">\(Y_{l_i, -m_i}\)</span> for each mode.  The <code class="docutils literal notranslate"><span class="pre">m_i</span> <span class="pre">=</span> <span class="pre">0</span></code> entries
-are unused (FEW does not pair m=0 modes with a -m partner).
-Easiest source:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">ylms_neg</span> <span class="o">=</span> <span class="n">ylm_gen</span><span class="p">(</span><span class="n">amp_data</span><span class="o">.</span><span class="n">l_arr</span><span class="p">,</span> <span class="o">-</span><span class="n">amp_data</span><span class="o">.</span><span class="n">m_arr</span><span class="p">,</span> <span class="n">θ</span><span class="p">,</span> <span class="n">φ</span><span class="p">)</span>
-</pre></div>
-</div>
-</p></li>
-<li><p><strong>threshold</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – FEW mode-selection threshold (<code class="docutils literal notranslate"><span class="pre">mode_selection_threshold</span></code>).</p></li>
-<li><p><strong>include_minus_mkn</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code></span>) – Accepted only for API parity.  FEW 2.0.0 always builds the
-extended power including the -mkn partner in the threshold
-path; setting this to <code class="docutils literal notranslate"><span class="pre">False</span></code> does not change the result.</p></li>
-<li><p><strong>teuk_modes</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-data docutils literal notranslate"><span class="pre">Optional</span></code>[<code class="xref py py-class docutils literal notranslate"><span class="pre">Array</span></code>]</span>) – Pre-computed amplitudes to score, in the same mode order as
-<code class="docutils literal notranslate"><span class="pre">self.amp_data.l_arr</span></code>.  When supplied the JAX amplitude pass
-is skipped, so the selection becomes byte-for-byte
-reproducible against FEW (whose amplitudes come from
-scipy/cupy <code class="docutils literal notranslate"><span class="pre">bisplev</span></code>).  Use this to feed
-<code class="docutils literal notranslate"><span class="pre">model.amplitude_generator(a,</span> <span class="pre">p,</span> <span class="pre">e,</span> <span class="pre">x0)</span></code> when you need to
-match <code class="docutils literal notranslate"><span class="pre">ModeSelector</span></code> exactly; omit it for the all-JAX fast
-path.</p></li>
+<li><p><strong>p</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">Array</span></code></span>) – Sparse trajectory (no Δt weighting in 2.0.0).</p></li>
+<li><p><strong>e</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">Array</span></code></span>) – Sparse trajectory (no Δt weighting in 2.0.0).</p></li>
+<li><p><strong>ylms_pos</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">Array</span></code></span>) – <span class="math notranslate nohighlight">\(Y_{l_i, +m_i}\)</span> and <span class="math notranslate nohighlight">\(Y_{l_i, -m_i}\)</span> for each mode in
+<code class="docutils literal notranslate"><span class="pre">self.amp_data</span></code> order, e.g. <code class="docutils literal notranslate"><span class="pre">ylm_gen(l_arr,</span> <span class="pre">±m_arr,</span> <span class="pre">θ,</span> <span class="pre">φ)</span></code>
+(the <code class="docutils literal notranslate"><span class="pre">m_i</span> <span class="pre">=</span> <span class="pre">0</span></code> entries of <code class="docutils literal notranslate"><span class="pre">ylms_neg</span></code> are unused).</p></li>
+<li><p><strong>ylms_neg</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">Array</span></code></span>) – <span class="math notranslate nohighlight">\(Y_{l_i, +m_i}\)</span> and <span class="math notranslate nohighlight">\(Y_{l_i, -m_i}\)</span> for each mode in
+<code class="docutils literal notranslate"><span class="pre">self.amp_data</span></code> order, e.g. <code class="docutils literal notranslate"><span class="pre">ylm_gen(l_arr,</span> <span class="pre">±m_arr,</span> <span class="pre">θ,</span> <span class="pre">φ)</span></code>
+(the <code class="docutils literal notranslate"><span class="pre">m_i</span> <span class="pre">=</span> <span class="pre">0</span></code> entries of <code class="docutils literal notranslate"><span class="pre">ylms_neg</span></code> are unused).</p></li>
+<li><p><strong>threshold</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – FEW <code class="docutils literal notranslate"><span class="pre">mode_selection_threshold</span></code>.</p></li>
+<li><p><strong>include_minus_mkn</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code></span>) – Accepted only for API parity; ignored (2.0.0 always pairs ±mkn).</p></li>
+<li><p><strong>teuk_modes</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-data docutils literal notranslate"><span class="pre">Optional</span></code>[<code class="xref py py-class docutils literal notranslate"><span class="pre">Array</span></code>]</span>) – Pre-computed amplitudes to score, in <code class="docutils literal notranslate"><span class="pre">self.amp_data.l_arr</span></code> order.
+Supplying FEW’s own amplitudes makes the selection byte-for-byte
+reproducible against <code class="docutils literal notranslate"><span class="pre">ModeSelector</span></code>.</p></li>
 </ul>
 </dd>
 <dt class="field-even">Return type<span class="colon">:</span></dt>
@@ -790,11 +594,9 @@ path.</p></li>
 </dd>
 <dt class="field-odd">Returns<span class="colon">:</span></dt>
 <dd class="field-odd"><p><ul class="simple">
-<li><p><strong>keep_inds</strong> (<em>(n_keep,) np.ndarray int</em>) – Sorted-ascending indices into the mode arrays of
-<code class="docutils literal notranslate"><span class="pre">self.amp_data</span></code>.</p></li>
-<li><p><strong>teuk_all</strong> (<em>(N_traj, n_modes) np.ndarray complex128</em>) – All amplitudes evaluated on the sparse trajectory.  Use
-<code class="docutils literal notranslate"><span class="pre">teuk_all[:,</span> <span class="pre">keep_inds]</span></code> to feed the mode-summation step
-without re-evaluating the amplitudes.</p></li>
+<li><p><strong>keep_inds</strong> (<em>(n_keep,) np.ndarray int</em>) – Sorted-ascending indices into <code class="docutils literal notranslate"><span class="pre">self.amp_data</span></code>’s mode arrays.</p></li>
+<li><p><strong>teuk_all</strong> (<em>(N_traj, n_modes) np.ndarray complex128</em>) – Amplitudes on the sparse trajectory; <code class="docutils literal notranslate"><span class="pre">teuk_all[:,</span> <span class="pre">keep_inds]</span></code>
+feeds the mode summation without a second amplitude pass.</p></li>
 </ul>
 </p>
 </dd>
@@ -823,6 +625,33 @@ computed internally via <a class="reference internal" href="#fewtrax.utils.geode
 </dd>
 <dt class="field-odd">Return type<span class="colon">:</span></dt>
 <dd class="field-odd"><p><span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">Array</span></code></span></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="fewtrax.amplitude.interp.JAXAmplitudeInterpolator.select_modes_from_amps">
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">select_modes_from_amps</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">teuk_modes</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">threshold</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1e-05</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/fewtrax/amplitude/interp.html#JAXAmplitudeInterpolator.select_modes_from_amps"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#fewtrax.amplitude.interp.JAXAmplitudeInterpolator.select_modes_from_amps" title="Link to this definition"></a></dt>
+<dd><p>Indices of modes whose mean <span class="math notranslate nohighlight">\(|A|^2\)</span> is &gt;= <code class="docutils literal notranslate"><span class="pre">threshold</span> <span class="pre">*</span> <span class="pre">max</span></code>.</p>
+<p>Operates on already-evaluated <code class="docutils literal notranslate"><span class="pre">(N_traj,</span> <span class="pre">n_modes)</span></code> amplitudes, so the
+trajectory amplitude pass is not repeated.  Returns a sorted numpy
+index array.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">ndarray</span></code></span></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="fewtrax.amplitude.interp.JAXAmplitudeInterpolator.select_modes">
+<span class="sig-name descname"><span class="pre">select_modes</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">a</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">p</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">e</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">threshold</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1e-05</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/fewtrax/amplitude/interp.html#JAXAmplitudeInterpolator.select_modes"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#fewtrax.amplitude.interp.JAXAmplitudeInterpolator.select_modes" title="Link to this definition"></a></dt>
+<dd><p>Evaluate the trajectory amplitudes and threshold by mean power.</p>
+<p>Convenience wrapper around <a class="reference internal" href="#fewtrax.amplitude.interp.JAXAmplitudeInterpolator.evaluate_trajectory" title="fewtrax.amplitude.interp.JAXAmplitudeInterpolator.evaluate_trajectory"><code class="xref py py-meth docutils literal notranslate"><span class="pre">evaluate_trajectory()</span></code></a> +
+<a class="reference internal" href="#fewtrax.amplitude.interp.JAXAmplitudeInterpolator.select_modes_from_amps" title="fewtrax.amplitude.interp.JAXAmplitudeInterpolator.select_modes_from_amps"><code class="xref py py-meth docutils literal notranslate"><span class="pre">select_modes_from_amps()</span></code></a>; see the latter for the threshold rule.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">ndarray</span></code></span></p>
 </dd>
 </dl>
 </dd></dl>
@@ -861,8 +690,9 @@ to waveform parameters is obtained simply by:</p>
 <section id="utilities">
 <h2>Utilities<a class="headerlink" href="#utilities" title="Link to this heading"></a></h2>
 <dl class="simple">
-<dt><a class="reference internal" href="#fewtrax.summation.modes.interpolated_mode_sum" title="fewtrax.summation.modes.interpolated_mode_sum"><code class="xref py py-func docutils literal notranslate"><span class="pre">interpolated_mode_sum()</span></code></a></dt><dd><p>Upsamples the sparse trajectory to a dense time grid before
-summation using cubic spline interpolation of the phases.</p>
+<dt><a class="reference internal" href="#fewtrax.summation.modes.interpolated_mode_sum" title="fewtrax.summation.modes.interpolated_mode_sum"><code class="xref py py-func docutils literal notranslate"><span class="pre">interpolated_mode_sum()</span></code></a></dt><dd><p>Upsamples the sparse trajectory to a dense time grid before summation:
+amplitudes via cubic spline, phases via the trajectory’s Dopri8 dense
+(7th/8th-order) interpolant (<code class="docutils literal notranslate"><span class="pre">phase_fn</span></code>).</p>
 </dd>
 <dt><a class="reference internal" href="#fewtrax.summation.modes.ModeSum" title="fewtrax.summation.modes.ModeSum"><code class="xref py py-class docutils literal notranslate"><span class="pre">ModeSum</span></code></a></dt><dd><p>Stateful wrapper that caches the trajectory phases and amplitudes.</p>
 </dd>
@@ -916,11 +746,13 @@ to JAX arrays on first call.</p>
 
 <dl class="py function">
 <dt class="sig sig-object py" id="fewtrax.summation.modes.interpolated_mode_sum">
-<span class="sig-prename descclassname"><span class="pre">fewtrax.summation.modes.</span></span><span class="sig-name descname"><span class="pre">interpolated_mode_sum</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">t_traj</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">teuk_modes</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ylms_pos</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ylms_neg</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">Phi_phi</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">Phi_theta</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">Phi_r</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">l_arr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">m_arr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">k_arr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_arr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dt</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">10.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">M</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">T</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/fewtrax/summation/modes.html#interpolated_mode_sum"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#fewtrax.summation.modes.interpolated_mode_sum" title="Link to this definition"></a></dt>
-<dd><p>Produce a densely sampled waveform by interpolating the phases.</p>
-<p>The trajectory is computed on a sparse grid; this function upsamples
-the phases to a uniformly spaced time grid with step <code class="docutils literal notranslate"><span class="pre">dt</span></code> using
-cubic spline interpolation, then calls <a class="reference internal" href="#fewtrax.summation.modes.direct_mode_sum" title="fewtrax.summation.modes.direct_mode_sum"><code class="xref py py-func docutils literal notranslate"><span class="pre">direct_mode_sum()</span></code></a>.</p>
+<span class="sig-prename descclassname"><span class="pre">fewtrax.summation.modes.</span></span><span class="sig-name descname"><span class="pre">interpolated_mode_sum</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">t_traj</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">teuk_modes</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ylms_pos</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ylms_neg</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">Phi_phi</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">Phi_theta</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">Phi_r</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">l_arr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">m_arr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">k_arr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_arr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">phase_fn</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dt</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">10.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">M</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">T</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/fewtrax/summation/modes.html#interpolated_mode_sum"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#fewtrax.summation.modes.interpolated_mode_sum" title="Link to this definition"></a></dt>
+<dd><p>Produce a densely sampled waveform from the sparse trajectory.</p>
+<p>Amplitudes are upsampled to a uniform grid with step <code class="docutils literal notranslate"><span class="pre">dt</span></code> via cubic
+spline (matching FEW); the orbital phases come from <code class="docutils literal notranslate"><span class="pre">phase_fn</span></code>, called as
+<code class="docutils literal notranslate"><span class="pre">phase_fn(t_dense_seconds)</span> <span class="pre">-&gt;</span> <span class="pre">(Phi_phi,</span> <span class="pre">Phi_theta,</span> <span class="pre">Phi_r)</span></code>, which
+evaluates the trajectory’s Dopri8 dense (7th/8th-order) interpolant.  The
+densified arrays are then passed to <a class="reference internal" href="#fewtrax.summation.modes.direct_mode_sum" title="fewtrax.summation.modes.direct_mode_sum"><code class="xref py py-func docutils literal notranslate"><span class="pre">direct_mode_sum()</span></code></a>.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
@@ -928,13 +760,20 @@ cubic spline interpolation, then calls <a class="reference internal" href="#fewt
 <li><p><strong>teuk_modes</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">ndarray</span></code></span>) – Mode amplitudes at each trajectory point.</p></li>
 <li><p><strong>ylms_pos</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">Array</span></code></span>) – Spherical harmonics.</p></li>
 <li><p><strong>ylms_neg</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">Array</span></code></span>) – Spherical harmonics.</p></li>
-<li><p><strong>Phi_phi</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">Array</span></code></span>) – Orbital phases at trajectory points.</p></li>
-<li><p><strong>Phi_theta</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">Array</span></code></span>) – Orbital phases at trajectory points.</p></li>
-<li><p><strong>Phi_r</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">Array</span></code></span>) – Orbital phases at trajectory points.</p></li>
+<li><p><strong>Phi_phi</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">Array</span></code></span>) – Orbital phases at trajectory points (kept for signature symmetry; the
+dense phases are produced by <code class="docutils literal notranslate"><span class="pre">phase_fn</span></code>).</p></li>
+<li><p><strong>Phi_theta</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">Array</span></code></span>) – Orbital phases at trajectory points (kept for signature symmetry; the
+dense phases are produced by <code class="docutils literal notranslate"><span class="pre">phase_fn</span></code>).</p></li>
+<li><p><strong>Phi_r</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">Array</span></code></span>) – Orbital phases at trajectory points (kept for signature symmetry; the
+dense phases are produced by <code class="docutils literal notranslate"><span class="pre">phase_fn</span></code>).</p></li>
 <li><p><strong>l_arr</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">ndarray</span></code></span>) – Mode index arrays.</p></li>
 <li><p><strong>m_arr</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">ndarray</span></code></span>) – Mode index arrays.</p></li>
 <li><p><strong>k_arr</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">ndarray</span></code></span>) – Mode index arrays.</p></li>
 <li><p><strong>n_arr</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">ndarray</span></code></span>) – Mode index arrays.</p></li>
+<li><p><strong>phase_fn</strong> (<em>callable</em>) – <code class="docutils literal notranslate"><span class="pre">phase_fn(t_dense_seconds)</span> <span class="pre">-&gt;</span> <span class="pre">(Phi_phi,</span> <span class="pre">Phi_theta,</span> <span class="pre">Phi_r)</span></code> from the
+Dopri8 dense interpolant.  Obtain it from
+<code class="xref py py-meth docutils literal notranslate"><span class="pre">__call__()</span></code> with
+<code class="docutils literal notranslate"><span class="pre">return_dense_phase_fn=True</span></code>.</p></li>
 <li><p><strong>dt</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Output sampling interval [s].</p></li>
 <li><p><strong>M</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Primary mass <span class="math notranslate nohighlight">\([M_\\odot]\)</span>.</p></li>
 <li><p><strong>T</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Total duration [years].  If not provided, uses <code class="docutils literal notranslate"><span class="pre">t_traj[-1]</span></code>.</p></li>
@@ -1130,8 +969,7 @@ or multispline re-fitting is performed at load time.</p>
 <p>Amplitude evaluation proceeds as:</p>
 <ol class="arabic simple">
 <li><p>Linear interpolation in <code class="docutils literal notranslate"><span class="pre">z</span></code> between the two surrounding z-slices
-(matching FEW’s <a class="reference internal" href="#fewtrax.amplitude.interp.AmplitudeInterpolator" title="fewtrax.amplitude.interp.AmplitudeInterpolator"><code class="xref py py-class docutils literal notranslate"><span class="pre">AmplitudeInterpolator</span></code></a>
-exactly).</p></li>
+(matching FEW exactly).</p></li>
 <li><p>2-D B-spline evaluation at each z-slice via
 <code class="xref py py-func docutils literal notranslate"><span class="pre">eval_bisplev_batched()</span></code> (de Boor’s
 algorithm, all modes in one <code class="docutils literal notranslate"><span class="pre">einsum</span></code>).</p></li>
@@ -1300,9 +1138,9 @@ convergence testing; do not use in production.</p></li>
 <span class="sig-prename descclassname"><span class="pre">fewtrax.data.loader.</span></span><span class="sig-name descname"><span class="pre">load_amplitude_data</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data_dir</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">filename</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'ZNAmps_l10_m10_n55_DS2Outer.h5'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/fewtrax/data/loader.html#load_amplitude_data"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#fewtrax.data.loader.load_amplitude_data" title="Link to this definition"></a></dt>
 <dd><p>Load Teukolsky mode amplitude data.</p>
 <p>Reads the amplitude HDF5 file and returns an <a class="reference internal" href="#fewtrax.data.loader.AmplitudeData" title="fewtrax.data.loader.AmplitudeData"><code class="xref py py-class docutils literal notranslate"><span class="pre">AmplitudeData</span></code></a>
-container holding the raw B-spline coefficients.  The coefficients are
-in <code class="docutils literal notranslate"><span class="pre">scipy.interpolate.bisplev</span></code> format and are evaluated at query
-points in <a class="reference internal" href="#fewtrax.amplitude.interp.AmplitudeInterpolator" title="fewtrax.amplitude.interp.AmplitudeInterpolator"><code class="xref py py-class docutils literal notranslate"><span class="pre">AmplitudeInterpolator</span></code></a>.</p>
+container holding the raw <code class="docutils literal notranslate"><span class="pre">scipy.interpolate.bisplev</span></code>-format B-spline
+coefficients and the mode index arrays.  For JAX-native evaluation use
+<a class="reference internal" href="#fewtrax.data.loader.load_amplitude_data_jax" title="fewtrax.data.loader.load_amplitude_data_jax"><code class="xref py py-func docutils literal notranslate"><span class="pre">load_amplitude_data_jax()</span></code></a> with <code class="xref py py-class docutils literal notranslate"><span class="pre">JAXAmplitudeInterpolator</span></code>.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
@@ -1666,67 +1504,30 @@ overhead on repeated JIT-compiled calls.</p>
 </dd></dl>
 
 <p id="module-fewtrax.utils.harmonics">Spin-weight −2 spherical harmonics <span class="math notranslate nohighlight">\({}_{-2}Y_{\ell m}(\theta, \phi)\)</span>.</p>
-<p>These are the spin-weighted spherical harmonics with spin weight <span class="math notranslate nohighlight">\(s = -2\)</span>
-that appear in the gravitational wave strain decomposition:</p>
-<div class="math notranslate nohighlight">
-\[h_+ - i h_{\times} = \sum_{\ell, m} {}_{-2}Y_{\ell m}(\theta, \phi) h_{\ell m}(t)\]</div>
-<p>Closed-form expressions are tabulated for <span class="math notranslate nohighlight">\(\ell = 2, \ldots, 10\)</span>.
-They are expressed in terms of
-<span class="math notranslate nohighlight">\(c = \cos(\theta/2)\)</span> and <span class="math notranslate nohighlight">\(s = \sin(\theta/2)\)</span>.</p>
-<p>All functions are JIT-compilable.  For use in vectorised pipelines,
-use <a class="reference internal" href="#fewtrax.utils.harmonics.get_ylms_for_modes" title="fewtrax.utils.harmonics.get_ylms_for_modes"><code class="xref py py-func docutils literal notranslate"><span class="pre">get_ylms_for_modes()</span></code></a> which returns a 1-D complex array of
-harmonics for a list of <span class="math notranslate nohighlight">\((\ell, m)\)</span> mode indices.</p>
-<p class="rubric">References</p>
-<p>Goldberg et al. (1967); Berti, Cardoso &amp; Will (2006) for conventions.</p>
+<p>These appear in the strain decomposition
+<span class="math notranslate nohighlight">\(h_+ - i h_\times = \sum_{\ell m} {}_{-2}Y_{\ell m}(\theta, \phi)\, h_{\ell m}(t)\)</span>.</p>
+<p>Closed forms for <span class="math notranslate nohighlight">\(\ell = 2 \ldots 10\)</span> are hardcoded in <code class="xref py py-data docutils literal notranslate"><span class="pre">_YLM_TABLE</span></code>
+(from FastEMRIWaveforms <code class="docutils literal notranslate"><span class="pre">few/utils/ylm.py</span></code>; Goldberg et al. 1967 convention),
+written in JAX so they are JIT-compilable and differentiable in <span class="math notranslate nohighlight">\((\theta,
+\phi)\)</span>; <span class="math notranslate nohighlight">\((\ell, m)\)</span> are static. Keys are <code class="docutils literal notranslate"><span class="pre">l&lt;ell&gt;_m&lt;m&gt;</span></code>, negative orders
+<code class="docutils literal notranslate"><span class="pre">neg</span></code> (e.g. <code class="docutils literal notranslate"><span class="pre">l2_m2</span></code>, <code class="docutils literal notranslate"><span class="pre">l2_mneg2</span></code>); entries are functions of <code class="docutils literal notranslate"><span class="pre">(c,</span> <span class="pre">s,</span> <span class="pre">phi)</span></code>
+with <code class="docutils literal notranslate"><span class="pre">c</span> <span class="pre">=</span> <span class="pre">cos(theta/2)</span></code>, <code class="docutils literal notranslate"><span class="pre">s</span> <span class="pre">=</span> <span class="pre">sin(theta/2)</span></code>.</p>
 <dl class="py function">
 <dt class="sig sig-object py" id="fewtrax.utils.harmonics.spin_weighted_spherical_harmonic">
 <span class="sig-prename descclassname"><span class="pre">fewtrax.utils.harmonics.</span></span><span class="sig-name descname"><span class="pre">spin_weighted_spherical_harmonic</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">l</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">m</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">theta</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">phi</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/fewtrax/utils/harmonics.html#spin_weighted_spherical_harmonic"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#fewtrax.utils.harmonics.spin_weighted_spherical_harmonic" title="Link to this definition"></a></dt>
-<dd><p>Spin-weight −2 spherical harmonic <span class="math notranslate nohighlight">\({}_{-2}Y_{\ell m}(\theta, \phi)\)</span>.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>l</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code></span>) – Degree <span class="math notranslate nohighlight">\(\ell \ge 2\)</span>.</p></li>
-<li><p><strong>m</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code></span>) – Order <span class="math notranslate nohighlight">\(-\ell \le m \le \ell\)</span>.</p></li>
-<li><p><strong>theta</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Polar angle [rad].</p></li>
-<li><p><strong>phi</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Azimuthal angle [rad].</p></li>
-</ul>
-</dd>
-<dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p>The harmonic value.</p>
-</dd>
-<dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p><span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">complex</span></code></span></p>
-</dd>
-</dl>
+<dd><p>Public single-mode SWSH <span class="math notranslate nohighlight">\({}_{-2}Y_{\ell m}(\theta, \phi)\)</span>.</p>
+<p>Wrapper around <code class="xref py py-func docutils literal notranslate"><span class="pre">_swsh_jax()</span></code>; to <code class="docutils literal notranslate"><span class="pre">jax.jit</span></code> directly, mark <code class="docutils literal notranslate"><span class="pre">l,</span> <span class="pre">m</span></code> static.</p>
 </dd></dl>
 
 <dl class="py function">
 <dt class="sig sig-object py" id="fewtrax.utils.harmonics.get_ylms_for_modes">
 <span class="sig-prename descclassname"><span class="pre">fewtrax.utils.harmonics.</span></span><span class="sig-name descname"><span class="pre">get_ylms_for_modes</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">l_arr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">m_arr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">theta</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">phi</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/fewtrax/utils/harmonics.html#get_ylms_for_modes"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#fewtrax.utils.harmonics.get_ylms_for_modes" title="Link to this definition"></a></dt>
-<dd><p>Compute <span class="math notranslate nohighlight">\({}_{-2}Y_{\ell m}(\theta, \phi)\)</span> for an array of modes.</p>
-<p>Returns a complex array of shape <code class="docutils literal notranslate"><span class="pre">(N_modes,)</span></code> as well as the
-corresponding negative-m harmonics <code class="docutils literal notranslate"><span class="pre">(N_modes,)</span></code> needed for the
-conjugate term in the summation.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>l_arr</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">ndarray</span></code></span>) – Arrays of <span class="math notranslate nohighlight">\(\ell\)</span> and <span class="math notranslate nohighlight">\(m\)</span> values (length N_modes).</p></li>
-<li><p><strong>m_arr</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">ndarray</span></code></span>) – Arrays of <span class="math notranslate nohighlight">\(\ell\)</span> and <span class="math notranslate nohighlight">\(m\)</span> values (length N_modes).</p></li>
-<li><p><strong>theta</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Observer angles [rad].</p></li>
-<li><p><strong>phi</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span>) – Observer angles [rad].</p></li>
-</ul>
-</dd>
-<dt class="field-even">Return type<span class="colon">:</span></dt>
-<dd class="field-even"><p><span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">Array</span></code></span></p>
-</dd>
-<dt class="field-odd">Returns<span class="colon">:</span></dt>
-<dd class="field-odd"><p><ul class="simple">
-<li><p><strong>ylms_pos</strong> (<em>jnp.ndarray, shape (N_modes,), complex</em>) – Harmonics <span class="math notranslate nohighlight">\({}_{-2}Y_{\ell m}\)</span> (for m as given).</p></li>
-<li><p><strong>ylms_neg</strong> (<em>jnp.ndarray, shape (N_modes,), complex</em>) – Harmonics <span class="math notranslate nohighlight">\({}_{-2}Y_{\ell, -m}\)</span> (for the negative-m conjugate term).</p></li>
-</ul>
-</p>
-</dd>
-</dl>
+<dd><p>Batched <span class="math notranslate nohighlight">\({}_{-2}Y_{\ell m}(\theta, \phi)\)</span> for arrays of modes.</p>
+<p>Each distinct <span class="math notranslate nohighlight">\((\ell, m)\)</span> is evaluated once then gathered, so cost
+scales with the number of <em>unique</em> harmonics, not the mode count. Static
+<code class="docutils literal notranslate"><span class="pre">l_arr,</span> <span class="pre">m_arr</span></code> (int arrays); <code class="docutils literal notranslate"><span class="pre">theta,</span> <span class="pre">phi</span></code> (rad) may be JAX tracers.</p>
+<p>Returns <code class="docutils literal notranslate"><span class="pre">(ylms_pos,</span> <span class="pre">ylms_neg)</span></code>, both <code class="docutils literal notranslate"><span class="pre">(N_modes,)</span></code> complex128, holding
+<span class="math notranslate nohighlight">\({}_{-2}Y_{\ell m}\)</span> and <span class="math notranslate nohighlight">\({}_{-2}Y_{\ell, -m}\)</span> (conjugate term).</p>
 </dd></dl>
 
 </section>

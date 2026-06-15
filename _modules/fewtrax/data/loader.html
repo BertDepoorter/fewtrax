@@ -376,8 +376,7 @@
 <span class="sd">    Amplitude evaluation proceeds as:</span>
 
 <span class="sd">    1. Linear interpolation in ``z`` between the two surrounding z-slices</span>
-<span class="sd">       (matching FEW&#39;s :class:`~fewtrax.amplitude.interp.AmplitudeInterpolator`</span>
-<span class="sd">       exactly).</span>
+<span class="sd">       (matching FEW exactly).</span>
 <span class="sd">    2. 2-D B-spline evaluation at each z-slice via</span>
 <span class="sd">       :func:`~fewtrax.utils.bspline_jax.eval_bisplev_batched` (de Boor&#39;s</span>
 <span class="sd">       algorithm, all modes in one ``einsum``).</span>
@@ -677,9 +676,9 @@
 <span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;Load Teukolsky mode amplitude data.</span>
 
 <span class="sd">    Reads the amplitude HDF5 file and returns an :class:`AmplitudeData`</span>
-<span class="sd">    container holding the raw B-spline coefficients.  The coefficients are</span>
-<span class="sd">    in ``scipy.interpolate.bisplev`` format and are evaluated at query</span>
-<span class="sd">    points in :class:`~fewtrax.amplitude.interp.AmplitudeInterpolator`.</span>
+<span class="sd">    container holding the raw ``scipy.interpolate.bisplev``-format B-spline</span>
+<span class="sd">    coefficients and the mode index arrays.  For JAX-native evaluation use</span>
+<span class="sd">    :func:`load_amplitude_data_jax` with :class:`JAXAmplitudeInterpolator`.</span>
 
 <span class="sd">    Parameters</span>
 <span class="sd">    ----------</span>
