@@ -18,7 +18,7 @@ evaluation is pure JAX and fully differentiable.
 (e.g. one independent spline per Teukolsky mode sharing a common ``(u, w, z)``
 grid).  It performs a single cell lookup for the query point and then
 contracts the polynomial basis against every batch element in one
-``einsum``, replacing the ``N_traj × N_modes`` ``scipy.bisplev`` Python loop
+``einsum``, replacing the ``N_traj x N_modes`` ``scipy.bisplev`` Python loop
 used for amplitude interpolation.  It is JIT / vmap / grad compatible.
 
 Usage example
@@ -371,12 +371,10 @@ class BatchedTricubicSplineE3(eqx.Module):
     every batch element in one ``einsum``.  The output of
     :meth:`__call__` has shape ``(B,)``.
 
-    This replaces the Python loop over ``scipy.interpolate.bisplev`` in
-    :class:`~fewtrax.amplitude.interp.AmplitudeInterpolator`, which is
-    ``O(N_traj × N_modes)`` sequential CPU calls.  Evaluating one
-    trajectory point on ``B`` modes is a single fused kernel here and is
-    fully compatible with :func:`jax.jit`, :func:`jax.vmap`, and
-    :func:`jax.grad`.
+    This replaces FEW's ``O(N_traj × N_modes)`` sequential
+    ``scipy.interpolate.bisplev`` CPU calls: evaluating one trajectory point
+    on ``B`` modes is a single fused kernel here, fully compatible with
+    :func:`jax.jit`, :func:`jax.vmap`, and :func:`jax.grad`.
 
     Parameters
     ----------
@@ -392,7 +390,7 @@ class BatchedTricubicSplineE3(eqx.Module):
     For ``B = 400`` modes on a ``Nu = 33, Nw = 10, Nz = 11`` grid the
     coefficient tensor occupies ``400 × 32 × 9 × 10 × 64 × 8 B ≈ 590 MB``.
     Mode selection via power thresholding (see
-    :meth:`~fewtrax.amplitude.interp.AmplitudeInterpolator.select_modes`)
+    :meth:`~fewtrax.amplitude.interp.JAXAmplitudeInterpolator.select_modes`)
     is the recommended way to keep this in range on a single GPU.
 
     See Also

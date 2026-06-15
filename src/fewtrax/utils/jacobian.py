@@ -1,22 +1,22 @@
-"""Analytical Jacobian utilities for (Ė, L̇) ↔ (ṗ, ė) conversion.
+"""Analytical Jacobian utilities for :math:`(\dot{E}, \dot{L}) \leftrightarrow (\dot{p}, \dot{e})` conversion.
 
 Provides JAX-differentiable conversion between the two radiation-reaction
 conventions used in EMRI trajectory codes:
 
-* **ELQ convention** (fewtrax legacy): store PN-normalised (Ė/Ė_PN, L̇/L̇_PN);
-  apply the Jacobian ∂(E,L)/∂(p,e) at ODE run-time.
-* **pex convention** (FEW): pre-compute (ṗ/ṗ_PN, ė/ė_PN) at grid points using
-  the analytical Jacobian at load time; at ODE run-time just evaluate splines
-  multiplied by the PN functions.
+* **ELQ convention** (fewtrax legacy): store PN-normalised :math:`\dot{E}/\dot{E}_PN, \dot{L}/\dot{L}_PN`;
+  apply the Jacobian :math:`\partial(E,L)/\partial(p,e)` at ODE run-time.
+* **pex convention** (FEW): pre-compute :math:`(\dot{p}/\dot{p}_PN, \dot{e}/\dot{e}_PN)` at grid points using
+  the analytical Jacobian at load time.  When running ODEs we evaluate splines and multiply by the PN functions at ODE run-time.
 
 Public API
 ----------
 :func:`ELdot_to_pedot_jax`
-    (Ė, L̇) → (ṗ, ė) using JAX ``jacfwd`` Jacobian (JIT-able).
+    :math:`(\dot{E}, \dot{L}) \mapsto (\dot{p}, \dot{e})` using JAX ``jacfwd`` Jacobian (JIT-able).
 :func:`pedot_to_ELdot_jax`
-    (ṗ, ė) → (Ė, L̇) using JAX ``jacfwd`` Jacobian (JIT-able).
+    :math:`(\dot{p}, \dot{e}) \mapsto (\dot{E}, \dot{L})` using JAX ``jacfwd`` Jacobian (JIT-able).
 :func:`ELdot_to_pedot_grid`
-    Vectorised (Ė, L̇) → (ṗ, ė) for full flux grids at data-loading time.
+    Vectorised :math:`(\dot{E}, \dot{L}) \mapsto (\dot{p}, \dot{e})` for full flux grids
+    when data is loaded.
 """
 
 from __future__ import annotations
@@ -30,11 +30,9 @@ from fewtrax.utils.geodesic import (
     kerr_geo_angular_momentum_equatorial,
 )
 
-
 # ---------------------------------------------------------------------------
-# JAX Jacobian helpers (JIT-able)
+# Jacobian helpers in JAX
 # ---------------------------------------------------------------------------
-
 def _EL_of_pe(a_abs: jnp.ndarray, x: jnp.ndarray, pe: jnp.ndarray) -> jnp.ndarray:
     """Return [E, L] as a JAX array given [p, e]."""
     E = kerr_geo_energy_equatorial(a_abs, pe[0], pe[1], x)
@@ -51,9 +49,9 @@ def ELdot_to_pedot_jax(
     Ldot: jnp.ndarray,
     e_min: float = 1e-4,
 ) -> tuple[jnp.ndarray, jnp.ndarray]:
-    r"""Convert (Ė, L̇) to (ṗ, ė) using the JAX ``jacfwd`` Jacobian.
+    r"""Convert :math:`(\dot{E}, \dot{L})` to :math:`(\dot{p}, \dot{e})` using the JAX ``jacfwd`` Jacobian.
 
-    Solves the 2×2 linear system :math:`J \cdot (\dot{p}, \dot{e})^T = (\dot{E}, \dot{L})^T`
+    Solves the 2x2 linear system :math:`J \cdot (\dot{p}, \dot{e})^T = (\dot{E}, \dot{L})^T`
     where :math:`J = \partial(E, L)/\partial(p, e)` is computed via
     forward-mode automatic differentiation.
 
@@ -81,7 +79,7 @@ def ELdot_to_pedot_jax(
     rhs = jnp.array([Edot, Ldot])
     pe_dot = jnp.linalg.solve(J, rhs)
 
-    # Circular-orbit fallback: use ∂E/∂p alone, set edot = 0
+    # Circular-orbit fallback: use delE/del p alone, set edot = 0
     dEdp = J[0, 0]
     pdot_circ = Edot / jnp.where(jnp.abs(dEdp) > 1e-30, dEdp, 1.0)
 
@@ -100,7 +98,7 @@ def pedot_to_ELdot_jax(
     edot: jnp.ndarray,
     e_min: float = 1e-4,
 ) -> tuple[jnp.ndarray, jnp.ndarray]:
-    r"""Convert (ṗ, ė) to (Ė, L̇) using the forward Jacobian (JAX, JIT-able).
+    r"""Convert :math:`(\dot{p}, \dot{e})` to :math:`(\dot{E}, \dot{L})` using the forward Jacobian (JAX, JIT-able).
 
     Applies the Jacobian :math:`J = \partial(E, L)/\partial(p, e)` directly:
     :math:`(\dot{E}, \dot{L}) = J \cdot (\dot{p}, \dot{e})`.
@@ -143,7 +141,7 @@ def ELdot_to_pedot_grid(
     Ldot_arr: np.ndarray,
     e_min: float = 1e-4,
 ) -> tuple[np.ndarray, np.ndarray]:
-    """Convert flattened (Ė, L̇) arrays to (ṗ, ė) for an entire flux grid.
+    """Convert flattened :math:`(\dot{E}, \dot{L})` arrays to :math:`(\dot{p}, \dot{e})` for an entire flux grid.
 
     Applies :func:`ELdot_to_pedot_jax` point-by-point using JAX ``vmap``
     for efficiency.  Intended for use at data-loading time to pre-compute the

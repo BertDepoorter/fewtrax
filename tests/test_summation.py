@@ -174,13 +174,20 @@ class TestInterpolatedModeSum:
         dt = 10.0
         T_s = float(d["t"][-1])
         n_expected = max(2, int(round(T_s / dt)) + 1)
+
+        # Linear-in-time stand-in for the Dopri8 dense-output phase evaluator.
+        t0, t1 = float(d["t"][0]), float(d["t"][-1])
+        def phase_fn(t_dense):
+            frac = (t_dense - t0) / (t1 - t0)
+            return (100.0 * frac, 80.0 * frac, 50.0 * frac)
+
         t_out, h = interpolated_mode_sum(
             d["t"], np.array(d["teuk_modes"]),
             d["ylms_pos"], d["ylms_neg"],
             d["Phi_phi"], d["Phi_theta"], d["Phi_r"],
             np.array(d["l_arr"]), np.array(d["m_arr"]),
             np.array(d["k_arr"]), np.array(d["n_arr"]),
-            dt=dt,
+            phase_fn, dt=dt,
         )
         assert t_out.shape[0] == n_expected, \
             f"Expected {n_expected} output points, got {t_out.shape[0]}"

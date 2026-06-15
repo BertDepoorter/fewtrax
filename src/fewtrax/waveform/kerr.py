@@ -13,7 +13,7 @@ Pipeline
    the adiabatic ODE for :math:`(p, e, \\Phi_\\phi, \\Phi_\\theta, \\Phi_r)`.
 3. **Mode selection**: modes are filtered by their relative power
    contribution (threshold configurable).
-4. **Amplitude evaluation**: :class:`~fewtrax.amplitude.AmplitudeInterpolator`
+4. **Amplitude evaluation**: :class:`~fewtrax.amplitude.JAXAmplitudeInterpolator`
    evaluates :math:`A_{\\ell m k n}` at each trajectory point.
 5. **Harmonics**: :func:`~fewtrax.utils.harmonics.get_ylms_for_modes`
    computes :math:`{}_{-2}Y_{\\ell m}(\\theta, \\phi)`.
@@ -67,7 +67,7 @@ from fewtrax.data.loader import (
     FluxData, AmplitudeData,
 )
 from fewtrax.trajectory.inspiral import EMRIInspiral
-from fewtrax.amplitude.interp import AmplitudeInterpolator, JAXAmplitudeInterpolator
+from fewtrax.amplitude.interp import JAXAmplitudeInterpolator
 from fewtrax.summation.modes import ModeSum
 from fewtrax.summation.tf_sum import direct_tf_sum
 from fewtrax.utils.tf_bases.base import TFGrid
@@ -176,7 +176,6 @@ class KerrEccentricEquatorialWaveform:
         mode_selection_threshold: float = 1.0e-5,
         dense_steps: int = 100,
         preload_amplitude: bool = True,
-        use_jax_amps: bool = True,
     ):
         self.data_dir = data_dir
         self.amp_filename = amp_filename
@@ -189,23 +188,20 @@ class KerrEccentricEquatorialWaveform:
         self._amp_data: Optional[AmplitudeData] = None
         self._jax_amp_interp: Optional[JAXAmplitudeInterpolator] = None
         if preload_amplitude:
-            log.info("Loading amplitude data …")
-            self._amp_data = load_amplitude_data(data_dir, filename=amp_filename)
-            self._amp_interp = AmplitudeInterpolator(self._amp_data)
-            if use_jax_amps:
-                log.info("Loading JAX amplitude data …")
-                _jax_amp_data = load_amplitude_data_jax(data_dir, filename=amp_filename)
-                self._jax_amp_interp = JAXAmplitudeInterpolator(_jax_amp_data)
-        else:
-            self._amp_interp = None
+            self._ensure_amp_loaded()
 
     def _ensure_amp_loaded(self):
+        """Load the amplitude data (mode arrays + JAX interpolator) once."""
         if self._amp_data is None:
             log.info("Loading amplitude data …")
             self._amp_data = load_amplitude_data(
                 self.data_dir, filename=self.amp_filename
             )
-            self._amp_interp = AmplitudeInterpolator(self._amp_data)
+        if self._jax_amp_interp is None:
+            log.info("Loading JAX amplitude data …")
+            self._jax_amp_interp = JAXAmplitudeInterpolator(
+                load_amplitude_data_jax(self.data_dir, filename=self.amp_filename)
+            )
 
     def generate_sparse(
         self,
@@ -266,36 +262,38 @@ class KerrEccentricEquatorialWaveform:
         self._ensure_amp_loaded()
 
         # --- Trajectory ---
+        # Request the Dopri8 dense-output phase evaluator (7th/8th-order) so the
+        # time-domain summation uses the polynomial phases.  Available in both
+        # forward and backward fixed-grid mode; only save_at_steps lacks it.
+        want_dense_phase = not traj_kwargs.get("save_at_steps", False)
         traj = EMRIInspiral(self._flux_data)
-        t, p, e, Phi_phi, Phi_theta, Phi_r = traj(
+        traj_out = traj(
             p0=p0, e0=e0, T=T, a=a, x0=x0, dt=dt, M=M, mu=mu,
             Phi_phi0=Phi_phi0, Phi_theta0=Phi_theta0, Phi_r0=Phi_r0,
             dense_steps=self.dense_steps,
+            return_dense_phase_fn=want_dense_phase,
             **traj_kwargs,
         )
+        if want_dense_phase:
+            t, p, e, Phi_phi, Phi_theta, Phi_r, phase_fn = traj_out
+        else:
+            t, p, e, Phi_phi, Phi_theta, Phi_r = traj_out
+            phase_fn = None
 
-        p_np = np.asarray(p)
-        e_np = np.asarray(e)
-
-        # --- Mode selection (always via numpy evaluator) ---
-        mode_inds = self._amp_interp.select_modes(
-            a, p_np, e_np, threshold=self.mode_selection_threshold, x=x0
+        # --- Amplitudes (all modes) + mean-power mode selection (JAX-native) ---
+        teuk_modes_all = self._jax_amp_interp.evaluate_trajectory(
+            jnp.asarray(a, dtype=jnp.float64), p, e
+        )  # (N_traj, n_all_modes)
+        mode_inds = self._jax_amp_interp.select_modes_from_amps(
+            teuk_modes_all, threshold=self.mode_selection_threshold
         )
         log.info("Selected %d modes (threshold=%.1e)", len(mode_inds), self.mode_selection_threshold)
-
-        # --- Amplitude evaluation ---
-        if self._jax_amp_interp is not None:
-            # JAX-native path: vmap over trajectory, then select modes
-            teuk_modes_all = self._jax_amp_interp.evaluate_trajectory(
-                jnp.asarray(a, dtype=jnp.float64), p, e
-            )  # (N_traj, n_all_modes)
-            teuk_modes = teuk_modes_all[:, mode_inds]
-        else:
-            teuk_modes = self._amp_interp.evaluate(a, p_np, e_np, x=x0, specific_modes=mode_inds)
+        teuk_modes = teuk_modes_all[:, mode_inds]
 
         ad = self._amp_data
         return dict(
             t=t, p=p, e=e, Phi_phi=Phi_phi, Phi_theta=Phi_theta, Phi_r=Phi_r,
+            phase_fn=phase_fn,
             teuk_modes=teuk_modes,
             l_arr=ad.l_arr[mode_inds],
             m_arr=ad.m_arr[mode_inds],
@@ -519,6 +517,7 @@ class KerrEccentricEquatorialWaveform:
             sparse["Phi_theta"],
             sparse["Phi_r"],
             dt=dt,
+            phase_fn=sparse.get("phase_fn"),
         )
 
         # Source-frame sign convention (FEW rotates by π after summation)

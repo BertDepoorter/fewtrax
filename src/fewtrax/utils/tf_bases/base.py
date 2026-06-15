@@ -14,8 +14,8 @@ class TFGrid(ABC):
     and define a ``kernel`` method that maps normalised frequency offsets and
     chirp parameters to complex pixel weights.
 
-    The concrete implementations provided by fewtrax are
-    :class:`~fewtrax.utils.tf_bases.wdm.WDMGrid` (Wilson–Daubechies–Meyer)
+    Implemented daughters:
+    :class:`~fewtrax.utils.tf_bases.wdm.WDMGrid` (Wilson-Daubechies-Meyer)
     and :class:`~fewtrax.utils.tf_bases.sft.SFTGrid` (Short-Time Fourier
     Transform).
     """

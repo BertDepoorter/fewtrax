@@ -7,8 +7,8 @@ FEW amplitude data.
 
 The key function is :func:`eval_bisplev_batched`, which evaluates all
 ``n_modes`` complex amplitudes at a single ``(w, u)`` query point in a single
-``jnp.einsum`` call, replacing the nested Python loop over modes and
-trajectory points in :class:`~fewtrax.amplitude.interp.AmplitudeInterpolator`.
+``jnp.einsum`` call, replacing FEW's nested ``scipy.bisplev`` loop over modes
+and trajectory points.
 
 All functions are fully compatible with ``jax.jit``, ``jax.vmap``, and
 ``jax.grad``.

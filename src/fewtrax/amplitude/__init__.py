@@ -1,5 +1,5 @@
 """Teukolsky mode amplitude interpolation."""
 
-from fewtrax.amplitude.interp import AmplitudeInterpolator, JAXAmplitudeInterpolator
+from fewtrax.amplitude.interp import JAXAmplitudeInterpolator
 
-__all__ = ["AmplitudeInterpolator", "JAXAmplitudeInterpolator"]
+__all__ = ["JAXAmplitudeInterpolator"]

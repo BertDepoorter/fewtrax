@@ -264,11 +264,11 @@ def jax_amp_interp(data_dir):
 
 @pytest.fixture(scope="module")
 def scipy_amp_interp(data_dir):
-    """Session-scoped scipy amplitude interpolator."""
+    """Session-scoped scipy bisplev reference (test-only ground truth)."""
     from fewtrax.data.loader import load_amplitude_data
-    from fewtrax.amplitude.interp import AmplitudeInterpolator
+    from tests.scipy_amp_reference import ScipyAmplitudeReference
     amp_data = load_amplitude_data(data_dir)
-    return AmplitudeInterpolator(amp_data)
+    return ScipyAmplitudeReference(amp_data)
 
 
 def test_amplitude_single_point_vs_scipy(jax_amp_interp, scipy_amp_interp):

@@ -42,8 +42,9 @@ to waveform parameters is obtained simply by:
 Utilities
 ---------
 :func:`interpolated_mode_sum`
-    Upsamples the sparse trajectory to a dense time grid before
-    summation using cubic spline interpolation of the phases.
+    Upsamples the sparse trajectory to a dense time grid before summation:
+    amplitudes via cubic spline, phases via the trajectory's Dopri8 dense
+    (7th/8th-order) interpolant (``phase_fn``).
 :class:`ModeSum`
     Stateful wrapper that caches the trajectory phases and amplitudes.
 """
@@ -172,15 +173,18 @@ def interpolated_mode_sum(
     m_arr: np.ndarray,
     k_arr: np.ndarray,
     n_arr: np.ndarray,
+    phase_fn,
     dt: float = 10.0,
     M: float = 1.0,
     T: float = None,
 ) -> tuple[jnp.ndarray, jnp.ndarray]:
-    r"""Produce a densely sampled waveform by interpolating the phases.
+    r"""Produce a densely sampled waveform from the sparse trajectory.
 
-    The trajectory is computed on a sparse grid; this function upsamples
-    the phases to a uniformly spaced time grid with step ``dt`` using
-    cubic spline interpolation, then calls :func:`direct_mode_sum`.
+    Amplitudes are upsampled to a uniform grid with step ``dt`` via cubic
+    spline (matching FEW); the orbital phases come from ``phase_fn``, called as
+    ``phase_fn(t_dense_seconds) -> (Phi_phi, Phi_theta, Phi_r)``, which
+    evaluates the trajectory's Dopri8 dense (7th/8th-order) interpolant.  The
+    densified arrays are then passed to :func:`direct_mode_sum`.
 
     Parameters
     ----------
@@ -191,9 +195,15 @@ def interpolated_mode_sum(
     ylms_pos, ylms_neg : jnp.ndarray, shape (N_modes,)
         Spherical harmonics.
     Phi_phi, Phi_theta, Phi_r : jnp.ndarray, shape (N_traj,)
-        Orbital phases at trajectory points.
+        Orbital phases at trajectory points (kept for signature symmetry; the
+        dense phases are produced by ``phase_fn``).
     l_arr, m_arr, k_arr, n_arr : array_like of int
         Mode index arrays.
+    phase_fn : callable
+        ``phase_fn(t_dense_seconds) -> (Phi_phi, Phi_theta, Phi_r)`` from the
+        Dopri8 dense interpolant.  Obtain it from
+        :meth:`~fewtrax.trajectory.EMRIInspiral.__call__` with
+        ``return_dense_phase_fn=True``.
     dt : float
         Output sampling interval [s].
     M : float
@@ -224,14 +234,8 @@ def interpolated_mode_sum(
     n_dense = max(2, int(np.round(T_s / dt)) + 1)
     t_dense = jnp.linspace(float(t_np[0]), float(t_np[-1]), n_dense)
 
-    def _interp(arr):
-        arr_np = np.asarray(arr)[valid]
-        spl = Interpolator1D(t_np, arr_np, method="cubic2", extrap=True)
-        return spl(t_dense)
-
-    Phi_phi_d = _interp(Phi_phi)
-    Phi_theta_d = _interp(Phi_theta)
-    Phi_r_d = _interp(Phi_r)
+    # 7th/8th-order Dopri8 dense-output phases (matches FEW's DOPR853 path).
+    Phi_phi_d, Phi_theta_d, Phi_r_d = phase_fn(t_dense)
 
     # Interpolate amplitude magnitudes and phases separately
     teuk_np = np.asarray(teuk_modes)[valid, :]
@@ -322,6 +326,7 @@ class ModeSum:
         Phi_r: jnp.ndarray,
         dt: float = 10.0,
         dense: bool = True,
+        phase_fn=None,
     ) -> tuple[jnp.ndarray, jnp.ndarray]:
         r"""Evaluate the gravitational-wave strain.
 
@@ -338,6 +343,10 @@ class ModeSum:
         dense : bool
             If True, upsample to a dense grid.  If False, return the
             sparse trajectory summation.
+        phase_fn : callable
+            ``phase_fn(t_dense_seconds) -> (Phi_phi, Phi_theta, Phi_r)`` from
+            the Dopri8 dense (7th/8th-order) interpolant.  Required when
+            ``dense=True`` (see :func:`interpolated_mode_sum`).
 
         Returns
         -------
@@ -347,12 +356,17 @@ class ModeSum:
             :math:`h_+ - i h_{\times}` in physical units.
         """
         if dense:
+            if phase_fn is None:
+                raise ValueError(
+                    "phase_fn is required when dense=True; obtain it from "
+                    "EMRIInspiral.__call__(..., return_dense_phase_fn=True)."
+                )
             t_out, h = interpolated_mode_sum(
                 t_traj, teuk_modes,
                 self.ylms_pos, self.ylms_neg,
                 Phi_phi, Phi_theta, Phi_r,
                 self.l_arr, self.m_arr, self.k_arr, self.n_arr,
-                dt=dt, M=self.M,
+                phase_fn, dt=dt, M=self.M,
             )
         else:
             h = direct_mode_sum(
