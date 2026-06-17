@@ -1,54 +1,16 @@
 """High-level KerrEccentricEquatorial waveform generator.
 
 :class:`KerrEccentricEquatorialWaveform` is the main entry point for
-generating EMRI gravitational waveforms in fewtrax.  It mirrors the
-API of ``few.waveform.FastKerrEccentricEquatorialFlux`` while using
-JAX-accelerated trajectory integration and mode summation.
+generating EMRI gravitational waveforms in fewtrax.  It mirrors the API of
+``few.waveform.FastKerrEccentricEquatorialFlux`` (data loading → diffrax
+trajectory → mode selection → amplitudes → harmonics → summation), produced in
+the source frame and rotated to the SSB frame using FEW's angle conventions.
+See :meth:`KerrEccentricEquatorialWaveform.__call__` for the full parameter
+and frame reference.
 
-Pipeline
---------
-1. **Data loading**: on construction, the FEW HDF5 data files are read
-   once and JAX-compatible interpolators are built.
-2. **Trajectory**: :class:`~fewtrax.trajectory.EMRIInspiral` integrates
-   the adiabatic ODE for :math:`(p, e, \\Phi_\\phi, \\Phi_\\theta, \\Phi_r)`.
-3. **Mode selection**: modes are filtered by their relative power
-   contribution (threshold configurable).
-4. **Amplitude evaluation**: :class:`~fewtrax.amplitude.JAXAmplitudeInterpolator`
-   evaluates :math:`A_{\\ell m k n}` at each trajectory point.
-5. **Harmonics**: :func:`~fewtrax.utils.harmonics.get_ylms_for_modes`
-   computes :math:`{}_{-2}Y_{\\ell m}(\\theta, \\phi)`.
-6. **Summation**: :class:`~fewtrax.summation.ModeSum` upsamples the sparse
-   trajectory to the requested ``dt`` and sums the modes.
-
-Frame transformations
----------------------
-The waveform is produced in the *source frame* (sky direction
-:math:`(\\theta_S, \\phi_S)`, spin direction :math:`(\\theta_K, \\phi_K)`).
-The :meth:`__call__` signature matches the FEW convention, including
-the sky-location and spin-orientation angles.
-
-JAX compatibility
------------------
-*  :meth:`__call__` is **not** JIT-compiled as a whole (it mixes numpy
-   amplitude evaluation with JAX trajectory/summation).  Use
-   :meth:`generate_sparse` to obtain the sparse trajectory and
-   amplitudes, then call :func:`~fewtrax.summation.direct_mode_sum`
-   directly inside ``jax.jit``.
-*  The trajectory is fully differentiable with respect to
-   :math:`(p_0, e_0, \\Phi_{\\phi 0}, \\Phi_{\\theta 0}, \\Phi_{r 0})`.
-
-Examples
---------
 >>> from fewtrax import KerrEccentricEquatorialWaveform
 >>> wf = KerrEccentricEquatorialWaveform(data_dir="/path/to/few/data")
->>> hp, hx = wf(
-...     M=1e6, mu=10.0, a=0.3,
-...     p0=10.0, e0=0.4, x0=1.0,
-...     dist=1.0,
-...     qS=0.2, phiS=0.2, qK=0.8, phiK=0.8,
-...     Phi_phi0=1.0, Phi_theta0=2.0, Phi_r0=3.0,
-...     T=0.1, dt=10.0,
-... )
+>>> hp, hx = wf(M=1e6, mu=10.0, a=0.3, p0=10.0, e0=0.4, T=0.1, dt=10.0)
 """
 
 from __future__ import annotations
@@ -84,24 +46,11 @@ log = logging.getLogger(__name__)
 def _get_viewing_angles(
     qS: float, phiS: float, qK: float, phiK: float
 ) -> tuple[float, float]:
-    """Compute source-frame observer angles from SSB sky/spin angles.
+    """Source-frame observer angles ``(theta, phi)`` from SSB sky/spin angles.
 
-    Mirrors ``GenerateEMRIWaveform._get_viewing_angles`` in FEW.
-
-    Parameters
-    ----------
-    qS, phiS : float
-        Sky location polar/azimuthal angles [rad] in the SSB ecliptic frame.
-    qK, phiK : float
-        BH spin polar/azimuthal angles [rad] in the SSB ecliptic frame.
-
-    Returns
-    -------
-    theta : float
-        Source-frame polar angle of the observer (angle between source
-        direction and spin axis) [rad].
-    phi : float
-        Source-frame azimuthal angle, fixed to ``-π/2`` by definition.
+    ``theta`` is the angle between source direction and spin axis; ``phi`` is
+    fixed to ``-π/2``.  Mirrors ``GenerateEMRIWaveform._get_viewing_angles``
+    in FEW.  Angle definitions: see :meth:`KerrEccentricEquatorialWaveform.__call__`.
     """
     R = np.array([
         np.sin(qS) * np.cos(phiS),
@@ -224,28 +173,8 @@ class KerrEccentricEquatorialWaveform:
         amplitude arrays.  This is the differentiable "inner loop";
         the trajectory components are JAX arrays.
 
-        Parameters
-        ----------
-        M : float
-            Primary BH mass [:math:`M_\odot`].
-        mu : float
-            Secondary mass [:math:`M_\odot`].
-        a : float
-            Dimensionless spin parameter.
-        p0 : float
-            Initial semi-latus rectum [:math:`M`].
-        e0 : float
-            Initial eccentricity.
-        x0 : float
-            Cosine of inclination (:math:`\pm 1`).
-        T : float
-            Observation time [years].
-        dt : float
-            Waveform sampling interval [s] (used for output).
-        Phi_phi0, Phi_theta0, Phi_r0 : float
-            Initial orbital phases [rad].
-        **traj_kwargs
-            Extra keyword arguments forwarded to :class:`EMRIInspiral`.
+        See :meth:`__call__` for parameter descriptions; ``**traj_kwargs`` are
+        forwarded to :class:`EMRIInspiral`.
 
         Returns
         -------

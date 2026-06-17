@@ -44,7 +44,7 @@ import numpy as np
 import jax.numpy as jnp
 import equinox as eqx
 
-from fewtrax.utils.splines import CubicSpline3D, TricubicSplineE3
+from fewtrax.utils.splines import TricubicSplineE3
 
 log = logging.getLogger(__name__)
 
