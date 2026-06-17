@@ -1,3 +1,4 @@
+
 """Kerr geodesic utilities implemented in JAX.
 
 This module provides JAX-compatible functions for computing key quantities
@@ -9,10 +10,11 @@ of Kerr geodesics required by the EMRI waveform model:
    :math:`\\Omega_\\phi, \\Omega_\\theta, \\Omega_r`
 
 All functions are JIT-compilable and differentiable via JAX's automatic
-differentiation.  Elliptic integrals :math:`K(k)` and :math:`E(k)` are
-evaluated with ``jax.scipy.special``; the complete elliptic integral of
-the third kind :math:`\\Pi(n, k)` is evaluated by 64-point Gauss-Legendre
-quadrature on the standard integral representation.
+differentiation.  The complete elliptic integrals :math:`K, E, \\Pi` come
+from two interchangeable backends — :mod:`fewtrax.utils.elliptic_gpu` and
+:mod:`fewtrax.utils.elliptic_cpu` — each holding the algorithm that is
+fastest at scale on its device.  :func:`get_fundamental_frequencies_platform`
+selects between them based on the default JAX device.
 
 Mathematical background
 -----------------------
@@ -23,7 +25,6 @@ gr-qc/0203086.
 
 from __future__ import annotations
 
-import numpy as np
 import jax
 jax.config.update("jax_enable_x64", True)
 import jax.numpy as jnp
@@ -31,27 +32,23 @@ from jax import jit
 from functools import partial
 
 from fewtrax.utils.constants import PI
+from fewtrax.utils import elliptic_gpu as _ell_gpu
+from fewtrax.utils import elliptic_cpu as _ell_cpu
 
 # ---------------------------------------------------------------------------
-# Gauss-Legendre nodes/weights for EllipPi (precomputed once at import time)
+# Elliptic-integral backend aliases (for callers that import them directly).
+# The frequency code below does not use these names — it binds a backend
+# explicitly via the factory — but the validation/comparison harness and
+# external callers still import the legacy symbols.
 # ---------------------------------------------------------------------------
 
-_N_GL = 64
-_gl_nodes_np, _gl_weights_np = np.polynomial.legendre.leggauss(_N_GL)
-# Transform from [-1, 1] to [0, π/2]
-_GL_THETA = jnp.asarray((_gl_nodes_np + 1.0) / 2.0 * np.pi / 2.0, dtype=jnp.float64)
-_GL_W = jnp.asarray(_gl_weights_np / 2.0 * np.pi / 2.0, dtype=jnp.float64)
+ellipk = _ell_gpu.ellipk            # 64-point Gauss-Legendre K(m)
+ellipe = _ell_gpu.ellipe            # 64-point Gauss-Legendre E(m)
+ellip_pi = _ell_gpu.ellip_pi_exact  # 64-point Gauss-Legendre Π(n, k) (accuracy ref)
 
-# 24-point GL nodes/weights for the fast Π variant (accurate to ~1e-12 for
-# the smooth integrands encountered in bound EMRI orbits).
-_N_GL24 = 24
-_gl24_nodes_np, _gl24_weights_np = np.polynomial.legendre.leggauss(_N_GL24)
-_GL24_THETA = jnp.asarray((_gl24_nodes_np + 1.0) / 2.0 * np.pi / 2.0, dtype=jnp.float64)
-_GL24_W = jnp.asarray(_gl24_weights_np / 2.0 * np.pi / 2.0, dtype=jnp.float64)
-
-# Number of AGM iterations used by ellipk_agm / ellipe_agm.
-# 12 iterations gives ~2^{-50} ≈ 1e-15 relative error (quadratic convergence).
-_N_AGM: int = 12
+ellipk_agm = _ell_cpu.ellipk        # AGM-12 K(m)
+ellipe_agm = _ell_cpu.ellipe        # AGM-12 E(m)
+ellip_pi_fast = _ell_gpu.ellip_pi   # 24-point Gauss-Legendre Π(n, k)
 
 # Hybrid bisection+NR for the fast separatrix.
 # Phase 1: _N_BISECT_INIT bisection steps narrow the bracket to width
@@ -63,170 +60,6 @@ _N_AGM: int = 12
 #   float64 precision in ≤3 steps; 5 is used for a generous safety margin.
 _N_BISECT_INIT: int = 20
 _N_NR: int = 5
-
-
-@jit
-def ellipk(m: float) -> float:
-    r"""Complete elliptic integral of the first kind :math:`K(m)`.
-
-    .. math::  K(m) = \int_0^{\pi/2} \frac{d\theta}{\sqrt{1 - m \sin^2\theta}}
-
-    Uses 64-point Gauss-Legendre quadrature.  ``m`` is the *parameter*
-    (square of the modulus), consistent with scipy's convention.
-    """
-    sin2 = jnp.sin(_GL_THETA) ** 2
-    integrand = 1.0 / jnp.sqrt(jnp.maximum(1.0 - m * sin2, 1e-30))
-    return jnp.dot(_GL_W, integrand)
-
-
-@jit
-def ellipe(m: float) -> float:
-    r"""Complete elliptic integral of the second kind :math:`E(m)`.
-
-    .. math::  E(m) = \int_0^{\pi/2} \sqrt{1 - m \sin^2\theta}\, d\theta
-
-    Uses 64-point Gauss-Legendre quadrature.
-    """
-    sin2 = jnp.sin(_GL_THETA) ** 2
-    integrand = jnp.sqrt(jnp.maximum(1.0 - m * sin2, 0.0))
-    return jnp.dot(_GL_W, integrand)
-
-
-@jit
-def ellip_pi(n: float, k: float) -> float:
-    r"""Complete elliptic integral of the third kind :math:`\Pi(n, k)`.
-
-    .. math::
-
-        \Pi(n, k) = \int_0^{\pi/2}
-            \frac{d\theta}{(1 - n\sin^2\theta)\sqrt{1 - k^2\sin^2\theta}}
-
-    Evaluated via 64-point Gauss-Legendre quadrature on :math:`[0, \pi/2]`.
-    Accurate to approximately :math:`10^{-12}` for the parameter ranges
-    encountered in EMRI trajectories.
-
-    Parameters
-    ----------
-    n : float
-        Characteristic parameter; must satisfy :math:`n < 1`.
-    k : float
-        Modulus; must satisfy :math:`0 \le k < 1`.
-
-    Returns
-    -------
-    float
-        :math:`\Pi(n, k)`.
-    """
-    sin2 = jnp.sin(_GL_THETA) ** 2
-    integrand = 1.0 / ((1.0 - n * sin2) * jnp.sqrt(1.0 - k**2 * sin2))
-    return jnp.dot(_GL_W, integrand)
-
-
-# ---------------------------------------------------------------------------
-# Fast elliptic integrals
-# ---------------------------------------------------------------------------
-#
-# These replace the 64-point Gauss-Legendre versions above with two faster
-# algorithms:
-#
-#   * K(m) and E(m)  — Arithmetic-Geometric Mean (AGM / Borwein, _N_AGM iters).
-#     12 iterations achieves ~1e-15 relative accuracy via quadratic convergence.
-#     ~5× faster than 64-point GL on CPU; avoids the 64-element dot product.
-#
-#   * Π(n, k)        — 24-point Gauss-Legendre.
-#     For the smooth integrands of bound EMRI orbits (k² < 0.95, n < 1) the
-#     error is below 1e-12, well within the 1-rad dephasing budget over 2 yr.
-#     ~2.5× faster than the 64-point version.
-#
-# Combined, each call to get_fundamental_frequencies_fast saves ~5× on the
-# elliptic integral part.
-
-@jit
-def ellipk_agm(m: float) -> float:
-    r"""Complete elliptic integral K(m) via the AGM algorithm.
-
-    Uses :math:`K(m) = \pi / (2\,\mathrm{AGM}(1, \sqrt{1-m}))`.
-
-    Parameters
-    ----------
-    m : float
-        Parameter (square of the modulus), :math:`0 \le m < 1`.
-
-    Returns
-    -------
-    float
-        :math:`K(m)`.
-    """
-    def body(_, state):
-        a, b = state
-        a_new = (a + b) * 0.5
-        b_new = jnp.sqrt(jnp.maximum(a * b, 0.0))
-        return a_new, b_new
-
-    a0 = jnp.float64(1.0)
-    b0 = jnp.sqrt(jnp.maximum(1.0 - m, 0.0))
-    a_f, _ = jax.lax.fori_loop(0, _N_AGM, body, (a0, b0))
-    return jnp.pi / (2.0 * a_f)
-
-
-@jit
-def ellipe_agm(m: float) -> float:
-    r"""Complete elliptic integral E(m) via the AGM / Borwein algorithm.
-
-    Uses the identity
-    :math:`E(m) = K(m)\bigl(1 - \sum_{n \ge 0} 2^{n-1} c_n^2\bigr)`
-    where :math:`c_n` are the AGM correction terms.
-
-    Parameters
-    ----------
-    m : float
-        Parameter, :math:`0 \le m < 1`.
-
-    Returns
-    -------
-    float
-        :math:`E(m)`.
-    """
-    def body(_, state):
-        a, b, esum, power = state
-        a_new = (a + b) * 0.5
-        b_new = jnp.sqrt(jnp.maximum(a * b, 0.0))
-        c = a - a_new                          # = (a − b)/2  = c_{n+1}
-        return a_new, b_new, esum + power * c * c, power * 2.0
-
-    a0 = jnp.float64(1.0)
-    b0 = jnp.sqrt(jnp.maximum(1.0 - m, 0.0))
-    # Seed with the n=0 term: 2^{-1} · c_0^2  where c_0 = √m
-    init_esum = m * 0.5
-    a_f, _, esum, _ = jax.lax.fori_loop(
-        0, _N_AGM, body, (a0, b0, init_esum, jnp.float64(1.0))
-    )
-    K = jnp.pi / (2.0 * a_f)
-    return K * (1.0 - esum)
-
-
-@jit
-def ellip_pi_fast(n: float, k: float) -> float:
-    r"""Complete elliptic integral Π(n, k) via 24-point GL quadrature.
-
-    Approximately 2.5× faster than :func:`ellip_pi` (64-point version)
-    with ~1e-12 accuracy for the smooth integrands of bound EMRI orbits.
-
-    Parameters
-    ----------
-    n : float
-        Characteristic parameter, :math:`n < 1`.
-    k : float
-        Modulus, :math:`0 \le k < 1`.
-
-    Returns
-    -------
-    float
-        :math:`\Pi(n, k)`.
-    """
-    sin2 = jnp.sin(_GL24_THETA) ** 2
-    integrand = 1.0 / ((1.0 - n * sin2) * jnp.sqrt(jnp.maximum(1.0 - k**2 * sin2, 1e-30)))
-    return jnp.dot(_GL24_W, integrand)
 
 
 # ---------------------------------------------------------------------------
@@ -524,110 +357,137 @@ def _radial_roots_equatorial(a: float, p: float, e: float, En: float):
     return r1, r2, r3, r4
 
 
-@jit
-def _mino_frequencies_equatorial(
-    a: float, p: float, e: float, x: float
-) -> tuple[float, float, float, float]:
-    r"""Mino-time frequencies for equatorial eccentric Kerr geodesics.
+def _make_mino_frequencies(ellipk_fn, ellipe_fn, ellip_pi_fn):
+    r"""Build a JIT-compiled Mino-time frequency function bound to an elliptic
+    backend.
 
-    Returns :math:`(\Gamma, \Upsilon_\phi, |\Upsilon_\theta|, \Upsilon_r)`.
+    The mathematics (Schmidt 2002 §IV, equatorial Q = 0 specialisation) is
+    identical for every backend; only the three elliptic-integral primitives
+    differ.  Binding them once here keeps a single source of truth for the
+    frequency formulae instead of one copy per platform.
 
-    Follows Schmidt (2002) §IV; the equatorial specialisation (Q = 0)
-    removes the :math:`\theta`-sector elliptic integrals.
+    Parameters
+    ----------
+    ellipk_fn, ellipe_fn : callable
+        :math:`K(m)` and :math:`E(m)` (parameter convention, ``m = k^2``).
+    ellip_pi_fn : callable
+        :math:`\Pi(n, k)`.
+
+    Returns
+    -------
+    callable
+        JIT-compiled ``(a, p, e, x) -> (Γ, Υ_φ, |Υ_θ|, Υ_r)``.
     """
-    En = kerr_geo_energy_equatorial(a, p, e, x)
-    L = kerr_geo_angular_momentum_equatorial(a, p, e, x, En)
+    @jit
+    def _mino(a: float, p: float, e: float, x: float):
+        En = kerr_geo_energy_equatorial(a, p, e, x)
+        L = kerr_geo_angular_momentum_equatorial(a, p, e, x, En)
 
-    r1, r2, r3, r4 = _radial_roots_equatorial(a, p, e, En)
+        r1, r2, r3, r4 = _radial_roots_equatorial(a, p, e, En)
 
-    # Radial modulus
-    kr2 = (r1 - r2) / (r1 - r3) * (r3 - r4) / (r2 - r4)
-    kr = jnp.sqrt(jnp.maximum(kr2, 0.0))
+        # Radial modulus
+        kr2 = (r1 - r2) / (r1 - r3) * (r3 - r4) / (r2 - r4)
+        kr = jnp.sqrt(jnp.maximum(kr2, 0.0))
 
-    # Horizon radii (M = 1)
-    rp = 1.0 + jnp.sqrt(1.0 - a**2)
-    rm = 1.0 - jnp.sqrt(1.0 - a**2)
+        # Horizon radii (M = 1)
+        rp = 1.0 + jnp.sqrt(1.0 - a**2)
+        rm = 1.0 - jnp.sqrt(1.0 - a**2)
 
-    EllK = ellipk(kr**2)  # jax uses m = k^2 convention
-    EllE_val = ellipe(kr**2)
+        EllK = ellipk_fn(kr**2)  # jax uses m = k^2 convention
+        EllE_val = ellipe_fn(kr**2)
 
-    # Υ_r (Mino time)
-    Upsilon_r = PI * jnp.sqrt((1.0 - En**2) * (r1 - r3) * r2) / (2.0 * EllK)
+        # Υ_r (Mino time)
+        Upsilon_r = PI * jnp.sqrt((1.0 - En**2) * (r1 - r3) * r2) / (2.0 * EllK)
 
-    # Υ_θ (equatorial: = |x| * sqrt(L^2 + a^2*(1-E^2)))
-    zp = a**2 * (1.0 - En**2) + L**2
-    Upsilon_theta = jnp.abs(x) * jnp.sqrt(jnp.maximum(zp, 0.0))
+        # Υ_θ (equatorial: = |x| * sqrt(L^2 + a^2*(1-E^2)))
+        zp = a**2 * (1.0 - En**2) + L**2
+        Upsilon_theta = jnp.abs(x) * jnp.sqrt(jnp.maximum(zp, 0.0))
 
-    # Epsilon0zp = zp / L^2
-    Epsilon0zp = zp / L**2
+        # Epsilon0zp = zp / L^2
+        Epsilon0zp = zp / L**2
 
-    # Υ_φ via Schmidt (2002) Eq. (21)
-    hr = (r1 - r2) / (r1 - r3)
-    hp = (r1 - r2) * (r3 - rp) / ((r1 - r3) * (r2 - rp))
-    hm = (r1 - r2) * (r3 - rm) / ((r1 - r3) * (r2 - rm))
+        # Υ_φ via Schmidt (2002) Eq. (21)
+        hr = (r1 - r2) / (r1 - r3)
+        hp = (r1 - r2) * (r3 - rp) / ((r1 - r3) * (r2 - rp))
+        hm = (r1 - r2) * (r3 - rm) / ((r1 - r3) * (r2 - rm))
 
-    EllPi_hr = ellip_pi(hr, kr)
-    EllPi_hp = ellip_pi(hp, kr)
-    EllPi_hm = ellip_pi(hm, kr)
+        EllPi_hr = ellip_pi_fn(hr, kr)
+        EllPi_hp = ellip_pi_fn(hp, kr)
+        EllPi_hm = ellip_pi_fn(hm, kr)
 
-    fac_r = 2.0 * a * Upsilon_r / (
-        PI * (rp - rm) * jnp.sqrt((1.0 - En**2) * (r1 - r3) * r2)
-    )
-    prob1 = jnp.where(
-        jnp.abs(r3 - rp) > 1.0e-14,
-        (2.0 * En * rp - a * L)
-        * (EllK - (r2 - r3) / (r2 - rp) * EllPi_hp)
-        / (r3 - rp),
-        0.0,
-    )
-    prob2_neg = (2.0 * En * rm - a * L) * (
-        EllK - (r2 - r3) / (r2 - rm) * EllPi_hm
-    ) / (r3 - rm)
-
-    Upsilon_phi = (
-        Upsilon_theta / jnp.sqrt(Epsilon0zp)
-        + fac_r * (prob1 - prob2_neg)
-    )
-
-    # Γ (Boyer-Lindquist time per Mino time)
-    prob3 = jnp.where(
-        jnp.abs(r3 - rp) > 1.0e-14,
-        ((4.0 * En - a * L) * rp - 2.0 * a**2 * En)
-        * (EllK - (r2 - r3) / (r2 - rp) * EllPi_hp)
-        / (r3 - rp),
-        0.0,
-    )
-    prob3_neg = (
-        ((4.0 * En - a * L) * rm - 2.0 * a**2 * En)
-        * (EllK - (r2 - r3) / (r2 - rm) * EllPi_hm)
-        / (r3 - rm)
-    )
-    Gamma = 4.0 * En + (2.0 * Upsilon_r / (
-        PI * jnp.sqrt((1.0 - En**2) * (r1 - r3) * r2)
-    )) * (
-        En / 2.0 * (
-            (r3 * (r1 + r2 + r3) - r1 * r2) * EllK
-            + (r2 - r3) * (r1 + r2 + r3 + r4) * EllPi_hr
-            + (r1 - r3) * r2 * EllE_val
+        fac_r = 2.0 * a * Upsilon_r / (
+            PI * (rp - rm) * jnp.sqrt((1.0 - En**2) * (r1 - r3) * r2)
         )
-        + 2.0 * En * (r3 * EllK + (r2 - r3) * EllPi_hr)
-        + 2.0 / (rp - rm) * (prob3 - prob3_neg)
-    )
+        prob1 = jnp.where(
+            jnp.abs(r3 - rp) > 1.0e-14,
+            (2.0 * En * rp - a * L)
+            * (EllK - (r2 - r3) / (r2 - rp) * EllPi_hp)
+            / (r3 - rp),
+            0.0,
+        )
+        prob2_neg = (2.0 * En * rm - a * L) * (
+            EllK - (r2 - r3) / (r2 - rm) * EllPi_hm
+        ) / (r3 - rm)
 
-    return Gamma, Upsilon_phi, jnp.abs(Upsilon_theta), Upsilon_r
+        Upsilon_phi = (
+            Upsilon_theta / jnp.sqrt(Epsilon0zp)
+            + fac_r * (prob1 - prob2_neg)
+        )
+
+        # Γ (Boyer-Lindquist time per Mino time)
+        prob3 = jnp.where(
+            jnp.abs(r3 - rp) > 1.0e-14,
+            ((4.0 * En - a * L) * rp - 2.0 * a**2 * En)
+            * (EllK - (r2 - r3) / (r2 - rp) * EllPi_hp)
+            / (r3 - rp),
+            0.0,
+        )
+        prob3_neg = (
+            ((4.0 * En - a * L) * rm - 2.0 * a**2 * En)
+            * (EllK - (r2 - r3) / (r2 - rm) * EllPi_hm)
+            / (r3 - rm)
+        )
+        Gamma = 4.0 * En + (2.0 * Upsilon_r / (
+            PI * jnp.sqrt((1.0 - En**2) * (r1 - r3) * r2)
+        )) * (
+            En / 2.0 * (
+                (r3 * (r1 + r2 + r3) - r1 * r2) * EllK
+                + (r2 - r3) * (r1 + r2 + r3 + r4) * EllPi_hr
+                + (r1 - r3) * r2 * EllE_val
+            )
+            + 2.0 * En * (r3 * EllK + (r2 - r3) * EllPi_hr)
+            + 2.0 / (rp - rm) * (prob3 - prob3_neg)
+        )
+
+        return Gamma, Upsilon_phi, jnp.abs(Upsilon_theta), Upsilon_r
+
+    return _mino
+
+
+# Two backend-bound Mino-frequency functions, built once at import time.
+_mino_frequencies_equatorial = _make_mino_frequencies(
+    _ell_gpu.ellipk, _ell_gpu.ellipe, _ell_gpu.ellip_pi
+)
+_mino_frequencies_equatorial_fast = _make_mino_frequencies(
+    _ell_cpu.ellipk, _ell_cpu.ellipe, _ell_cpu.ellip_pi
+)
 
 
 @jit
 def get_fundamental_frequencies(
     a: float, p: float, e: float, x: float
 ) -> tuple[float, float, float]:
-    r"""Boyer-Lindquist fundamental frequencies for an equatorial Kerr geodesic.
+    r"""Boyer-Lindquist fundamental frequencies (GPU-optimal backend).
 
     .. math::
 
         \Omega_\phi = \frac{\Upsilon_\phi}{\Gamma}, \quad
         \Omega_\theta = \frac{\Upsilon_\theta}{\Gamma}, \quad
         \Omega_r = \frac{\Upsilon_r}{\Gamma}
+
+    Uses :mod:`fewtrax.utils.elliptic_gpu`: 64-point Gauss-Legendre for
+    :math:`K, E` and 24-point GL for :math:`\Pi` — the combination that
+    maximises GPU throughput at batch scale.
 
     Parameters
     ----------
@@ -649,108 +509,16 @@ def get_fundamental_frequencies(
     return Up_phi / Gamma, Up_theta / Gamma, Up_r / Gamma
 
 
-# ---------------------------------------------------------------------------
-# Fast fundamental frequencies (AGM + 24-pt GL)
-# ---------------------------------------------------------------------------
-
-@jit
-def _mino_frequencies_equatorial_fast(
-    a: float, p: float, e: float, x: float
-) -> tuple[float, float, float, float]:
-    r"""Mino-time frequencies using fast elliptic integrals.
-
-    Identical to :func:`_mino_frequencies_equatorial` but substitutes:
-
-    * :func:`ellipk_agm` / :func:`ellipe_agm` for K and E.
-    * :func:`ellip_pi_fast` (24-pt GL) for all three Π evaluations.
-
-    Approximately 3–4× faster than the exact version for typical EMRI orbits.
-    """
-    En = kerr_geo_energy_equatorial(a, p, e, x)
-    L = kerr_geo_angular_momentum_equatorial(a, p, e, x, En)
-
-    r1, r2, r3, r4 = _radial_roots_equatorial(a, p, e, En)
-
-    kr2 = (r1 - r2) / (r1 - r3) * (r3 - r4) / (r2 - r4)
-    kr  = jnp.sqrt(jnp.maximum(kr2, 0.0))
-
-    rp = 1.0 + jnp.sqrt(1.0 - a ** 2)
-    rm = 1.0 - jnp.sqrt(1.0 - a ** 2)
-
-    # --- fast K and E via AGM ---
-    EllK     = ellipk_agm(kr ** 2)
-    EllE_val = ellipe_agm(kr ** 2)
-
-    Upsilon_r = PI * jnp.sqrt((1.0 - En ** 2) * (r1 - r3) * r2) / (2.0 * EllK)
-
-    zp = a ** 2 * (1.0 - En ** 2) + L ** 2
-    Upsilon_theta = jnp.abs(x) * jnp.sqrt(jnp.maximum(zp, 0.0))
-    Epsilon0zp = zp / L ** 2
-
-    hr = (r1 - r2) / (r1 - r3)
-    hp = (r1 - r2) * (r3 - rp) / ((r1 - r3) * (r2 - rp))
-    hm = (r1 - r2) * (r3 - rm) / ((r1 - r3) * (r2 - rm))
-
-    # --- fast Π via 24-pt GL ---
-    EllPi_hr = ellip_pi_fast(hr, kr)
-    EllPi_hp = ellip_pi_fast(hp, kr)
-    EllPi_hm = ellip_pi_fast(hm, kr)
-
-    fac_r = 2.0 * a * Upsilon_r / (
-        PI * (rp - rm) * jnp.sqrt((1.0 - En ** 2) * (r1 - r3) * r2)
-    )
-    prob1 = jnp.where(
-        jnp.abs(r3 - rp) > 1.0e-14,
-        (2.0 * En * rp - a * L)
-        * (EllK - (r2 - r3) / (r2 - rp) * EllPi_hp)
-        / (r3 - rp),
-        0.0,
-    )
-    prob2_neg = (2.0 * En * rm - a * L) * (
-        EllK - (r2 - r3) / (r2 - rm) * EllPi_hm
-    ) / (r3 - rm)
-
-    Upsilon_phi = (
-        Upsilon_theta / jnp.sqrt(Epsilon0zp)
-        + fac_r * (prob1 - prob2_neg)
-    )
-
-    prob3 = jnp.where(
-        jnp.abs(r3 - rp) > 1.0e-14,
-        ((4.0 * En - a * L) * rp - 2.0 * a ** 2 * En)
-        * (EllK - (r2 - r3) / (r2 - rp) * EllPi_hp)
-        / (r3 - rp),
-        0.0,
-    )
-    prob3_neg = (
-        ((4.0 * En - a * L) * rm - 2.0 * a ** 2 * En)
-        * (EllK - (r2 - r3) / (r2 - rm) * EllPi_hm)
-        / (r3 - rm)
-    )
-    Gamma = 4.0 * En + (2.0 * Upsilon_r / (
-        PI * jnp.sqrt((1.0 - En ** 2) * (r1 - r3) * r2)
-    )) * (
-        En / 2.0 * (
-            (r3 * (r1 + r2 + r3) - r1 * r2) * EllK
-            + (r2 - r3) * (r1 + r2 + r3 + r4) * EllPi_hr
-            + (r1 - r3) * r2 * EllE_val
-        )
-        + 2.0 * En * (r3 * EllK + (r2 - r3) * EllPi_hr)
-        + 2.0 / (rp - rm) * (prob3 - prob3_neg)
-    )
-
-    return Gamma, Upsilon_phi, jnp.abs(Upsilon_theta), Upsilon_r
-
-
 @jit
 def get_fundamental_frequencies_fast(
     a: float, p: float, e: float, x: float
 ) -> tuple[float, float, float]:
-    r"""Boyer-Lindquist fundamental frequencies using fast elliptic integrals.
+    r"""Boyer-Lindquist fundamental frequencies (CPU/TPU-optimal backend).
 
-    Identical interface to :func:`get_fundamental_frequencies`; uses
-    :func:`ellipk_agm`, :func:`ellipe_agm`, and :func:`ellip_pi_fast`
-    instead of the 64-point GL versions.  Roughly 3–4× faster.
+    Identical interface and mathematics to :func:`get_fundamental_frequencies`;
+    uses :mod:`fewtrax.utils.elliptic_cpu` (AGM-12 for :math:`K, E`, 24-point
+    GL for :math:`\Pi`), which has fewer sequential operations and is faster on
+    scalar / small-batch CPU workloads.
 
     Parameters
     ----------
@@ -769,20 +537,22 @@ def get_fundamental_frequencies_fast(
 def get_fundamental_frequencies_platform(
     a: float, p: float, e: float, x: float
 ) -> tuple[float, float, float]:
-    r"""Platform-aware Boyer-Lindquist fundamental frequencies.
+    r"""Platform-aware Boyer-Lindquist fundamental frequencies (dispatcher).
 
-    Dispatches at JIT-trace time based on the default JAX device:
+    Single entry point that routes to the elliptic backend that is fastest at
+    scale on the current device.  The branch is resolved at Python (trace)
+    time, so there is no runtime overhead on repeated JIT-compiled calls.
 
-    * **GPU** — :func:`get_fundamental_frequencies` (64-point Gauss-Legendre).
-      The K/E/Π evaluations compile to large BLAS contractions that saturate
-      GPU throughput at any batch size.
+    * **GPU** — :func:`get_fundamental_frequencies`
+      (:mod:`~fewtrax.utils.elliptic_gpu`: 64-point GL for :math:`K, E`,
+      24-point GL for :math:`\Pi`).  The quadratures compile to fused BLAS-like
+      contractions that saturate GPU throughput; the iterative AGM is
+      latency-bound and measured *slower* here.
 
-    * **CPU / TPU** — :func:`get_fundamental_frequencies_fast` (AGM for K/E,
-      24-point GL for Π).  Fewer sequential operations → lower per-step cost
-      on scalar or small-batch workloads.
-
-    The branch is resolved at Python (trace) time, so there is no runtime
-    overhead on repeated JIT-compiled calls.
+    * **CPU / TPU** — :func:`get_fundamental_frequencies_fast`
+      (:mod:`~fewtrax.utils.elliptic_cpu`: AGM-12 for :math:`K, E`, 24-point GL
+      for :math:`\Pi`).  Fewer sequential operations → lower per-step cost on
+      scalar / small-batch workloads.
 
     Parameters
     ----------
