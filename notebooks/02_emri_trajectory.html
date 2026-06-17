@@ -153,7 +153,7 @@
 <div><p><strong>Note:</strong> At <span class="math notranslate nohighlight">\(e = 0\)</span> both <span class="math notranslate nohighlight">\(\partial E/\partial e = \partial L/\partial e = 0\)</span> (circular orbit symmetry), making <span class="math notranslate nohighlight">\(J\)</span> singular. fewtrax handles this by using the circular-orbit fallback <span class="math notranslate nohighlight">\(\dot{p} = \dot{E}/(\partial E/\partial p)\)</span>, <span class="math notranslate nohighlight">\(\dot{e} = 0\)</span>.</p>
 </div></blockquote>
 <div class="nbinput docutils container">
-<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[28]:
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[1]:
 </pre></div>
 </div>
 <div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
@@ -229,7 +229,7 @@ Done.
 </tbody>
 </table>
 <div class="nbinput docutils container">
-<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[14]:
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[11]:
 </pre></div>
 </div>
 <div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">t</span><span class="p">,</span> <span class="n">p</span><span class="p">,</span> <span class="n">e</span><span class="p">,</span> <span class="n">Phi_phi</span><span class="p">,</span> <span class="n">Phi_theta</span><span class="p">,</span> <span class="n">Phi_r</span> <span class="o">=</span> <span class="n">run_inspiral</span><span class="p">(</span>
@@ -240,7 +240,7 @@ Done.
     <span class="n">flux_data</span> <span class="o">=</span> <span class="n">flux_data</span><span class="p">,</span>
     <span class="n">M</span>       <span class="o">=</span> <span class="mf">1e6</span><span class="p">,</span>     <span class="c1"># primary mass [M_sun]</span>
     <span class="n">mu</span>      <span class="o">=</span> <span class="mf">10.0</span><span class="p">,</span>    <span class="c1"># secondary mass [M_sun]</span>
-    <span class="n">dense_steps</span> <span class="o">=</span> <span class="mi">200</span><span class="p">,</span> <span class="c1"># number of saved trajectory points</span>
+    <span class="c1"># dense_steps = 200, # number of saved trajectory points</span>
 <span class="p">)</span>
 
 <span class="n">valid</span> <span class="o">=</span> <span class="o">~</span><span class="n">np</span><span class="o">.</span><span class="n">isinf</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">p</span><span class="p">))</span>
@@ -256,14 +256,14 @@ Done.
 </div>
 <div class="output_area docutils container">
 <div class="highlight"><pre>
-Trajectory points computed: 116 / 201
+Trajectory points computed: 58 / 101
 p: 6.0000 -&gt; 2.0109  [M]
 e: 0.4000 -&gt; 0.0987
 Total azimuthal phase: 51147.0 radians
 </pre></div></div>
 </div>
 <div class="nbinput docutils container">
-<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[15]:
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[12]:
 </pre></div>
 </div>
 <div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">valid</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span>
@@ -271,16 +271,16 @@ Total azimuthal phase: 51147.0 radians
 </div>
 </div>
 <div class="nboutput nblast docutils container">
-<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[15]:
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[12]:
 </pre></div>
 </div>
 <div class="output_area docutils container">
 <div class="highlight"><pre>
-np.int64(116)
+np.int64(58)
 </pre></div></div>
 </div>
 <div class="nbinput docutils container">
-<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[16]:
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[13]:
 </pre></div>
 </div>
 <div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">p</span><span class="p">[</span><span class="n">valid</span><span class="p">]</span>
@@ -288,39 +288,27 @@ np.int64(116)
 </div>
 </div>
 <div class="nboutput nblast docutils container">
-<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[16]:
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[13]:
 </pre></div>
 </div>
 <div class="output_area docutils container">
 <div class="highlight"><pre>
-Array([6.        , 5.98652336, 5.97295278, 5.95928686, 5.94552419,
-       5.93166331, 5.91770273, 5.90364092, 5.88947633, 5.87520734,
-       5.86083232, 5.84634958, 5.8317574 , 5.817054  , 5.80223757,
-       5.78730624, 5.77225809, 5.75709117, 5.74180346, 5.72639288,
-       5.7108573 , 5.69519453, 5.67940233, 5.66347836, 5.64742027,
-       5.63122558, 5.61489179, 5.59841628, 5.5817964 , 5.56502938,
-       5.54811238, 5.53104247, 5.51381663, 5.49643175, 5.47888461,
-       5.46117188, 5.44329014, 5.42523584, 5.40700531, 5.38859478,
-       5.37000032, 5.35121787, 5.33224323, 5.31307204, 5.29369981,
-       5.27412184, 5.25433329, 5.23432912, 5.21410411, 5.19365281,
-       5.17296958, 5.15204854, 5.13088358, 5.10946831, 5.08779612,
-       5.06586007, 5.04365295, 5.02116721, 4.99839498, 4.97532801,
-       4.9519577 , 4.92827501, 4.90427047, 4.87993418, 4.8552557 ,
-       4.83022411, 4.80482788, 4.7790549 , 4.7528924 , 4.72632691,
-       4.69934421, 4.67192926, 4.64406616, 4.61573803, 4.586927  ,
-       4.55761403, 4.5277789 , 4.49740008, 4.46645455, 4.43491775,
-       4.40276336, 4.36996314, 4.33648676, 4.30230157, 4.26737233,
-       4.23166094, 4.19512606, 4.1577228 , 4.11940225, 4.08011096,
-       4.0397903 , 3.99837582, 3.95579637, 3.91197312, 3.86681831,
-       3.82023386, 3.77210955, 3.72232088, 3.67072626, 3.61716369,
-       3.56144629, 3.50335657, 3.44263907, 3.37899009, 3.3120439 ,
-       3.24135296, 3.16635924, 3.08635044, 3.00039035, 2.9072003 ,
-       2.80494104, 2.69076238, 2.55970498, 2.40115491, 2.17678099,
-       2.01091325], dtype=float64)
+Array([6.        , 5.97281522, 5.94524515, 5.91727811, 5.88890184,
+       5.86010347, 5.83086947, 5.80118561, 5.77103692, 5.74040761,
+       5.70928102, 5.67763955, 5.6454646 , 5.61273647, 5.5794343 ,
+       5.54553593, 5.51101781, 5.4758549 , 5.44002048, 5.40348605,
+       5.36622117, 5.32819319, 5.2893671 , 5.24970527, 5.20916721,
+       5.16770917, 5.12528387, 5.08184003, 5.03732193, 4.99166889,
+       4.94481454, 4.89668617, 4.84720385, 4.79627936, 4.74381504,
+       4.68970225, 4.63381974, 4.57603144, 4.51618386, 4.45410297,
+       4.38959016, 4.3224172 , 4.25231989, 4.17898965, 4.10206266,
+       4.02110525, 3.93559386, 3.84488716, 3.74818576, 3.64447246,
+       3.53241958, 3.41023772, 3.27541257, 3.12420328, 2.95055646,
+       2.7432272 , 2.47457985, 2.01091325], dtype=float64)
 </pre></div></div>
 </div>
 <div class="nbinput docutils container">
-<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[18]:
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[14]:
 </pre></div>
 </div>
 <div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;t = </span><span class="si">{</span><span class="n">t</span><span class="p">[</span><span class="n">valid</span><span class="p">]</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
@@ -334,79 +322,45 @@ Array([6.        , 5.98652336, 5.97295278, 5.95928686, 5.94552419,
 </div>
 <div class="output_area docutils container">
 <div class="highlight"><pre>
-t = [       0.           158583.6671535    317167.33430699   475751.00146049
-   634334.66861398   792918.33576748   951502.00292097  1110085.67007447
-  1268669.33722796  1427253.00438146  1585836.67153495  1744420.33868845
-  1903004.00584195  2061587.67299544  2220171.34014894  2378755.00730243
-  2537338.67445593  2695922.34160942  2854506.00876292  3013089.67591641
-  3171673.34306991  3330257.0102234   3488840.6773769   3647424.3445304
-  3806008.01168389  3964591.67883739  4123175.34599088  4281759.01314438
-  4440342.68029787  4598926.34745137  4757510.01460486  4916093.68175836
-  5074677.34891186  5233261.01606535  5391844.68321885  5550428.35037234
-  5709012.01752584  5867595.68467933  6026179.35183283  6184763.01898632
-  6343346.68613982  6501930.35329331  6660514.02044681  6819097.68760031
-  6977681.3547538   7136265.0219073   7294848.68906079  7453432.35621429
-  7612016.02336778  7770599.69052128  7929183.35767477  8087767.02482827
-  8246350.69198176  8404934.35913526  8563518.02628876  8722101.69344225
-  8880685.36059575  9039269.02774924  9197852.69490274  9356436.36205623
-  9515020.02920973  9673603.69636322  9832187.36351672  9990771.03067021
- 10149354.69782371 10307938.36497721 10466522.0321307  10625105.6992842
- 10783689.36643769 10942273.03359119 11100856.70074468 11259440.36789818
- 11418024.03505167 11576607.70220517 11735191.36935866 11893775.03651216
- 12052358.70366566 12210942.37081915 12369526.03797265 12528109.70512614
- 12686693.37227964 12845277.03943313 13003860.70658663 13162444.37374012
- 13321028.04089362 13479611.70804711 13638195.37520061 13796779.04235411
- 13955362.7095076  14113946.3766611  14272530.04381459 14431113.71096809
- 14589697.37812158 14748281.04527508 14906864.71242857 15065448.37958207
- 15224032.04673556 15382615.71388906 15541199.38104255 15699783.04819605
- 15858366.71534955 16016950.38250304 16175534.04965654 16334117.71681003
- 16492701.38396353 16651285.05111702 16809868.71827052 16968452.38542401
- 17127036.05257751 17285619.71973101 17444203.3868845  17602787.054038
- 17761370.72119149 17919954.38834499 18078538.05549848 18132221.32649739]
-p = [6.         5.98652336 5.97295278 5.95928686 5.94552419 5.93166331
- 5.91770273 5.90364092 5.88947633 5.87520734 5.86083232 5.84634958
- 5.8317574  5.817054   5.80223757 5.78730624 5.77225809 5.75709117
- 5.74180346 5.72639288 5.7108573  5.69519453 5.67940233 5.66347836
- 5.64742027 5.63122558 5.61489179 5.59841628 5.5817964  5.56502938
- 5.54811238 5.53104247 5.51381663 5.49643175 5.47888461 5.46117188
- 5.44329014 5.42523584 5.40700531 5.38859478 5.37000032 5.35121787
- 5.33224323 5.31307204 5.29369981 5.27412184 5.25433329 5.23432912
- 5.21410411 5.19365281 5.17296958 5.15204854 5.13088358 5.10946831
- 5.08779612 5.06586007 5.04365295 5.02116721 4.99839498 4.97532801
- 4.9519577  4.92827501 4.90427047 4.87993418 4.8552557  4.83022411
- 4.80482788 4.7790549  4.7528924  4.72632691 4.69934421 4.67192926
- 4.64406616 4.61573803 4.586927   4.55761403 4.5277789  4.49740008
- 4.46645455 4.43491775 4.40276336 4.36996314 4.33648676 4.30230157
- 4.26737233 4.23166094 4.19512606 4.1577228  4.11940225 4.08011096
- 4.0397903  3.99837582 3.95579637 3.91197312 3.86681831 3.82023386
- 3.77210955 3.72232088 3.67072626 3.61716369 3.56144629 3.50335657
- 3.44263907 3.37899009 3.3120439  3.24135296 3.16635924 3.08635044
- 3.00039035 2.9072003  2.80494104 2.69076238 2.55970498 2.40115491
- 2.17678099 2.01091325]
-e = [0.4        0.39861243 0.39721621 0.39581125 0.39439742 0.3929746
- 0.39154268 0.39010152 0.38865101 0.38719101 0.38572138 0.38424201
- 0.38275274 0.38125343 0.37974395 0.37822413 0.37669383 0.37515289
- 0.37360115 0.37203846 0.37046463 0.3688795  0.36728289 0.36567462
- 0.3640545  0.36242234 0.36077796 0.35912113 0.35745167 0.35576935
- 0.35407396 0.35236527 0.35064306 0.34890708 0.34715709 0.34539283
- 0.34361406 0.34182049 0.34001186 0.33818788 0.33634826 0.3344927
- 0.33262088 0.33073248 0.32882718 0.32690462 0.32496444 0.32300629
- 0.32102978 0.31903452 0.3170201  0.31498609 0.31293206 0.31085755
- 0.30876208 0.30664518 0.30450632 0.30234498 0.3001606  0.29795261
- 0.29572041 0.29346337 0.29118085 0.28887216 0.2865366  0.28417341
- 0.28178182 0.27936102 0.27691014 0.2744283  0.27191455 0.2693679
- 0.26678731 0.26417167 0.26151984 0.25883058 0.25610261 0.25333455
- 0.25052494 0.24767226 0.24477486 0.24183099 0.2388388  0.23579629
- 0.23270134 0.22955166 0.2263448  0.22307812 0.21974877 0.21635365
- 0.21288944 0.20935247 0.20573878 0.20204401 0.19826339 0.19439164
- 0.19042291 0.18635071 0.18216778 0.17786595 0.17343597 0.16886732
- 0.16414794 0.15926384 0.15419869 0.1489332  0.14344424 0.13770375
- 0.13167704 0.12532039 0.11857773 0.11137631 0.10362607 0.09526926
- 0.08740661 0.09873156]
+t = [       0.           318769.18953076   637538.37906153   956307.56859229
+  1275076.75812305  1593845.94765382  1912615.13718458  2231384.32671535
+  2550153.51624611  2868922.70577687  3187691.89530764  3506461.0848384
+  3825230.27436916  4143999.46389993  4462768.65343069  4781537.84296145
+  5100307.03249222  5419076.22202298  5737845.41155375  6056614.60108451
+  6375383.79061527  6694152.98014604  7012922.1696768   7331691.35920756
+  7650460.54873833  7969229.73826909  8287998.92779985  8606768.11733062
+  8925537.30686138  9244306.49639215  9563075.68592291  9881844.87545367
+ 10200614.06498444 10519383.2545152  10838152.44404596 11156921.63357673
+ 11475690.82310749 11794460.01263825 12113229.20216902 12431998.39169978
+ 12750767.58123055 13069536.77076131 13388305.96029207 13707075.14982283
+ 14025844.3393536  14344613.52888436 14663382.71841513 14982151.90794589
+ 15300921.09747665 15619690.28700742 15938459.47653818 16257228.66606895
+ 16575997.85559971 16894767.04513047 17213536.23466124 17532305.424192
+ 17851074.61372276 18132221.32649739]
+p = [6.         5.97281522 5.94524515 5.91727811 5.88890184 5.86010347
+ 5.83086947 5.80118561 5.77103692 5.74040761 5.70928102 5.67763955
+ 5.6454646  5.61273647 5.5794343  5.54553593 5.51101781 5.4758549
+ 5.44002048 5.40348605 5.36622117 5.32819319 5.2893671  5.24970527
+ 5.20916721 5.16770917 5.12528387 5.08184003 5.03732193 4.99166889
+ 4.94481454 4.89668617 4.84720385 4.79627936 4.74381504 4.68970225
+ 4.63381974 4.57603144 4.51618386 4.45410297 4.38959016 4.3224172
+ 4.25231989 4.17898965 4.10206266 4.02110525 3.93559386 3.84488716
+ 3.74818576 3.64447246 3.53241958 3.41023772 3.27541257 3.12420328
+ 2.95055646 2.7432272  2.47457985 2.01091325]
+e = [0.4        0.39720207 0.39436876 0.39149914 0.3885922  0.3856469
+ 0.38266216 0.37963682 0.37656971 0.37345955 0.37030503 0.36710477
+ 0.36385731 0.36056111 0.35721455 0.35381593 0.35036344 0.34685515
+ 0.34328906 0.339663   0.3359747  0.33222171 0.32840145 0.32451114
+ 0.32054782 0.31650833 0.31238924 0.30818689 0.30389733 0.29951628
+ 0.29503911 0.29046078 0.2857758  0.28097817 0.27606133 0.27101803
+ 0.26584028 0.26051921 0.25504494 0.24940639 0.24359111 0.23758499
+ 0.23137193 0.22493345 0.21824814 0.21129097 0.20403238 0.19643699
+ 0.18846186 0.180054   0.17114662 0.16165343 0.15145932 0.14040436
+ 0.12825392 0.11463902 0.09896911 0.09873156]
 </pre></div></div>
 </div>
 <div class="nbinput docutils container">
-<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[19]:
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[15]:
 </pre></div>
 </div>
 <div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">fig</span><span class="p">,</span> <span class="n">ax</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplots</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="mi">1</span><span class="p">,</span> <span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">4</span><span class="p">,</span><span class="mi">4</span><span class="p">))</span>
@@ -416,12 +370,12 @@ e = [0.4        0.39861243 0.39721621 0.39581125 0.39439742 0.3929746
 </div>
 </div>
 <div class="nboutput docutils container">
-<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[19]:
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[15]:
 </pre></div>
 </div>
 <div class="output_area docutils container">
 <div class="highlight"><pre>
-[&lt;matplotlib.lines.Line2D at 0x10753f110&gt;]
+[&lt;matplotlib.lines.Line2D at 0x36986f4d0&gt;]
 </pre></div></div>
 </div>
 <div class="nboutput nblast docutils container">
@@ -432,7 +386,7 @@ e = [0.4        0.39861243 0.39721621 0.39581125 0.39439742 0.3929746
 </div>
 </div>
 <div class="nbinput docutils container">
-<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[20]:
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[16]:
 </pre></div>
 </div>
 <div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">t_yr</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">t</span><span class="p">)[</span><span class="n">valid</span><span class="p">]</span> <span class="o">/</span> <span class="p">(</span><span class="mf">365.25</span> <span class="o">*</span> <span class="mi">24</span> <span class="o">*</span> <span class="mi">3600</span><span class="p">)</span>
@@ -485,7 +439,7 @@ e = [0.4        0.39861243 0.39721621 0.39581125 0.39439742 0.3929746
 <p>For a typical EMRI: <span class="math notranslate nohighlight">\(\mu/M = 10/10^6 = 10^{-5}\)</span>, so the inspiral rate is 100,000 times slower than the flux-table value. The orbital phases <span class="math notranslate nohighlight">\(\Phi_\phi\)</span>, <span class="math notranslate nohighlight">\(\Phi_r\)</span> are <strong>not</strong> scaled by <span class="math notranslate nohighlight">\(\mu/M\)</span> — they accumulate at the geodesic frequencies regardless of mass ratio.</p>
 <p>Let’s check how the inspiral depth scales with the mass ratio:</p>
 <div class="nbinput docutils container">
-<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[21]:
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[17]:
 </pre></div>
 </div>
 <div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">fig</span><span class="p">,</span> <span class="n">ax</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplots</span><span class="p">(</span><span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">9</span><span class="p">,</span> <span class="mi">4</span><span class="p">))</span>
@@ -523,7 +477,7 @@ e = [0.4        0.39861243 0.39721621 0.39581125 0.39439742 0.3929746
 \[\dot{p} = \frac{\dot{E}}{\partial E/\partial p}, \qquad \dot{e} = 0\]</div>
 <p>Circular orbits evolve along the circular-orbit sequence and stay circular throughout.</p>
 <div class="nbinput docutils container">
-<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[22]:
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[18]:
 </pre></div>
 </div>
 <div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">fig</span><span class="p">,</span> <span class="n">axes</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplots</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">11</span><span class="p">,</span> <span class="mi">4</span><span class="p">))</span>
@@ -566,7 +520,7 @@ e = [0.4        0.39861243 0.39721621 0.39581125 0.39439742 0.3929746
 <h2>2.4 Separatrix Termination<a class="headerlink" href="#2.4-Separatrix-Termination" title="Link to this heading"></a></h2>
 <p>The ODE is stopped when <span class="math notranslate nohighlight">\(p &lt; p_{\rm sep}(a, e) + \delta p_{\rm buffer}\)</span>. This is implemented as a <code class="docutils literal notranslate"><span class="pre">diffrax.Event</span></code> with a boolean condition. After termination, the remaining <code class="docutils literal notranslate"><span class="pre">dense_steps</span></code> entries are filled with <code class="docutils literal notranslate"><span class="pre">Inf</span></code>. Always mask with <code class="docutils literal notranslate"><span class="pre">~np.isinf(p)</span></code> before analysis.</p>
 <div class="nbinput docutils container">
-<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[27]:
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[19]:
 </pre></div>
 </div>
 <div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">fewtrax.utils.geodesic</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_separatrix</span>
@@ -610,7 +564,16 @@ e = [0.4        0.39861243 0.39721621 0.39581125 0.39439742 0.3929746
 </div>
 <div class="output_area docutils container">
 <div class="highlight"><pre>
-delta p = 0.001688315118294259
+<span class="ansi-red-fg">---------------------------------------------------------------------------</span>
+<span class="ansi-red-fg">NameError</span>                                 Traceback (most recent call last)
+<span class="ansi-cyan-fg">Cell</span><span class="ansi-cyan-fg"> </span><span class="ansi-green-fg">In[19]</span><span class="ansi-green-fg">, line 26</span>
+<span class="ansi-green-fg">     22</span> ax.legend()
+<span class="ansi-green-fg">     23</span> plt.tight_layout()
+<span class="ansi-green-fg">     24</span> plt.show()
+<span class="ansi-green-fg">     25</span>
+<span class="ansi-green-fg">---&gt; </span><span class="ansi-green-fg">26</span> print(f&#39;delta p = {np.abs(p_sep -p_fin)} &lt; {DELTAP_SEP}&#39;)
+
+<span class="ansi-red-fg">NameError</span>: name &#39;DELTAP_SEP&#39; is not defined
 </pre></div></div>
 </div>
 </section>
@@ -618,7 +581,7 @@ delta p = 0.001688315118294259
 <h2>2.5 JIT Timing<a class="headerlink" href="#2.5-JIT-Timing" title="Link to this heading"></a></h2>
 <p>The ODE solve is wrapped in <code class="docutils literal notranslate"><span class="pre">&#64;eqx.filter_jit</span></code>. The first call traces and compiles; subsequent calls reuse the compiled kernel.</p>
 <div class="nbinput docutils container">
-<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[19]:
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[20]:
 </pre></div>
 </div>
 <div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">time</span>
@@ -647,10 +610,10 @@ delta p = 0.001688315118294259
 </div>
 <div class="output_area docutils container">
 <div class="highlight"><pre>
-First call  (compile): 25 ms
-Call 2 (cached):     1.7 ms
-Call 3 (cached):     1.6 ms
-Call 4 (cached):     1.5 ms
+First call  (compile): 11 ms
+Call 2 (cached):     7.4 ms
+Call 3 (cached):     8.3 ms
+Call 4 (cached):     4.1 ms
 </pre></div></div>
 </div>
 </section>
@@ -658,7 +621,7 @@ Call 4 (cached):     1.5 ms
 <h2>2.6 vmap Over Initial Conditions<a class="headerlink" href="#2.6-vmap-Over-Initial-Conditions" title="Link to this heading"></a></h2>
 <p>One of JAX’s main advantages: <code class="docutils literal notranslate"><span class="pre">jax.vmap</span></code> vectorises a function over a batch of inputs with no Python loop overhead. Here we compute trajectories for a grid of <span class="math notranslate nohighlight">\((p_0, e_0)\)</span> values simultaneously.</p>
 <div class="nbinput docutils container">
-<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[20]:
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[21]:
 </pre></div>
 </div>
 <div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">traj</span> <span class="o">=</span> <span class="n">EMRIInspiral</span><span class="p">(</span><span class="n">flux_data</span><span class="p">)</span>
@@ -688,12 +651,12 @@ Call 4 (cached):     1.5 ms
 </div>
 <div class="output_area docutils container">
 <div class="highlight"><pre>
-Batch of 1000 trajectories in 419.7 ms
-Output shape: (1000, 200)  (N_batch × N_steps)
+Batch of 1000 trajectories in 1386.6 ms
+Output shape: (1000, 201)  (N_batch × N_steps)
 </pre></div></div>
 </div>
 <div class="nbinput nblast docutils container">
-<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[21]:
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[22]:
 </pre></div>
 </div>
 <div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">batch_traj</span> <span class="o">=</span> <span class="n">jax</span><span class="o">.</span><span class="n">vmap</span><span class="p">(</span><span class="n">single_traj</span><span class="p">)</span>
@@ -701,7 +664,7 @@ Output shape: (1000, 200)  (N_batch × N_steps)
 </div>
 </div>
 <div class="nbinput docutils container">
-<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[22]:
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[23]:
 </pre></div>
 </div>
 <div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="o">%%timeit</span>
@@ -714,15 +677,15 @@ Output shape: (1000, 200)  (N_batch × N_steps)
 </div>
 <div class="output_area docutils container">
 <div class="highlight"><pre>
-411 ms ± 16.2 ms per loop (mean ± std. dev. of 7 runs, 1 loop each)
+408 ms ± 9.39 ms per loop (mean ± std. dev. of 7 runs, 1 loop each)
 </pre></div></div>
 </div>
 <div class="nbinput docutils container">
-<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[23]:
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[25]:
 </pre></div>
 </div>
 <div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">fig</span><span class="p">,</span> <span class="n">ax</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplots</span><span class="p">(</span><span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">9</span><span class="p">,</span> <span class="mi">4</span><span class="p">))</span>
-<span class="n">t_dummy</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linspace</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">,</span> <span class="mi">200</span><span class="p">)</span>  <span class="c1"># approximate time axis</span>
+<span class="n">t_dummy</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linspace</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">,</span> <span class="mi">201</span><span class="p">)</span>  <span class="c1"># approximate time axis</span>
 <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">p0_batch</span><span class="p">)):</span>
     <span class="n">p_i</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">p_batch</span><span class="p">[</span><span class="n">i</span><span class="p">])</span>
     <span class="n">valid_</span> <span class="o">=</span> <span class="o">~</span><span class="n">np</span><span class="o">.</span><span class="n">isnan</span><span class="p">(</span><span class="n">p_i</span><span class="p">)</span>
