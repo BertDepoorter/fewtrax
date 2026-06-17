@@ -186,7 +186,7 @@ def report_device() -> str:
     return dev.platform
 
 
-def _bench(fn, *args, n_repeat: int = 20) -> float:
+def _bench(fn, *args, n_repeat: int = 5) -> float:
     """Mean wall time [ms] of ``fn(*args)`` after one warmup."""
     out = fn(*args); jax.block_until_ready(out)
     ts = []
@@ -210,7 +210,7 @@ def _sample_orbit(batch: int):
             jnp.asarray(e), jnp.asarray(x))
 
 
-def speed_benchmark(batch_sizes=(1, 100, 10_000, 1_000_000)) -> None:
+def speed_benchmark(batch_sizes=(1, 100, 10_000, 100_000)) -> None:
     """Speed + accuracy of exact vs fast paths across batch sizes and device.
 
     Times the bare integrals K/E/Π and the composite fundamental-frequency
@@ -218,7 +218,7 @@ def speed_benchmark(batch_sizes=(1, 100, 10_000, 1_000_000)) -> None:
     max relative disagreement so the two are weighed together.
     """
     platform = report_device()
-    print(f"\n=== Speed sweep ({platform.upper()}; median of 20 runs, "
+    print(f"\n=== Speed sweep ({platform.upper()}; median of 5 runs, "
           f"ratio = exact/fast, >1 ⇒ fast faster) ===")
     header = f"  {'batch':>9} | {'K':>16} | {'E':>16} | {'Pi':>16} | {'Omega(φ,θ,r)':>18}"
     print(header)
