@@ -14,7 +14,14 @@ on the default JAX device (GPU → 64-pt GL, CPU → AGM+24-pt GL).
 
 Part 1 — Pointwise accuracy over a grid of (m, n) values.
 
-Part 2 — Phase self-consistency:  run a 2-year EMRI inspiral with
+Part 2 — Speed + accuracy sweep across batch sizes and device.  The exact
+  path is a length-64 dot product (BLAS-friendly, favours GPU at large batch);
+  the fast path is a short sequential AGM loop (latency-bound).  Run this on
+  GPU to see whether the "slow" path is ever the bottleneck before deciding to
+  drop it.  Also times ``get_fundamental_frequencies{,_fast}`` end-to-end —
+  the composite the ODE RHS actually evaluates.
+
+Part 3 — Phase self-consistency:  run a 2-year EMRI inspiral with
   ``EMRIInspiral`` and verify the accumulated phases Φ_φ agree with
   independent numerical integration of Ω_φ(p(t), e(t)) · dt along the
   same trajectory.  The maximum discrepancy should be well below 1 rad.
@@ -50,6 +57,8 @@ from utils import find_data_dir, timer
 from fewtrax.utils.geodesic import (
     ellipk, ellipe, ellip_pi,
     ellipk_agm, ellipe_agm, ellip_pi_fast,
+    get_fundamental_frequencies, get_fundamental_frequencies_fast,
+    get_separatrix_fast,
 )
 
 # Optional mpmath for independent Π reference
@@ -74,8 +83,10 @@ def _ref_ellipe(m_arr):
 
 def _ref_ellip_pi(n_arr, k_arr):
     if _HAS_MPMATH:
+        # fewtrax ellip_pi(n, k) uses k as the *modulus* (integrand ∝ k²sin²θ);
+        # mpmath.ellippi(n, m) takes the *parameter* m = k².
         return np.array([
-            float(mpmath.ellippi(float(n), float(k)))
+            float(mpmath.ellippi(float(n), float(k) ** 2))
             for n, k in zip(n_arr, k_arr)
         ])
     else:
@@ -152,48 +163,92 @@ def accuracy_grid(n_pts: int = 200) -> None:
 
 
 # ---------------------------------------------------------------------------
-# 2. Speed comparison
+# 2. Speed + accuracy comparison  (exact 64-pt GL vs fast AGM/24-pt GL)
 # ---------------------------------------------------------------------------
+#
+# The two paths stress the hardware differently:
+#   * 64-pt GL ("exact")  — each call is a length-64 dot product, i.e. a
+#     (batch, 64)·(64,) contraction.  BLAS-friendly: GPUs/TPUs eat this for
+#     free at large batch, so the "exact" path may actually be *faster* there.
+#   * AGM-12 / 24-pt GL ("fast") — a short sequential fori_loop (K/E) or a
+#     length-24 dot (Π).  Fewer FLOPs, but the AGM loop is latency-bound.
+#
+# Hence the crossover is batch-size and device dependent.  We sweep batch
+# sizes and also time get_fundamental_frequencies{,_fast} end-to-end, since
+# that composite (not the bare integrals) is what the ODE RHS evaluates.
 
-def speed_benchmark(n_pts: int = 1000) -> None:
-    """Time exact vs fast integrals via jax.vmap."""
-    m_arr = jnp.linspace(0.01, 0.95, n_pts, dtype=jnp.float64)
-    n_arr = jnp.linspace(0.01, 0.89, n_pts, dtype=jnp.float64)
-    k_arr = jnp.linspace(0.05, 0.90, n_pts, dtype=jnp.float64)
+import time as _time
 
-    vK_exact = jax.jit(jax.vmap(ellipk))
-    vK_fast  = jax.jit(jax.vmap(ellipk_agm))
-    vE_exact = jax.jit(jax.vmap(ellipe))
-    vE_fast  = jax.jit(jax.vmap(ellipe_agm))
-    vPi_exact = jax.jit(jax.vmap(ellip_pi))
-    vPi_fast  = jax.jit(jax.vmap(ellip_pi_fast))
 
-    import time
+def report_device() -> str:
+    dev = jax.devices()[0]
+    print(f"\nJAX backend: {dev.platform.upper()}  ({dev})")
+    return dev.platform
 
-    def _bench(fn, *args, n_repeat=10):
-        # warmup
+
+def _bench(fn, *args, n_repeat: int = 20) -> float:
+    """Mean wall time [ms] of ``fn(*args)`` after one warmup."""
+    out = fn(*args); jax.block_until_ready(out)
+    ts = []
+    for _ in range(n_repeat):
+        t0 = _time.perf_counter()
         out = fn(*args); jax.block_until_ready(out)
-        ts = []
-        for _ in range(n_repeat):
-            t0 = time.perf_counter()
-            out = fn(*args); jax.block_until_ready(out)
-            ts.append(time.perf_counter() - t0)
-        return np.mean(ts) * 1e3  # ms
+        ts.append(_time.perf_counter() - t0)
+    return float(np.median(ts)) * 1e3
 
-    K_e  = _bench(vK_exact,  m_arr)
-    K_f  = _bench(vK_fast,   m_arr)
-    E_e  = _bench(vE_exact,  m_arr)
-    E_f  = _bench(vE_fast,   m_arr)
-    Pi_e = _bench(vPi_exact, n_arr, k_arr)
-    Pi_f = _bench(vPi_fast,  n_arr, k_arr)
 
-    print(f"\n=== Speed ({n_pts} evaluations, vmapped) ===")
-    print(f"  K:  64-pt GL {K_e:.2f} ms  →  AGM-12 {K_f:.2f} ms  "
-          f"({K_e/K_f:.1f}× speedup)")
-    print(f"  E:  64-pt GL {E_e:.2f} ms  →  AGM-12 {E_f:.2f} ms  "
-          f"({E_e/E_f:.1f}× speedup)")
-    print(f"  Π:  64-pt GL {Pi_e:.2f} ms  →  24-pt GL {Pi_f:.2f} ms  "
-          f"({Pi_e/Pi_f:.1f}× speedup)")
+def _sample_orbit(batch: int):
+    """Random (a, p, e, x) inside the bound-orbit region, for freq timing."""
+    rng = np.random.default_rng(0)
+    a = rng.uniform(-0.99, 0.99, batch)
+    e = rng.uniform(0.0, 0.7, batch)
+    x = np.ones(batch)
+    psep = np.array([float(get_separatrix_fast(abs(ai), ei, 1.0))
+                     for ai, ei in zip(a, e)])
+    p = psep + rng.uniform(0.5, 10.0, batch)
+    return (jnp.asarray(np.abs(a)), jnp.asarray(p),
+            jnp.asarray(e), jnp.asarray(x))
+
+
+def speed_benchmark(batch_sizes=(1, 100, 10_000, 1_000_000)) -> None:
+    """Speed + accuracy of exact vs fast paths across batch sizes and device.
+
+    Times the bare integrals K/E/Π and the composite fundamental-frequency
+    routine, reporting the fast/exact speed ratio (>1 = fast wins) and the
+    max relative disagreement so the two are weighed together.
+    """
+    platform = report_device()
+    print(f"\n=== Speed sweep ({platform.upper()}; median of 20 runs, "
+          f"ratio = exact/fast, >1 ⇒ fast faster) ===")
+    header = f"  {'batch':>9} | {'K':>16} | {'E':>16} | {'Pi':>16} | {'Omega(φ,θ,r)':>18}"
+    print(header)
+    print("  " + "-" * (len(header) - 2))
+
+    vK_e, vK_f = jax.jit(jax.vmap(ellipk)), jax.jit(jax.vmap(ellipk_agm))
+    vE_e, vE_f = jax.jit(jax.vmap(ellipe)), jax.jit(jax.vmap(ellipe_agm))
+    vPi_e, vPi_f = jax.jit(jax.vmap(ellip_pi)), jax.jit(jax.vmap(ellip_pi_fast))
+    vF_e = jax.jit(jax.vmap(get_fundamental_frequencies))
+    vF_f = jax.jit(jax.vmap(get_fundamental_frequencies_fast))
+
+    for B in batch_sizes:
+        m_arr = jnp.asarray(np.random.default_rng(1).uniform(0.01, 0.95, B))
+        n_arr = jnp.asarray(np.random.default_rng(2).uniform(0.01, 0.89, B))
+        k_arr = jnp.asarray(np.random.default_rng(3).uniform(0.05, 0.90, B))
+        orbit = _sample_orbit(B)
+
+        rK = _bench(vK_e, m_arr) / _bench(vK_f, m_arr)
+        rE = _bench(vE_e, m_arr) / _bench(vE_f, m_arr)
+        rPi = _bench(vPi_e, n_arr, k_arr) / _bench(vPi_f, n_arr, k_arr)
+        rF = _bench(vF_e, *orbit) / _bench(vF_f, *orbit)
+        print(f"  {B:>9d} | {rK:>14.2f}× | {rE:>14.2f}× | "
+              f"{rPi:>14.2f}× | {rF:>16.2f}×")
+
+    # Accuracy of the composite frequency at the largest batch (fast vs exact).
+    big = _sample_orbit(batch_sizes[-1])
+    Fe = np.array(vF_e(*big)); Ff = np.array(vF_f(*big))
+    rel = np.abs(Ff - Fe) / np.maximum(np.abs(Fe), 1e-300)
+    print(f"\n  Ω fast-vs-exact agreement (batch={batch_sizes[-1]}): "
+          f"max rel err = {rel.max():.2e}, mean = {rel.mean():.2e}")
 
 
 # ---------------------------------------------------------------------------
@@ -378,8 +433,9 @@ def main():
     # Part 1: pointwise accuracy
     accuracy_grid(n_pts=args.n_grid)
 
-    # Part 2: speed
-    speed_benchmark(n_pts=500)
+    # Part 2: speed + accuracy sweep (device-aware; run on GPU for the
+    # BLAS-vs-sequential crossover that decides whether the slow path matters)
+    speed_benchmark()
 
     # Part 3: dephasing
     data_dir = find_data_dir(args.data_dir)
