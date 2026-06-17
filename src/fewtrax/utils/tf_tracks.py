@@ -9,7 +9,7 @@ where M_s = (M + mu) MTSUN_SI is the total mass in seconds and Omega_i are the
 Boyer-Lindquist fundamental frequencies in geometric units [rad/M].
 
 Because EMRI signals evolve slowly, each mode occupies O(Nt) active pixels
-in an Nf × Nt WDM grid — a fraction 1/Nf of all pixels.  This allows a
+in an Nf x Nt WDM grid - a fraction 1/Nf of all pixels.  This allows a
 sparse representation of ~tens of kilobytes per mode.
 
 Two representations
@@ -45,7 +45,7 @@ from fewtrax.utils.geodesic import get_fundamental_frequencies
 
 
 # ---------------------------------------------------------------------------
-# Module-level JIT function for batched frequency computation (B5 fix)
+# JIT function for batched frequency computation 
 # ---------------------------------------------------------------------------
 # m, k, n are passed as jnp.int32 scalars (not Python ints captured in a
 # closure).  JAX traces over their values abstractly, so the function is
