@@ -206,15 +206,26 @@ def dephasing_test(
     params: dict | None = None,
     atol: float = 1e-9,
     rtol: float = 1e-9,
-    dense_steps: int = 200,
+    # dense_steps: int = 200,
 ) -> dict:
-    """Run EMRIInspiral trajectory and compare accumulated phases vs (p,e) track.
+    """Run EMRIInspiral trajectory and check the phases against Ω·dt.
 
     Since EMRIInspiral now uses a unified hybrid implementation (platform-aware
     dispatch between AGM+24-pt GL on CPU and 64-pt GL on GPU), this test
-    verifies self-consistency: the phases accumulated from the 5D solve are
-    compared against re-integrating Ω·dt along the independently computed
-    (p, e) trajectory.  A healthy implementation has |ΔΦ| < 0.1 rad.
+    verifies self-consistency: the accumulated phases Φ from the 5D solve must
+    satisfy dΦ/dt = Ω along the trajectory.
+
+    The dephasing between the solve and an independent Ω-integral is
+
+        ΔΦ(t) = Φ_ode(t) − ∫₀ᵗ Ω dt' = ∫₀ᵗ (dΦ_ode/dt' − Ω) dt' .
+
+    Rather than form ``Φ_ode − Σ trapezoid(Ω)`` (which differences two
+    O(10⁵ rad) numbers and is dominated by the trapezoid error of the coarse
+    output grid), we evaluate ``dΦ_ode/dt`` directly from the solver's Dopri8
+    dense (7th/8th-order) interpolant and integrate the small, smooth residual
+    ``dΦ_ode/dt − Ω``.  The quadrature error then scales with the residual
+    (~1e-7 rad/s) rather than with Ω, so the metric reflects the genuine ODE
+    accuracy.  A healthy implementation has |ΔΦ| < 0.1 rad.
     """
     from fewtrax.trajectory import EMRIInspiral
     import jax
@@ -231,52 +242,61 @@ def dephasing_test(
         p0=params["p0"], e0=params["e0"],
         T=params["T"], a=params["a"], x0=params.get("x0", 1.0),
         M=params["M"], mu=params["mu"],
-        dense_steps=dense_steps, atol=atol, rtol=rtol,
+        atol=atol, rtol=rtol,
+        return_dense_phase_fn=True,
     )
 
     print(f"\n  Running EMRIInspiral trajectory (T={T_yr} yr) …", end=" ", flush=True)
     with timer("traj", verbose=False):
-        t_out, p_out, e_out, Pp_out, Pt_out, Pr_out = traj(**kw)
+        t_out, p_out, e_out, Pp_out, Pt_out, Pr_out, phase_fn = traj(**kw)
     print("done")
 
-    # Re-integrate Ω_φ via trapezoid rule along the (p,e) track
     t_np  = np.asarray(t_out)
     p_np  = np.asarray(p_out)
     e_np  = np.asarray(e_out)
     Pp_np = np.asarray(Pp_out)
 
     valid = np.isfinite(p_np) & np.isfinite(Pp_np)
-    t_v, p_v, e_v, Pp_v = t_np[valid], p_np[valid], e_np[valid], Pp_np[valid]
+    t_v, p_v, e_v = t_np[valid], p_np[valid], e_np[valid]
 
     a_abs = jnp.float64(abs(params["a"]))
     x_in  = jnp.float64(float(np.sign(params["a"] * params.get("x0", 1.0))) or 1.0)
     M_s   = (params["M"] + params["mu"]) * MTSUN_SI
 
-    def _om_phi(pe):
-        Om_phi, _Ot, _Or = get_fundamental_frequencies_platform(a_abs, pe[0], pe[1], x_in)
-        return Om_phi / M_s  # rad/s
+    # dΦ/dt from the dense (7th/8th-order) interpolant, all three components.
+    def _phase_vec(ts):  # scalar seconds -> (Φ_φ, Φ_θ, Φ_r)
+        Pp, Pt, Pr = phase_fn(jnp.atleast_1d(ts))
+        return jnp.stack([Pp[0], Pt[0], Pr[0]])
+
+    t_jax = jnp.asarray(t_v)
+    dPhi_dt = np.asarray(jax.vmap(jax.jacfwd(_phase_vec))(t_jax))  # (N, 3) rad/s
+
+    # Fundamental frequencies Ω = (Ω_φ, Ω_θ, Ω_r) along the (p,e) track [rad/s].
+    def _omega(pe):
+        Om = get_fundamental_frequencies_platform(a_abs, pe[0], pe[1], x_in)
+        return jnp.stack(Om) / M_s
 
     pe_jax = jnp.asarray(np.stack([p_v, e_v], axis=1))
-    Om_phi = np.asarray(jax.vmap(_om_phi)(pe_jax))
+    Omega = np.asarray(jax.vmap(_omega)(pe_jax))            # (N, 3) rad/s
 
-    Pp_reimpl = np.zeros(len(t_v))
-    Pp_reimpl[0] = float(Pp_v[0])
-    for i in range(1, len(t_v)):
-        dt = float(t_v[i] - t_v[i - 1])
-        Pp_reimpl[i] = Pp_reimpl[i - 1] + 0.5 * (Om_phi[i - 1] + Om_phi[i]) * dt
-
-    dPp = np.abs(Pp_v - Pp_reimpl)
+    # Accumulated dephasing = ∫ (dΦ/dt − Ω) dt via trapezoid on the residual.
+    residual = dPhi_dt - Omega                             # (N, 3)
+    dt = np.diff(t_v)
+    incr = 0.5 * (residual[1:] + residual[:-1]) * dt[:, None]
+    acc = np.vstack([np.zeros((1, 3)), np.cumsum(incr, axis=0)])
+    dPhi = np.abs(acc)                                     # (N, 3)
+    dPp, dPt, dPr = dPhi[:, 0], dPhi[:, 1], dPhi[:, 2]
 
     result = dict(
         T_yr=T_yr,
         t_days=t_v / 86400.0,
-        dPp=dPp, dPt=np.zeros_like(dPp), dPr=np.zeros_like(dPp),
+        dPp=dPp, dPt=dPt, dPr=dPr,
         max_dPp=float(dPp.max()),
-        max_dPt=0.0,
-        max_dPr=0.0,
+        max_dPt=float(dPt.max()),
+        max_dPr=float(dPr.max()),
         mean_dPp=float(dPp.mean()),
-        mean_dPt=0.0,
-        mean_dPr=0.0,
+        mean_dPt=float(dPt.mean()),
+        mean_dPr=float(dPr.mean()),
     )
     return result
 
@@ -386,7 +406,6 @@ def main():
         all_pass = all_pass and ok
         if args.plot:
             res["label"] = label
-            breakpoint()
             plot_dephasing(res, out_dir=args.plot_dir)
 
     print("\n" + "=" * 70)
